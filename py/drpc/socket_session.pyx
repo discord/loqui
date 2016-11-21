@@ -6,6 +6,8 @@ from gevent.event import AsyncResult, Event
 
 from libc.stdint cimport uint32_t
 from cpython cimport PyBytes_GET_SIZE
+
+from drpc.exceptions import NoEncoderAvailable, ConnectionTerminated
 from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
 
 from socket_watcher cimport SocketWatcher
@@ -28,6 +30,7 @@ cdef class DRPCSocketSession:
     cdef object _stop_event
     cdef object _close_event
     cdef object _ready_event
+    cdef bint _is_ready
     cdef bytes _write_buf
     cdef uint32_t _ping_interval
     cdef dict _available_encoders
@@ -97,7 +100,8 @@ cdef class DRPCSocketSession:
         if not self._close_event.is_set():
             self._close_event.set()
 
-    cpdef void close(self, bint block=False, int reason=0):
+    cpdef close(self, bint block=False, int reason=0, timeout=None):
+        print 'closing', reason
         # Unblock anything waiting on ready event.
         if not self._ready_event.is_set():
             self._ready_event.set()
@@ -111,7 +115,10 @@ cdef class DRPCSocketSession:
 
         # If we are blocking, wait on close event to succeed.
         if block:
-            self._close_event.wait()
+            self.join(timeout)
+
+    cpdef join(self, timeout=None):
+        self._close_event.wait(timeout=timeout)
 
     cpdef _terminate(self):
         if self._close_event.wait(self._ping_interval):
@@ -184,6 +191,7 @@ cdef class DRPCSocketSession:
         return result
 
     cpdef object _send_select_encoding(self, bytes encoding):
+        print 'select encoding', encoding
         if not self._is_client:
             raise RuntimeError('Servers cannot select encoding.')
 
@@ -284,7 +292,7 @@ cdef class DRPCSocketSession:
         encoding, encoder = self._pick_best_encoding(hello.supported_encodings)
 
         if not encoding:
-            self.close(CloseReasons.NO_MUTUAL_ENCODERS)
+            self.close(reason=CloseReasons.NO_MUTUAL_ENCODERS)
 
         else:
             self._encoder_dumps = encoder.dumps
@@ -293,10 +301,10 @@ cdef class DRPCSocketSession:
             self._is_ready = True
             self._ready_event.set()
 
-    cdef _handle_select_encoding(self, SelectEncoding encoding):
-        encoder = self._available_encoders.get(encoding)
+    cdef _handle_select_encoding(self, SelectEncoding select_encoding):
+        encoder = self._available_encoders.get(select_encoding.encoding)
         if not encoder:
-            self.close(CloseReasons.UNKNOWN_ENCODER)
+            self.close(reason=CloseReasons.UNKNOWN_ENCODER)
 
         else:
             self._encoder_dumps = encoder.dumps
@@ -362,6 +370,7 @@ cdef class DRPCSocketSession:
 
                     if not data:
                         self.close()
+                        self._cleanup_socket()
 
                     else:
                         self._handle_data_received(data)
@@ -399,19 +408,3 @@ cdef class DRPCSocketSession:
         finally:
             sock_read_watcher.stop()
             sock_write_watcher.stop()
-
-
-class NoEncoderAvailable(Exception):
-    pass
-
-
-class ConnectionError(Exception):
-    pass
-
-
-class ConnectionTerminated(ConnectionError):
-    pass
-
-
-class ConnectionPingTimeout(ConnectionError):
-    pass

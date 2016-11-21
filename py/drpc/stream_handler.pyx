@@ -251,7 +251,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError('data is not bytes!')
 
-        rv = drpc_c.drpc_append_request(&self.write_buffer, seq, size, <const char*> buffer)
+        rv = drpc_c.drpc_append_response(&self.write_buffer, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError('not enough memory to fulfill buffer')
 

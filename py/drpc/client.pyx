@@ -1,50 +1,56 @@
 import gevent
-from gevent.hub import Waiter
-from greenlet import getcurrent
+import socket
+import logging
+from gevent.lock import RLock
+from gevent.event import Event
 
-cdef class SockWatcher:
-    def __cinit__(self, int sock_fileno):
-        self.sock_fileno = sock_fileno
-        self.sock_write_blocked = False
-        self.waiter = Waiter()
-        self.waiter_get = self.waiter.get
-        self.waiter_clear = self.waiter.clear
-        self.waiter_switch = self.waiter.switch
-        self.hub = gevent.get_hub()
-        self.is_switching = False
-        self.reset()
+from drpc.exceptions import ConnectionError
+from socket_session import DRPCSocketSession
 
-    cpdef void mark_ready(self, int fileno, bint read=True):
-        if read:
-            self.sock_read_ready = True
+from encoders import ENCODERS
 
-        else:
-            self.sock_write_ready = True
+class DRPCClient:
+    def __init__(self, address):
+        self._session = None
+        self._session_lock = RLock()
+        self._session_event = Event()
+        self._address = address
+        self._connect_timeout = 5
 
-        self.waiter_switch()
-
-    cdef reset(self):
-        self.sock_read_ready = False
-        self.sock_write_ready = False
-        self.is_switching = False
-        self.waiter_clear()
-
-    cdef wait(self):
-        return self.waiter_get()
-
-    cpdef request_switch(self):
-        if self.is_switching:
+    def connect(self):
+        if self._session is not None:
             return
 
-        self.is_switching = True
-        self.waiter_switch()
+        # if self._backoff.fails:
+        #     self._session_event.wait(self._backoff.current)
+        #    if self._session is not None:
+        #        return
 
-    cdef switch_if_unblocked(self):
-        if self.is_switching:
-            return
+        with self._session_lock:
+            if self._session is not None:
+                return
 
-        if not self.sock_write_blocked:
-            if self.hub is getcurrent():
-                self.request_switch()
-            else:
-                self.hub.loop.run_callback(self.request_switch)
+            try:
+                print ('connect, address:%s, port:%s', self._address[0], self._address[1])
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                sock.settimeout(self._connect_timeout)
+                sock.connect(self._address)
+                sock.setblocking(False)
+                self._session = DRPCSocketSession(sock, ENCODERS)
+                # self._backoff.succeed()
+                self._session_event.set()
+                print 'connected'
+
+            except socket.error:
+                # self._backoff.fail()
+                raise ConnectionError('No connection available')
+
+    def send_request(self, request_data, timeout=None):
+        self.connect()
+        response = self._session.send_request(request_data)
+        return response.get(timeout=timeout)
+
+    def send_push(self, push_data):
+        self.connect()
+        response = self._session.send_push(push_data)
