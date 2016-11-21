@@ -53,13 +53,9 @@ cdef inline bytes _get_payload_from_decode_buffer(drpc_c.drpc_decode_buffer_t* d
     return PyBytes_FromStringAndSize(buf, size)
 
 cdef class DRPCStreamHandler:
-    def __cinit__(self, bint client_mode=True):
+    def __cinit__(self):
         self.seq = 0
         self.write_buffer_position = 0
-        self.is_client = client_mode
-
-        self.write_buffer.buf = NULL
-        self.decode_buffer.drpc_buffer.buf = NULL
 
         _reset_buffer(&self.write_buffer)
         _reset_buffer(&self.decode_buffer.drpc_buffer)
@@ -185,6 +181,25 @@ cdef class DRPCStreamHandler:
             raise TypeError('data is not bytes!')
 
         rv = drpc_c.drpc_append_push(&self.write_buffer, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError('not enough memory to fulfill buffer')
+
+        return 1
+
+    cpdef uint32_t send_select_encoding(self, bytes data) except 0:
+        """
+        Enqueues a select_encoding type message to be sent, with the given bytes `data` as the payload.
+        :param data: The data to send
+        """
+        cdef int rv
+        cdef char *buffer
+        cdef size_t size
+
+        rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
+        if rv < 0:
+            raise TypeError('data is not bytes!')
+
+        rv = drpc_c.drpc_append_select_encoding(&self.write_buffer, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError('not enough memory to fulfill buffer')
 

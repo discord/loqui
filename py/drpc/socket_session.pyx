@@ -6,38 +6,53 @@ from gevent.event import AsyncResult, Event
 
 from libc.stdint cimport uint32_t
 from cpython cimport PyBytes_GET_SIZE
-from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway
+from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
 
 from socket_watcher cimport SocketWatcher
 from stream_handler cimport DRPCStreamHandler
 
 cdef size_t OUTBUF_MAX = 65535
 
+
 class CloseReasons(object):
     PING_TIMEOUT = 1
+    UNKNOWN_ENCODER = 2
+    NO_MUTUAL_ENCODERS = 3
 
 cdef class DRPCSocketSession:
     cdef DRPCStreamHandler _stream_handler
     cdef object _sock
     cdef SocketWatcher _watcher
     cdef dict _inflight_requests
+    cdef bint _is_client
     cdef object _stop_event
     cdef object _close_event
+    cdef object _ready_event
     cdef bytes _write_buf
     cdef uint32_t _ping_interval
+    cdef dict _available_encoders
 
     cdef object _on_request
     cdef object _on_push
+    cdef object _encoder_loads
+    cdef object _encoder_dumps
 
     def __cinit__(self, object sock, bint is_client=True):
+        self._is_client = is_client
         self._stream_handler = DRPCStreamHandler()
         self._sock = sock
         self._watcher = SocketWatcher(self._sock.fileno())
         self._inflight_requests = {}
+        self._available_encoders = {}
         self._stop_event = Event()
         self._close_event = Event()
+        self._ready_event = Event()
         self._ping_interval = 30
         self._write_buf = b''
+        self._is_ready = False
+
+    cpdef register_encoder(self, bytes encoder_name, object encoder):
+        self._available_encoders[encoder_name] = encoder
 
     cdef _resume_sending(self):
         if self._sock is None:
@@ -76,10 +91,18 @@ cdef class DRPCSocketSession:
             self._close_event.set()
 
     cpdef void close(self, bint block=False, int reason=0):
+        # Unblock anything waiting on ready event.
+        if not self._ready_event.is_set():
+            self._ready_event.set()
+
+        # Unblock anything waiting on stop event.
         if not self._stop_event.is_set():
             self._stop_event.set()
             gevent.spawn(self._terminate)
+            # TODO: Send goaway.
+            # self._stream_handler.send_goaway()
 
+        # If we are blocking, wait on close event to succeed.
         if block:
             self._close_event.wait()
 
@@ -87,7 +110,7 @@ cdef class DRPCSocketSession:
         if self._close_event.wait(self._ping_interval):
             return
 
-        self._cleanup_inflight_requests(Exception('TODO'))
+        self._cleanup_inflight_requests(ConnectionTerminated())
         self._cleanup_socket()
 
     cdef _cleanup_inflight_requests(self, close_exception):
@@ -98,18 +121,46 @@ cdef class DRPCSocketSession:
             if isinstance(request, AsyncResult):
                 request.set_exception(close_exception)
 
-    cpdef object send_request(self, bytes data):
+    cdef _encode_data(self, object data):
+        if not self._is_ready:
+            self._ready_event.wait()
+
+        if not self._encoder_dumps:
+            raise NoEncoderAvailable()
+
+        return self._encoder_dumps(data)
+
+    cdef _decode_data(self, object data):
+        if not self._is_ready:
+            self._ready_event.wait()
+
+        if not self._encoder_loads:
+            raise NoEncoderAvailable()
+
+        return self._encoder_loads(data)
+
+    cpdef object send_request(self, object data):
+        if not self._is_client:
+            raise RuntimeError('Servers cannot send requests')
+
+        cdef bytes encoded_data = self._encode_data(data)
         result = AsyncResult()
-        cdef uint32_t seq = self._stream_handler.send_request(data)
+        cdef uint32_t seq = self._stream_handler.send_request(encoded_data)
         self._inflight_requests[seq] = result
         self._resume_sending()
         return result
 
-    cpdef object send_push(self, bytes data):
+    cpdef object send_push(self, object data):
+        if not self._is_client:
+            raise RuntimeError('Servers cannot send pushes')
+
         self._stream_handler.send_push(data)
         self._resume_sending()
 
-    cpdef object send_response(self, uint32_t seq, bytes data):
+    cpdef object send_response(self, uint32_t seq, object data):
+        if self._is_client:
+            raise RuntimeError('Clients cannot send responses')
+
         request = self._inflight_requests.pop(seq)
         if not request:
             raise Exception('Sending response for unknown seq %s' % seq)
@@ -124,6 +175,9 @@ cdef class DRPCSocketSession:
         self._inflight_requests[seq] = result
         self._resume_sending()
         return result
+
+    cpdef object send_select_encoding(self, bytes encoding):
+        self._stream_handler.send_select_encoding(encoding)
 
     cdef _handle_ping_timeout(self):
         self.close(reason=CloseReasons.PING_TIMEOUT)
@@ -150,6 +204,9 @@ cdef class DRPCSocketSession:
 
             elif isinstance(event, GoAway):
                 self._handle_go_away(event)
+
+            elif isinstance(event, SelectEncoding):
+                self._handle_select_encoding(event)
 
         self._resume_sending()
 
@@ -185,10 +242,40 @@ cdef class DRPCSocketSession:
             ping_request.set(pong)
 
     cdef _handle_hello(self, Hello hello):
-        pass
+        self._ping_interval = int(hello.ping_interval / 1000)
+        encoding, encoder = self._pick_best_encoding(hello.supported_encodings)
+
+        if not encoding:
+            self.close(CloseReasons.NO_MUTUAL_ENCODERS)
+
+        else:
+            self._encoder_dumps = encoder.dumps
+            self._encoder_loads = encoder.loads
+            self.send_select_encoding(encoding)
+            self._is_ready = True
+            self._ready_event.set()
+
+    cdef _handle_select_encoding(self, SelectEncoding encoding):
+        encoder = self._available_encoders.get(encoding)
+        if not encoder:
+            self.close(CloseReasons.UNKNOWN_ENCODER)
+
+        else:
+            self._encoder_dumps = encoder.dumps
+            self._encoder_loads = encoder.loads
+            self._is_ready = True
+            self._ready_event.set()
 
     cdef _handle_go_away(self, GoAway go_away):
         pass
+
+    cdef _pick_best_encoding(self, list encodings):
+        for encoding in encodings:
+            encoder = self._available_encoders.get(encoding)
+            if encoder:
+                return encoding, encoder
+
+        return None, None
 
     cpdef _ping_loop(self):
         while True:
@@ -210,7 +297,7 @@ cdef class DRPCSocketSession:
         cdef bint did_empty_buffer = False
         cdef object sock_recv = self._sock.recv
         cdef object sock_send = self._sock.send
-        cdef object watcher_mark_ready = (<object>self._watcher).mark_ready
+        cdef object watcher_mark_ready = (<object> self._watcher).mark_ready
 
         sock_read_watcher = io(self._watcher.sock_fileno, READ)
         sock_write_watcher = io(self._watcher.sock_fileno, WRITE)
@@ -274,3 +361,19 @@ cdef class DRPCSocketSession:
         finally:
             sock_read_watcher.stop()
             sock_write_watcher.stop()
+
+
+class NoEncoderAvailable(Exception):
+    pass
+
+
+class ConnectionError(Exception):
+    pass
+
+
+class ConnectionTerminated(ConnectionError):
+    pass
+
+
+class ConnectionPingTimeout(ConnectionError):
+    pass

@@ -2,7 +2,6 @@ from libc.stdint cimport uint32_t
 cimport drpc_c
 
 cdef class DRPCStreamHandler:
-    cdef bint is_client
     cdef uint32_t seq
     cdef drpc_c.drpc_decode_buffer_t decode_buffer
     cdef drpc_c.drpc_buffer_t write_buffer
@@ -16,6 +15,7 @@ cdef class DRPCStreamHandler:
     cpdef uint32_t send_pong(self, uint32_t seq) except 0
     cpdef uint32_t send_request(self, bytes data) except 0
     cpdef uint32_t send_push(self, bytes data) except 0
+    cpdef uint32_t send_select_encoding(self, bytes data) except 0
     cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0
     cpdef size_t write_buffer_len(self)
     cpdef bytes write_buffer_get_bytes(self, size_t length)
