@@ -44,7 +44,7 @@ static inline int drpc_buffer_ensure_size(drpc_buffer_t *pk, size_t at_least_all
   size_t allocated_size = pk->allocated_size;
 
   if (at_least_allocated_size > allocated_size) {
-    // Grow buffer 2x to avoid excessive re-allocations.
+    // Grow buffer to the at-least allocated size.
     buf = (char *)realloc(buf, at_least_allocated_size);
 
     if (!buf)

@@ -13,7 +13,8 @@ typedef enum {
   DRPC_OP_REQUEST = 4,
   DRPC_OP_RESPONSE = 5,
   DRPC_OP_PUSH = 6,
-  DRPC_OP_GOAWAY = 7
+  DRPC_OP_GOAWAY = 7,
+  DRPC_OP_SELECT_ENCODING = 8
 } drpc_opcodes;
 
 

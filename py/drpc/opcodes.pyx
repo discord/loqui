@@ -23,11 +23,16 @@ cdef class Pong:
         self.seq = seq
 
 cdef class Hello:
-    def __cinit__(self, uint32_t seq, uint32_t ping_interval):
-        self.seq = seq
+    def __cinit__(self, uint8_t version, uint32_t ping_interval, list supported_encodings):
+        self.version = version
         self.ping_interval = ping_interval
+        self.supported_encodings = supported_encodings
 
 cdef class GoAway:
     def __cinit__(self, uint8_t code, bytes data):
         self.code = code
         self.data = data
+
+cdef class SelectEncoding:
+    def __cinit__(self, bytes encoding):
+        self.encoding = encoding

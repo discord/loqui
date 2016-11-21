@@ -311,6 +311,16 @@ cdef class DRPCStreamHandler:
                 drpc_c.drpc_get_code(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
+        elif opcode == drpc_c.DRPC_OP_HELLO:
+            response = opcodes.Hello(
+                drpc_c.drpc_get_version(&self.decode_buffer),
+                drpc_c.drpc_get_ping_interval(&self.decode_buffer),
+                _get_payload_from_decode_buffer(&self.decode_buffer).split(',')
+            )
+        elif opcode == drpc_c.DRPC_OP_SELECT_ENCODING:
+            response = opcodes.SelectEncoding(
+                _get_payload_from_decode_buffer(&self.decode_buffer)
+            )
 
         self._reset_decode_buf()
         return response

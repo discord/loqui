@@ -14,6 +14,7 @@ cdef extern from "../../c/buffer.h":
 
 cdef extern from "../../c/encoder.h":
     int drpc_append_hello(drpc_buffer_t *b, uint32_t ping_interval)
+    int drpc_append_select_encoding(drpc_buffer_t *b, uint32_t size, const char *data)
     int drpc_append_ping(drpc_buffer_t *b, uint32_t seq)
     int drpc_append_pong(drpc_buffer_t *b, uint32_t seq)
     int drpc_append_request(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char *data)
@@ -23,11 +24,11 @@ cdef extern from "../../c/encoder.h":
 
 cdef extern from "../../c/decoder.h":
     drpc_decoder_status drpc_decoder_read_data(drpc_decode_buffer_t *pk, size_t size, const char *data, size_t* consumed)
-    drpc_decoder_status drpc_buffer_has_data_payload(drpc_decode_buffer_t *pk)
-    drpc_decoder_status drpc_get_seq(drpc_decode_buffer_t *pk)
-    drpc_decoder_status drpc_get_data_payload_size(drpc_decode_buffer_t *pk)
-    drpc_decoder_status drpc_get_version(drpc_decode_buffer_t *pk)
-    drpc_decoder_status drpc_get_code(drpc_decode_buffer_t *pk)
+    uint32_t drpc_get_seq(drpc_decode_buffer_t *pk)
+    size_t drpc_get_data_payload_size(drpc_decode_buffer_t *pk)
+    uint8_t drpc_get_version(drpc_decode_buffer_t *pk)
+    uint8_t drpc_get_code(drpc_decode_buffer_t *pk)
+    uint32_t drpc_get_ping_interval(drpc_decode_buffer_t *pk)
 
 cdef extern from "../../c/constants.h":
     const unsigned char DRPC_VERSION;
@@ -41,6 +42,7 @@ cdef extern from "../../c/constants.h":
         DRPC_OP_RESPONSE
         DRPC_OP_PUSH
         DRPC_OP_GOAWAY
+        DRPC_OP_SELECT_ENCODING
 
     ctypedef enum drpc_decoder_status:
         DRPC_DECODE_NEEDS_MORE

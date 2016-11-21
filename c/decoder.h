@@ -12,7 +12,7 @@
 static inline size_t _drpc_get_header_size(uint8_t opcode) {
   switch (opcode) {
     case DRPC_OP_HELLO:
-      return sizeof(uint8_t) + sizeof(uint32_t);
+      return sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
     case DRPC_OP_PING:
     case DRPC_OP_PONG:
       return sizeof(uint32_t);
@@ -20,6 +20,7 @@ static inline size_t _drpc_get_header_size(uint8_t opcode) {
     case DRPC_OP_RESPONSE:
       return sizeof(uint32_t) + sizeof(uint32_t);
     case DRPC_OP_PUSH:
+    case DRPC_OP_SELECT_ENCODING:
       return sizeof(uint32_t);
     case DRPC_OP_GOAWAY:
       return sizeof(uint8_t) + sizeof(uint32_t);
@@ -34,9 +35,12 @@ static inline size_t drpc_get_data_payload_size(drpc_decode_buffer_t* pk) {
     case DRPC_OP_RESPONSE:
       return _drpc_load32(size_t, pk->drpc_buffer.buf + sizeof(uint32_t));
     case DRPC_OP_PUSH:
+    case DRPC_OP_SELECT_ENCODING:
       return _drpc_load32(size_t, pk->drpc_buffer.buf);
     case DRPC_OP_GOAWAY:
       return _drpc_load32(size_t, pk->drpc_buffer.buf + sizeof(uint8_t));
+    case DRPC_OP_HELLO:
+      return _drpc_load32(size_t, pk->drpc_buffer.buf + sizeof(uint8_t) + sizeof(uint32_t));
     default:
       return 0;
   }

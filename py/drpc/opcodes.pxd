@@ -18,9 +18,13 @@ cdef class Pong:
     cdef readonly uint32_t seq
 
 cdef class Hello:
-    cdef readonly uint8_t seq
+    cdef readonly uint8_t version
     cdef readonly uint32_t ping_interval
+    cdef readonly list supported_encodings
 
 cdef class GoAway:
     cdef readonly uint8_t code
     cdef readonly bytes data
+
+cdef class SelectEncoding:
+    cdef readonly bytes encoding
