@@ -1,15 +1,19 @@
-import gevent
 import socket
-import logging
 from gevent.lock import RLock
 from gevent.event import Event
 
 from drpc.exceptions import ConnectionError
-from socket_session import DRPCSocketSession
+from socket_session cimport DRPCSocketSession
 
 from encoders import ENCODERS
 
-class DRPCClient:
+cdef class DRPCClient:
+    cdef DRPCSocketSession _session
+    cdef object _session_lock
+    cdef object _session_event
+    cdef tuple _address
+    cdef int _connect_timeout
+
     def __init__(self, address):
         self._session = None
         self._session_lock = RLock()
@@ -17,7 +21,7 @@ class DRPCClient:
         self._address = address
         self._connect_timeout = 5
 
-    def connect(self):
+    cdef connect(self):
         if self._session is not None:
             return
 
@@ -46,11 +50,11 @@ class DRPCClient:
                 # self._backoff.fail()
                 raise ConnectionError('No connection available')
 
-    def send_request(self, request_data, timeout=None):
+    cpdef send_request(self, request_data, timeout=None):
         self.connect()
         response = self._session.send_request(request_data)
         return response.get(timeout=timeout)
 
-    def send_push(self, push_data):
+    cpdef send_push(self, push_data):
         self.connect()
         response = self._session.send_push(push_data)

@@ -22,24 +22,6 @@ class CloseReasons(object):
     NO_MUTUAL_ENCODERS = 3
 
 cdef class DRPCSocketSession:
-    cdef DRPCStreamHandler _stream_handler
-    cdef object _sock
-    cdef SocketWatcher _watcher
-    cdef dict _inflight_requests
-    cdef bint _is_client
-    cdef object _stop_event
-    cdef object _close_event
-    cdef object _ready_event
-    cdef bint _is_ready
-    cdef bytes _write_buf
-    cdef uint32_t _ping_interval
-    cdef dict _available_encoders
-
-    cdef object _on_request
-    cdef object _on_push
-    cdef object _encoder_loads
-    cdef object _encoder_dumps
-
     def __cinit__(self, object sock, dict encoders, bint is_client=True, object on_request=None, object on_push=None):
         self._is_client = is_client
         self._stream_handler = DRPCStreamHandler()

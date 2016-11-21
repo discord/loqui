@@ -70,7 +70,7 @@ def work_loop():
 import gevent
 
 greenlets = [gevent.spawn(log_loop)]
-for _ in xrange(10):
+for _ in xrange(150):
     greenlets.append(gevent.spawn(work_loop))
 
 import signal
