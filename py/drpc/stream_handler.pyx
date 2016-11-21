@@ -186,6 +186,27 @@ cdef class DRPCStreamHandler:
 
         return 1
 
+    cpdef uint32_t send_hello(self, uint32_t ping_interval, list available_encodings) except 0:
+        """
+        Enqueues a hello type message to be sent, with the given bytes `data` as the payload.
+
+        :param ping_interval: Ping interval in milliseconds
+        :param available_encodings: Available encodings that the server understands
+        """
+        cdef int rv
+        cdef char *buffer
+        cdef size_t size
+        cdef bytes data = b','.join(bytes(b) for b in available_encodings)
+        rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
+        if rv < 0:
+            raise TypeError('data is not bytes!')
+
+        rv = drpc_c.drpc_append_hello(&self.write_buffer, ping_interval, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError('not enough memory to fulfill buffer')
+
+        return 1
+
     cpdef uint32_t send_select_encoding(self, bytes data) except 0:
         """
         Enqueues a select_encoding type message to be sent, with the given bytes `data` as the payload.

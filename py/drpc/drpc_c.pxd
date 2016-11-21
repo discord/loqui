@@ -13,7 +13,7 @@ cdef extern from "../../c/buffer.h":
         size_t header_size;
 
 cdef extern from "../../c/encoder.h":
-    int drpc_append_hello(drpc_buffer_t *b, uint32_t ping_interval)
+    int drpc_append_hello(drpc_buffer_t *b, uint32_t ping_interval, uint32_t size, const char *data)
     int drpc_append_select_encoding(drpc_buffer_t *b, uint32_t size, const char *data)
     int drpc_append_ping(drpc_buffer_t *b, uint32_t seq)
     int drpc_append_pong(drpc_buffer_t *b, uint32_t seq)

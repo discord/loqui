@@ -37,13 +37,13 @@ cdef class DRPCSocketSession:
     cdef object _encoder_loads
     cdef object _encoder_dumps
 
-    def __cinit__(self, object sock, bint is_client=True):
+    def __cinit__(self, object sock, bint is_client=True, dict encoders, object on_request=None, object on_push=None):
         self._is_client = is_client
         self._stream_handler = DRPCStreamHandler()
         self._sock = sock
         self._watcher = SocketWatcher(self._sock.fileno())
         self._inflight_requests = {}
-        self._available_encoders = {}
+        self._available_encoders = encoders
         self._stop_event = Event()
         self._close_event = Event()
         self._ready_event = Event()
@@ -51,8 +51,15 @@ cdef class DRPCSocketSession:
         self._write_buf = b''
         self._is_ready = False
 
-    cpdef register_encoder(self, bytes encoder_name, object encoder):
-        self._available_encoders[encoder_name] = encoder
+        if not self._is_client:
+            self._on_request = on_request
+            self._on_push = on_push
+
+        gevent.spawn(self._ping_loop)
+        gevent.spawn(self._run_loop)
+
+        if not is_client:
+            self._send_hello()
 
     cdef _resume_sending(self):
         if self._sock is None:
@@ -176,22 +183,38 @@ cdef class DRPCSocketSession:
         self._resume_sending()
         return result
 
-    cpdef object send_select_encoding(self, bytes encoding):
+    cpdef object _send_select_encoding(self, bytes encoding):
+        if not self._is_client:
+            raise RuntimeError('Servers cannot select encoding.')
+
         self._stream_handler.send_select_encoding(encoding)
+
+    cpdef object _send_hello(self):
+        if self._is_client:
+            raise RuntimeError('Clients cannot send hello.')
+
+        self._stream_handler.send_hello(int(self._ping_interval * 1000), list(self._available_encoders.keys()))
 
     cdef _handle_ping_timeout(self):
         self.close(reason=CloseReasons.PING_TIMEOUT)
 
     cdef _handle_data_received(self, data):
-        for event in self._stream_handler.on_bytes_received(data):
+        events = self._stream_handler.on_bytes_received(data)
+        if not events:
+            return
+
+        if self._is_client:
+            self._handle_client_events(events)
+
+        else:
+            self._handle_server_events(events)
+
+        self._resume_sending()
+
+    cdef _handle_client_events(self, list events):
+        for event in events:
             if isinstance(event, Response):
                 self._handle_response(event)
-
-            elif isinstance(event, Request):
-                self._handle_request(event)
-
-            elif isinstance(event, Push):
-                self._handle_push(event)
 
             elif isinstance(event, Ping):
                 self._handle_ping(event)
@@ -205,10 +228,25 @@ cdef class DRPCSocketSession:
             elif isinstance(event, GoAway):
                 self._handle_go_away(event)
 
+    cdef _handle_server_events(self, list events):
+        for event in events:
+            if isinstance(event, Request):
+                self._handle_request(event)
+
+            elif isinstance(event, Push):
+                self._handle_push(event)
+
+            elif isinstance(event, Ping):
+                self._handle_ping(event)
+
+            elif isinstance(event, Pong):
+                self._handle_pong(event)
+
+            elif isinstance(event, GoAway):
+                self._handle_go_away(event)
+
             elif isinstance(event, SelectEncoding):
                 self._handle_select_encoding(event)
-
-        self._resume_sending()
 
     cdef _handle_request(self, Request request):
         if self._on_request:
@@ -251,7 +289,7 @@ cdef class DRPCSocketSession:
         else:
             self._encoder_dumps = encoder.dumps
             self._encoder_loads = encoder.loads
-            self.send_select_encoding(encoding)
+            self._send_select_encoding(encoding)
             self._is_ready = True
             self._ready_event.set()
 
