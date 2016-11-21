@@ -10,6 +10,7 @@ cdef extern from "../../c/buffer.h":
         drpc_buffer_t drpc_buffer;
         uint8_t opcode;
         size_t data_size_remaining;
+        size_t header_size;
 
 cdef extern from "../../c/encoder.h":
     int drpc_append_hello(drpc_buffer_t *b, uint32_t ping_interval)
@@ -23,7 +24,6 @@ cdef extern from "../../c/encoder.h":
 cdef extern from "../../c/decoder.h":
     drpc_decoder_status drpc_decoder_read_data(drpc_decode_buffer_t *pk, size_t size, const char *data, size_t* consumed)
     drpc_decoder_status drpc_buffer_has_data_payload(drpc_decode_buffer_t *pk)
-    drpc_decoder_status drpc_get_required_initial_buffer_size(drpc_decode_buffer_t *pk)
     drpc_decoder_status drpc_get_seq(drpc_decode_buffer_t *pk)
     drpc_decoder_status drpc_get_data_payload_size(drpc_decode_buffer_t *pk)
     drpc_decoder_status drpc_get_version(drpc_decode_buffer_t *pk)

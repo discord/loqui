@@ -4,7 +4,7 @@ from libc.string cimport memcpy
 from libc.stdint cimport uint32_t, uint8_t
 
 cdef size_t BIG_BUF_SIZE = 1024 * 1024 * 2
-cdef size_t INITIAL_BUFFER_SIZE = 1024 * 217
+cdef size_t INITIAL_BUFFER_SIZE = 1024 * 512
 # Todo move to Header
 cdef uint32_t SEQ_MAX = (2 ** 32) - 2
 
@@ -15,7 +15,10 @@ cdef class DRPCStream:
     cdef bytes data
 
 
-cdef inline void _ensure_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
+cdef inline void _reset_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
+    """
+    Ensures the buffer is in a reset state.
+    """
     if drpc_buffer.buf != NULL:
         drpc_buffer.length = 0
 
@@ -28,6 +31,9 @@ cdef inline void _ensure_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
         drpc_buffer.length = 0
 
 cdef inline void _free_big_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
+    """
+    Frees the buffer if it's grown over `BIG_BUF_SIZE`.
+    """
     if drpc_buffer.allocated_size >= BIG_BUF_SIZE:
         free(drpc_buffer.buf)
         drpc_buffer.buf = NULL
@@ -38,8 +44,11 @@ cdef inline void _free_big_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
     else:
         drpc_buffer.length = 0
 
-cdef inline bytes _get_bytes_from_decode_buffer(drpc_c.drpc_decode_buffer_t* decode_buffer):
-    cdef char* buf = decode_buffer.drpc_buffer.buf + drpc_c.drpc_get_required_initial_buffer_size(decode_buffer)
+cdef inline bytes _get_payload_from_decode_buffer(drpc_c.drpc_decode_buffer_t* decode_buffer):
+    """
+    Get the payload part of the decode buffer. Copies the data after the headers in the buffer into a PyBytes object.
+    """
+    cdef char* buf = decode_buffer.drpc_buffer.buf + decode_buffer.header_size
     cdef size_t size = drpc_c.drpc_get_data_payload_size(decode_buffer)
     if size == 0:
         return None
@@ -62,24 +71,39 @@ cdef class DRPCStreamHandler:
         self.write_buffer.buf = NULL
         self.decode_buffer.drpc_buffer.buf = NULL
 
-        _ensure_buffer(&self.write_buffer)
-        _ensure_buffer(&self.decode_buffer.drpc_buffer)
+        _reset_buffer(&self.write_buffer)
+        _reset_buffer(&self.decode_buffer.drpc_buffer)
+
+    def __dealloc__(self):
+        if self.write_buffer.buf != NULL:
+            free(self.write_buffer.buf)
+
+        if self.decode_buffer.drpc_buffer.buf != NULL:
+            free(self.decode_buffer.drpc_buffer.buf)
 
     cdef inline _reset_decode_buf(self):
+        """
+        Resets the decode buffer, re-allocating the buffer if it's grown too big - otherwise, reuse the same
+        buffer.
+        """
         self.decode_buffer.opcode = 0
         _free_big_buffer(&self.decode_buffer.drpc_buffer)
-        _ensure_buffer(&self.decode_buffer.drpc_buffer)
+        _reset_buffer(&self.decode_buffer.drpc_buffer)
 
     cdef _reset_or_compact_write_buf(self):
         """
         If the write buffer is larger than `BIG_BUF_SIZE`, free it, so that writing large data does not hold onto
-        the big buffer. Otherwise, try and compact the buffer.
+        the big buffer. Otherwise, try and compact the buffer - by moving bytes towards the end of the buffer
+        to the beginning, so that it can continue to be written to without needing a re-allocation.
         """
+
+        # The buffer has been fully written. Shrink it if needed, otherwise reset the position to the beginning.
         if self.write_buffer_position == self.write_buffer.length:
             _free_big_buffer(&self.write_buffer)
-            _ensure_buffer(&self.write_buffer)
+            _reset_buffer(&self.write_buffer)
             self.write_buffer_position = 0
 
+        # Attempt to compact the buffer.
         elif self.write_buffer.length > self.write_buffer_position > self.write_buffer.allocated_size / 2:
             memcpy(
                 self.write_buffer.buf,
@@ -90,17 +114,17 @@ cdef class DRPCStreamHandler:
             self.write_buffer_position -= self.write_buffer_position
             self.write_buffer.length -= self.write_buffer_position
 
-    def __dealloc__(self):
-        if self.write_buffer.buf != NULL:
-            free(self.write_buffer.buf)
-
-        if self.decode_buffer.drpc_buffer.buf != NULL:
-            free(self.decode_buffer.drpc_buffer.buf)
-
     cpdef uint32_t current_seq(self):
+        """
+        Returns the latest seq issued.
+        """
         return self.seq
 
-    cdef inline uint32_t _next_seq(self):
+    cdef inline uint32_t next_seq(self):
+        """
+        Returns the next sequence to be issued, and increments the local seq counter. Handles seq overflow by
+        restarting at 0.
+        """
         cdef uint32_t next_seq
         self.seq += 1
         next_seq = self.seq
@@ -110,24 +134,40 @@ cdef class DRPCStreamHandler:
 
         return next_seq
 
-    cpdef uint32_t send_ping(self):
+    cpdef uint32_t send_ping(self) except 0:
+        """
+        Enqueue a ping to be sent.
+        :return: Returns the seq of the ping being sent.
+        """
         cdef int rv
-        cdef uint32_t seq = self._next_seq()
+        cdef uint32_t seq = self.next_seq()
         rv = drpc_c.drpc_append_ping(&self.write_buffer, seq)
         if rv < 0:
             raise MemoryError('not enough memory to fulfill buffer')
 
         return seq
 
-    cpdef send_pong(self, uint32_t seq):
+    cpdef uint32_t send_pong(self, uint32_t seq) except 0:
+        """
+        Enqueues a pong to be sent.
+        :param seq: The seq to pong.
+        :return:
+        """
         cdef int rv
         rv = drpc_c.drpc_append_pong(&self.write_buffer, seq)
         if rv < 0:
             raise MemoryError('not enough memory to fulfill buffer')
 
-    cpdef uint32_t send_request(self, bytes data):
+        return 1
+
+    cpdef uint32_t send_request(self, bytes data) except 0:
+        """
+        Enqueues a request type message to be sent, with the given bytes `data` as the payload.
+        :param data: The data to send
+        :return: The seq of the request being sent.
+        """
         cdef int rv
-        cdef uint32_t seq = self._next_seq()
+        cdef uint32_t seq = self.next_seq()
         cdef char *buffer
         cdef size_t size
 
@@ -141,7 +181,15 @@ cdef class DRPCStreamHandler:
 
         return seq
 
-    cpdef void send_response(self, uint32_t seq, bytes data):
+    cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0:
+        """
+        Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
+        This function does not validate if the given seq is in-flight. It's assumed that the client will handle
+        duplicate responses correctly.
+
+        :param seq: The seq to reply to.
+        :param data: The data to respond with.
+        """
         cdef int rv
         cdef char *buffer
         cdef size_t size
@@ -154,13 +202,18 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise MemoryError('not enough memory to fulfill buffer')
 
+        return 1
 
     cpdef size_t write_buffer_len(self):
+        """
+        Gets the length of the write buffer - if non-zero, it means that we have data to write.
+        """
         return self.write_buffer.length - self.write_buffer_position
 
     cpdef bytes write_buffer_get_bytes(self, size_t length):
         """
-        Returns a bytes object that has at least n bytes from the write buffer.
+        Returns a bytes object that has at least n bytes from the write buffer. This function removes the data
+        from the buffer. It's assumed that the caller will hold onto this data until it's successfully sent.
 
         :param length: The number of bytes to get from the write buffer.
         """
@@ -178,6 +231,13 @@ cdef class DRPCStreamHandler:
         return write_buffer
 
     cpdef list on_bytes_received(self, bytes data):
+        """
+        Call this function when bytes are received from the remote end. It will return a list of objects that have
+        been parsed. Attempt to send data after calling this function, as it may have generated data to be written.
+
+        :param data: The data received from the remote end.
+        :return: List of objects that have been received.
+        """
         cdef size_t size = PyBytes_Size(data)
         cdef char* buf = PyBytes_AS_STRING(data)
         cdef size_t consumed = 0
@@ -211,36 +271,36 @@ cdef class DRPCStreamHandler:
 
         if opcode == drpc_c.DRPC_OP_RESPONSE:
             response = Response(
-                seq=drpc_c.drpc_get_seq(&self.decode_buffer),
-                data=_get_bytes_from_decode_buffer(&self.decode_buffer)
+                drpc_c.drpc_get_seq(&self.decode_buffer),
+                _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_REQUEST:
             response = Request(
-                seq=drpc_c.drpc_get_seq(&self.decode_buffer),
-                data=_get_bytes_from_decode_buffer(&self.decode_buffer)
+                drpc_c.drpc_get_seq(&self.decode_buffer),
+                _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_PUSH:
             response = Push(
-                data=_get_bytes_from_decode_buffer(&self.decode_buffer)
+                _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_PING:
             response = Ping(
-                seq=drpc_c.drpc_get_seq(&self.decode_buffer)
+                drpc_c.drpc_get_seq(&self.decode_buffer)
             )
             self.send_pong(response.seq)
 
         elif opcode == drpc_c.DRPC_OP_PONG:
             response = Pong(
-                seq=drpc_c.drpc_get_seq(&self.decode_buffer),
+                drpc_c.drpc_get_seq(&self.decode_buffer),
             )
 
         elif opcode == drpc_c.DRPC_OP_GOAWAY:
             response = GoAway(
-                code=drpc_c.drpc_get_code(&self.decode_buffer),
-                data=_get_bytes_from_decode_buffer(&self.decode_buffer)
+                drpc_c.drpc_get_code(&self.decode_buffer),
+                _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         self._reset_decode_buf()
@@ -274,7 +334,6 @@ cdef class Ping:
 
     def __cinit__(self, uint32_t seq):
         self.seq = seq
-
 
 cdef class Pong:
     cdef readonly uint32_t seq

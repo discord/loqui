@@ -9,7 +9,7 @@
 #ifndef DRPC_DECODER_H__
 #define DRPC_DECODER_H__
 
-static inline size_t _drpc_get_required_initial_buffer_size(uint8_t opcode) {
+static inline size_t _drpc_get_header_size(uint8_t opcode) {
   switch (opcode) {
     case DRPC_OP_HELLO:
       return sizeof(uint8_t) + sizeof(uint32_t);
@@ -26,10 +26,6 @@ static inline size_t _drpc_get_required_initial_buffer_size(uint8_t opcode) {
     default:
       return 0;
   }
-}
-
-static inline size_t drpc_get_required_initial_buffer_size(drpc_decode_buffer_t* pk) {
-  return _drpc_get_required_initial_buffer_size(pk->opcode);
 }
 
 static inline size_t drpc_get_data_payload_size(drpc_decode_buffer_t* pk) {
@@ -93,12 +89,11 @@ static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t * p
   }
 
   int rv;
-  size_t initial_buffer_size = drpc_get_required_initial_buffer_size(pk);
 
   // we haven't had the chance to read the header yet.
-  if (pk->drpc_buffer.length < initial_buffer_size) {
+  if (pk->drpc_buffer.length < pk->header_size) {
     // How many bytes remain to read the full header?
-    size_t header_chunk_to_read = initial_buffer_size - pk->drpc_buffer.length;
+    size_t header_chunk_to_read = pk->header_size - pk->drpc_buffer.length;
     if (header_chunk_to_read > size) {
       header_chunk_to_read = size;
     }
@@ -113,7 +108,7 @@ static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t * p
     *consumed += header_chunk_to_read;
 
     // We don't have the full header yet.
-    if (pk->drpc_buffer.length < initial_buffer_size) {
+    if (pk->drpc_buffer.length < pk->header_size) {
       return DRPC_DECODE_NEEDS_MORE;
     }
 
@@ -127,7 +122,7 @@ static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t * p
 
     // We have a data payload! Pre-allocate a buffer that's big enough to hold the resulting data.
     if (pk->data_size_remaining > 0) {
-      rv = drpc_buffer_ensure_size(&pk->drpc_buffer, initial_buffer_size + pk->data_size_remaining);
+      rv = drpc_buffer_ensure_size(&pk->drpc_buffer, pk->header_size + pk->data_size_remaining);
       if (rv < 0) {
         return DRPC_DECODE_MEMORY_ERROR;
       }
@@ -169,8 +164,8 @@ static inline drpc_decoder_status drpc_read_new_data(drpc_decode_buffer_t* pk,
                                                      const char* data,
                                                      size_t* consumed) {
   uint8_t opcode = (uint8_t) data[0];
-  size_t initial_buffer_size = _drpc_get_required_initial_buffer_size(opcode);
-  if (initial_buffer_size == 0) {
+  size_t header_size = _drpc_get_header_size(opcode);
+  if (header_size == 0) {
     return DRPC_DECODE_INVALID_OPCODE;
   }
 
@@ -181,6 +176,7 @@ static inline drpc_decoder_status drpc_read_new_data(drpc_decode_buffer_t* pk,
   pk->drpc_buffer.length = 0;
   pk->data_size_remaining = 0;
   pk->opcode = opcode;
+  pk->header_size = header_size;
 
   if (size > 0) {
     return drpc_read_append_data(pk, size, data, consumed);

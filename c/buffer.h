@@ -13,6 +13,7 @@ typedef struct {
   drpc_buffer_t drpc_buffer;
   uint8_t opcode;
   size_t data_size_remaining;
+  size_t header_size;
 } drpc_decode_buffer_t;
 
 static inline int drpc_buffer_write(drpc_buffer_t *pk, const char *bytes, size_t l) {
