@@ -65,7 +65,7 @@ static inline int drpc_append_response(drpc_buffer_t *b, uint32_t seq, uint32_t 
   drpc_append(b, data, size);
 }
 
-static inline int drpc_append_push(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char* data) {
+static inline int drpc_append_push(drpc_buffer_t *b, uint32_t size, const char* data) {
   #define SIZE 1 + sizeof(uint32_t)
   unsigned char buf[SIZE];
   buf[0] = DRPC_OP_PUSH;

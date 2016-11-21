@@ -18,7 +18,7 @@ cdef extern from "../../c/encoder.h":
     int drpc_append_pong(drpc_buffer_t *b, uint32_t seq)
     int drpc_append_request(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char *data)
     int drpc_append_response(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char *data)
-    int drpc_append_push(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char *data)
+    int drpc_append_push(drpc_buffer_t *b, uint32_t size, const char *data)
     int drpc_append_goaway(drpc_buffer_t *b, uint8_t code, uint32_t size, const char *data)
 
 cdef extern from "../../c/decoder.h":

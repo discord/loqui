@@ -2,17 +2,13 @@ from cpython cimport *
 from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport uint32_t, uint8_t
+cimport drpc_c
+cimport opcodes
 
 cdef size_t BIG_BUF_SIZE = 1024 * 1024 * 2
 cdef size_t INITIAL_BUFFER_SIZE = 1024 * 512
 # Todo move to Header
 cdef uint32_t SEQ_MAX = (2 ** 32) - 2
-
-cimport drpc_c
-
-cdef class DRPCStream:
-    cdef int seq
-    cdef bytes data
 
 
 cdef inline void _reset_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
@@ -57,12 +53,6 @@ cdef inline bytes _get_payload_from_decode_buffer(drpc_c.drpc_decode_buffer_t* d
     return PyBytes_FromStringAndSize(buf, size)
 
 cdef class DRPCStreamHandler:
-    cdef bint is_client
-    cdef uint32_t seq
-    cdef drpc_c.drpc_decode_buffer_t decode_buffer
-    cdef drpc_c.drpc_buffer_t write_buffer
-    cdef size_t write_buffer_position
-
     def __cinit__(self, bint client_mode=True):
         self.seq = 0
         self.write_buffer_position = 0
@@ -181,6 +171,25 @@ cdef class DRPCStreamHandler:
 
         return seq
 
+    cpdef uint32_t send_push(self, bytes data) except 0:
+        """
+        Enqueues a push type message to be sent, with the given bytes `data` as the payload.
+        :param data: The data to send
+        """
+        cdef int rv
+        cdef char *buffer
+        cdef size_t size
+
+        rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
+        if rv < 0:
+            raise TypeError('data is not bytes!')
+
+        rv = drpc_c.drpc_append_push(&self.write_buffer, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError('not enough memory to fulfill buffer')
+
+        return 1
+
     cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0:
         """
         Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
@@ -270,89 +279,38 @@ cdef class DRPCStreamHandler:
         cdef object response
 
         if opcode == drpc_c.DRPC_OP_RESPONSE:
-            response = Response(
+            response = opcodes.Response(
                 drpc_c.drpc_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_REQUEST:
-            response = Request(
+            response = opcodes.Request(
                 drpc_c.drpc_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_PUSH:
-            response = Push(
+            response = opcodes.Push(
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == drpc_c.DRPC_OP_PING:
-            response = Ping(
+            response = opcodes.Ping(
                 drpc_c.drpc_get_seq(&self.decode_buffer)
             )
             self.send_pong(response.seq)
 
         elif opcode == drpc_c.DRPC_OP_PONG:
-            response = Pong(
+            response = opcodes.Pong(
                 drpc_c.drpc_get_seq(&self.decode_buffer),
             )
 
         elif opcode == drpc_c.DRPC_OP_GOAWAY:
-            response = GoAway(
+            response = opcodes.GoAway(
                 drpc_c.drpc_get_code(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         self._reset_decode_buf()
         return response
-
-cdef class Response:
-    cdef readonly uint32_t seq
-    cdef readonly bytes data
-
-    def __cinit__(self, uint32_t seq, bytes data):
-        self.seq = seq
-        self.data = data
-
-cdef class Request:
-    cdef readonly uint32_t seq
-    cdef readonly bytes data
-
-    def __cinit__(self, uint32_t seq, bytes data):
-        self.seq = seq
-        self.data = data
-
-
-cdef class Push:
-    cdef readonly bytes data
-
-    def __cinit__(self, bytes data):
-        self.data = data
-
-cdef class Ping:
-    cdef readonly uint32_t seq
-
-    def __cinit__(self, uint32_t seq):
-        self.seq = seq
-
-cdef class Pong:
-    cdef readonly uint32_t seq
-
-    def __cinit__(self, uint32_t seq):
-        self.seq = seq
-
-cdef class Hello:
-    cdef readonly uint8_t seq
-    cdef readonly uint32_t ping_interval
-
-    def __cinit__(self, uint32_t seq, uint32_t ping_interval):
-        self.seq = seq
-        self.ping_interval = ping_interval
-
-cdef class GoAway:
-    cdef readonly uint8_t code
-    cdef readonly bytes data
-
-    def __cinit__(self, uint8_t code, bytes data):
-        self.code = code
-        self.data = data

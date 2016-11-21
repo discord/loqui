@@ -2,7 +2,7 @@ import gevent
 from gevent.hub import Waiter
 from greenlet import getcurrent
 
-cdef class SockWatcher:
+cdef class SocketWatcher:
     def __cinit__(self, int sock_fileno):
         self.sock_fileno = sock_fileno
         self.sock_write_blocked = False
@@ -15,6 +15,9 @@ cdef class SockWatcher:
         self.reset()
 
     cpdef void mark_ready(self, int fileno, bint read=True):
+        if fileno != self.sock_fileno:
+            return
+
         if read:
             self.sock_read_ready = True
 
@@ -36,15 +39,18 @@ cdef class SockWatcher:
         if self.is_switching:
             return
 
-        self.is_switching = True
-        self.waiter_switch()
+        if self.hub is getcurrent():
+            self._request_switch()
+        else:
+            self.hub.loop.run_callback(self._request_switch)
 
-    cdef switch_if_unblocked(self):
+    cpdef _request_switch(self):
         if self.is_switching:
             return
 
+        self.is_switching = True
+        self.waiter_switch()
+
+    cdef switch_if_write_unblocked(self):
         if not self.sock_write_blocked:
-            if self.hub is getcurrent():
-                self.request_switch()
-            else:
-                self.hub.loop.run_callback(self.request_switch)
+            self.request_switch()
