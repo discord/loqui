@@ -53,6 +53,14 @@ cdef inline bytes _get_payload_from_decode_buffer(drpc_c.drpc_decode_buffer_t* d
     return PyBytes_FromStringAndSize(buf, size)
 
 cdef class DRPCStreamHandler:
+    """
+    The stream handler handles reading and parsing data, and maintaining a write buffer for events through the RPC.
+    The handler does not track incoming or outgoing events, and does not validate the ordering of these events.
+    It's expected that a session handler will wrap the stream handler, and perform those actions. The stream handler
+    mainly exists to consume bytes and produce events, and take events and return bytes to be written. The stream
+    handler however will generate sequences for the relevant events, and return those sequences in their respective
+    `send_` functions.
+    """
     def __cinit__(self):
         self.seq = 0
         self.write_buffer_position = 0
@@ -72,7 +80,7 @@ cdef class DRPCStreamHandler:
         Resets the decode buffer, re-allocating the buffer if it's grown too big - otherwise, reuse the same
         buffer.
         """
-        self.decode_buffer.opcode = 0
+        drpc_c.drpc_decoder_reset(&self.decode_buffer)
         _free_big_buffer(&self.decode_buffer.drpc_buffer)
         _reset_buffer(&self.decode_buffer.drpc_buffer)
 
@@ -196,7 +204,7 @@ cdef class DRPCStreamHandler:
         cdef int rv
         cdef char *buffer
         cdef size_t size
-        cdef bytes data = b','.join(bytes(b) for b in available_encodings)
+        cdef bytes data = b','.join([bytes(b) for b in available_encodings])
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
             raise TypeError('data is not bytes!')
@@ -311,6 +319,10 @@ cdef class DRPCStreamHandler:
         return received_payloads
 
     cdef object _consume_decode_buffer(self):
+        """
+        Consumes the decode buffer, returning an opcode Event. Call this once the decoder returns DRPC_DECODE_COMPLETE.
+        This function must be called before attempting to decode more data.
+        """
         cdef uint8_t opcode = self.decode_buffer.opcode
         cdef object response
 

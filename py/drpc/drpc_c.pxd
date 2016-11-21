@@ -24,6 +24,7 @@ cdef extern from "../../c/encoder.h":
 
 cdef extern from "../../c/decoder.h":
     drpc_decoder_status drpc_decoder_read_data(drpc_decode_buffer_t *pk, size_t size, const char *data, size_t* consumed)
+    drpc_decoder_status drpc_decoder_reset(drpc_decode_buffer_t *pk)
     uint32_t drpc_get_seq(drpc_decode_buffer_t *pk)
     size_t drpc_get_data_payload_size(drpc_decode_buffer_t *pk)
     uint8_t drpc_get_version(drpc_decode_buffer_t *pk)

@@ -37,7 +37,7 @@ cdef class DRPCSocketSession:
     cdef object _encoder_loads
     cdef object _encoder_dumps
 
-    def __cinit__(self, object sock, bint is_client=True, dict encoders, object on_request=None, object on_push=None):
+    def __cinit__(self, object sock, dict encoders, bint is_client=True, object on_request=None, object on_push=None):
         self._is_client = is_client
         self._stream_handler = DRPCStreamHandler()
         self._sock = sock

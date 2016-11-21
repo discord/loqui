@@ -84,7 +84,13 @@ static inline uint8_t drpc_get_ping_interval(drpc_decode_buffer_t* pk) {
   }
 }
 
-static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t * pk,
+static inline void drpc_decoder_reset(drpc_decode_buffer_t* pk) {
+  pk->opcode = 0;
+  pk->data_size_remaining = 0;
+  pk->decode_complete = 0;
+}
+
+static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t* pk,
                                                         size_t size,
                                                         const char* data,
                                                         size_t* consumed) {
@@ -156,6 +162,7 @@ static inline drpc_decoder_status drpc_read_append_data(drpc_decode_buffer_t * p
   }
 
   if (pk->data_size_remaining == 0) {
+    pk->decode_complete = 1;
     return DRPC_DECODE_COMPLETE;
   }
   else {
@@ -193,7 +200,10 @@ static inline drpc_decoder_status drpc_decoder_read_data(drpc_decode_buffer_t* p
                                                          size_t size,
                                                          const char* data,
                                                          size_t* consumed) {
-  if (pk->opcode == 0) {
+  if (pk->decode_complete == 1) {
+    return DRPC_DECODE_COMPLETE;
+  }
+  else if (pk->opcode == 0) {
     return drpc_read_new_data(pk, size, data, consumed);
   }
   else {
