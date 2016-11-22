@@ -17,3 +17,16 @@ try:
 
 except ImportError:
     pass
+
+try:
+    import erlpack
+
+    # Make erlpack conform to dumps/loads.
+    class _erlpack:
+        dumps = erlpack.pack
+        loads = erlpack.unpack
+
+    ENCODERS['erlpack'] = _erlpack
+
+except ImportError:
+    pass

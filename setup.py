@@ -35,5 +35,6 @@ setup(
     package_dir={
         'drpc': 'py/drpc'
     },
+    packages=['drpc'],
     ext_modules=extensions,
 )
