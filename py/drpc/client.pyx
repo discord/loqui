@@ -24,21 +24,26 @@ cdef class DRPCClient:
         self._connect_timeout = 5
         self._backoff = Backoff(min_delay=0.25, max_delay=2)
 
-    cdef connect(self):
-        if self._session is not None and self._session.defunct():
-            session = self._session
-            with self._session_lock:
-                if session is self._session:
-                    self._session_event.clear()
-                    self._session = None
+    cdef inline _clear_current_session(self):
+        cdef DRPCSocketSession session = self._session
+        session = self._session
+        with self._session_lock:
+            if session is self._session:
+                self._backoff.fail()
+                self._session_event.clear()
+                self._session = None
 
+    cdef connect(self):
         if self._session is not None:
-            return
+            if self._session.defunct():
+                self._clear_current_session()
+            else:
+                return
 
         if self._backoff.fails():
-           self._session_event.wait(self._backoff.current())
-           if self._session is not None:
-               return
+            self._session_event.wait(self._backoff.current())
+            if self._session is not None:
+                return
 
         with self._session_lock:
             if self._session is not None:

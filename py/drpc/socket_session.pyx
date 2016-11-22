@@ -386,7 +386,6 @@ cdef class DRPCSocketSession:
 
     cdef bint defunct(self):
         if self._sock is None:
-            print 'no more sock', self._sock
             return True
 
         if self._shutting_down:
