@@ -1,4 +1,6 @@
-ENCODERS = {}
+from collections import OrderedDict
+
+ENCODERS = OrderedDict()
 
 try:
     import msgpack

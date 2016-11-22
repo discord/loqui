@@ -40,6 +40,7 @@ cdef class DRPCClient:
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.settimeout(self._connect_timeout)
                 sock.connect(self._address)
+                self.handle_new_socket(sock)
                 sock.setblocking(False)
                 self._session = DRPCSocketSession(sock, ENCODERS)
                 # self._backoff.succeed()
@@ -58,3 +59,40 @@ cdef class DRPCClient:
     cpdef send_push(self, push_data):
         self.connect()
         self._session.send_push(push_data)
+
+    def handle_new_socket(self, socket):
+        pass
+
+
+cdef class DRPCHTTPUpgradeCient(DRPCClient):
+    def handle_new_socket(self, sock):
+        upgrade_payload = '\r\n'.join([
+            b'GET /_rpc HTTP/1.1',
+            (b'Host: %s' % self._address[0]),
+            b'Upgrade: drpc',
+            b'Connection: Upgrade',
+            b'',
+            b''
+        ])
+
+        sock.sendall(upgrade_payload)
+        expected_handshake_response = '\r\n'.join([
+            b'HTTP/1.1 101 Switching Protocols',
+            b'Upgrade: drpc',
+            b'Connection: Upgrade',
+            b'',
+            b''
+        ])
+
+        bytes_remaining = len(expected_handshake_response)
+        handshake_response = b''
+        while bytes_remaining:
+            buf = sock.recv(bytes_remaining)
+            if not buf:
+                raise ConnectionError('Connection died while reading handshake response')
+
+            handshake_response += buf
+            bytes_remaining -= len(buf)
+
+        if handshake_response != expected_handshake_response:
+            raise ConnectionError('Invalid handshake response: %s' % handshake_response)

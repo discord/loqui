@@ -6,7 +6,7 @@ from drpc.server import DRPCServer
 
 class Server(DRPCServer):
     def handle_request(self, request):
-        return 'OK!'
+        return request
 
     def handle_push(self, push):
         # print 'psuh'

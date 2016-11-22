@@ -22,7 +22,7 @@ class CloseReasons(object):
     NO_MUTUAL_ENCODERS = 3
 
 cdef class DRPCSocketSession:
-    def __cinit__(self, object sock, dict encoders, bint is_client=True, object on_request=None, object on_push=None):
+    def __cinit__(self, object sock, object encoders, bint is_client=True, object on_request=None, object on_push=None):
         self._is_client = is_client
         self._stream_handler = DRPCStreamHandler()
         self._sock = sock
@@ -161,7 +161,7 @@ cdef class DRPCSocketSession:
         if not request:
             raise Exception('Sending response for unknown seq %s' % seq)
 
-        self._stream_handler.send_response(seq, data)
+        self._stream_handler.send_response(seq, self._encode_data(data))
         self._resume_sending()
         return None
 
@@ -242,7 +242,7 @@ cdef class DRPCSocketSession:
             # In this case, we set the inflight requests to the given request. That way send_response
             # will know if the seq is valid or not.
             self._inflight_requests[request.seq] = request
-            response = self._on_request(request)
+            response = self._on_request(self._decode_data(request.data))
             # If a response is given, we can return it to the sender right away.
             # Otherwise, it's the responsibility of the `_on_request` handler to eventually
             # call `send_response`.
@@ -253,7 +253,7 @@ cdef class DRPCSocketSession:
         request = self._inflight_requests.pop(response.seq)
         if request:
             # If we've gotten a response for a request we've made.
-            request.set(response)
+            request.set(self._decode_data(response.data))
 
     cdef _handle_push(self, Push push):
         if self._on_push:
@@ -278,6 +278,7 @@ cdef class DRPCSocketSession:
         else:
             self._encoder_dumps = encoder.dumps
             self._encoder_loads = encoder.loads
+            self._encoding = encoding
             self._send_select_encoding(encoding)
             self._is_ready = True
             self._ready_event.set()
@@ -290,6 +291,7 @@ cdef class DRPCSocketSession:
         else:
             self._encoder_dumps = encoder.dumps
             self._encoder_loads = encoder.loads
+            self._encoding = select_encoding.encoding
             self._is_ready = True
             self._ready_event.set()
 

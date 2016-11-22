@@ -16,12 +16,13 @@ cdef class DRPCSocketSession:
     cdef bint _is_ready
     cdef bytes _write_buf
     cdef uint32_t _ping_interval
-    cdef dict _available_encoders
+    cdef object _available_encoders
 
     cdef object _on_request
     cdef object _on_push
     cdef object _encoder_loads
     cdef object _encoder_dumps
+    cdef bytes _encoding
 
     cdef _resume_sending(self)
     cdef shutdown(self)

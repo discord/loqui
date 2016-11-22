@@ -5,14 +5,14 @@ from traceback import print_exc
 from gevent.monkey import patch_all
 patch_all()
 
-from drpc.client import DRPCHTTPUpgradeCient
+from drpc.client import DRPCClient
 
 
 i = 0
 in_flight = set()
 failed_requests = 0
 
-client = DRPCHTTPUpgradeCient(('localhost', 8080))
+client = DRPCClient(('localhost', 4001))
 
 
 class Request(object):
