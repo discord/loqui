@@ -57,4 +57,4 @@ cdef class DRPCClient:
 
     cpdef send_push(self, push_data):
         self.connect()
-        response = self._session.send_push(push_data)
+        self._session.send_push(push_data)

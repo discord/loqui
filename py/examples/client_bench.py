@@ -27,6 +27,7 @@ def do_work():
 
     try:
         res = client.send_request('hello world')
+        # gevent.sleep(0)
         assert res.data == 'OK!'
         i += 1
     except GreenletExit:
@@ -63,15 +64,16 @@ def work_loop():
 
     while True:
         do_work()
+        gevent.sleep(1)
         # gevent.spawn(do_work)
         # gevent.sleep(random.random() + .5)
 
 
 import gevent
-
+client.send_request('hi')
 greenlets = [gevent.spawn(log_loop)]
-for _ in xrange(150):
-    greenlets.append(gevent.spawn(work_loop))
+# for _ in xrange(1):
+#     greenlets.append(gevent.spawn(work_loop))
 
 import signal
 

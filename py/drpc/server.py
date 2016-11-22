@@ -10,7 +10,7 @@ from drpc.socket_session import DRPCSocketSession
 
 
 class DRPCServer:
-    def __init__(self, server_address, allow_reuse_address=True, request_queue_size=10):
+    def __init__(self, server_address):
         self.server = StreamServer(server_address, self._handle_connection)
 
     def serve_forever(self):

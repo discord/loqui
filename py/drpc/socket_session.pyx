@@ -32,7 +32,7 @@ cdef class DRPCSocketSession:
         self._stop_event = Event()
         self._close_event = Event()
         self._ready_event = Event()
-        self._ping_interval = 30
+        self._ping_interval = 5
         self._write_buf = b''
         self._is_ready = False
 
@@ -173,7 +173,6 @@ cdef class DRPCSocketSession:
         return result
 
     cpdef object _send_select_encoding(self, bytes encoding):
-        print 'select encoding', encoding
         if not self._is_client:
             raise RuntimeError('Servers cannot select encoding.')
 

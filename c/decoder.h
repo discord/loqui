@@ -46,13 +46,13 @@ static inline size_t drpc_get_data_payload_size(drpc_decode_buffer_t* pk) {
   }
 }
 
-static inline size_t drpc_get_seq(drpc_decode_buffer_t* pk) {
+static inline uint32_t drpc_get_seq(drpc_decode_buffer_t* pk) {
   switch (pk->opcode) {
     case DRPC_OP_REQUEST:
     case DRPC_OP_RESPONSE:
     case DRPC_OP_PING:
     case DRPC_OP_PONG:
-      return _drpc_load32(size_t, pk->drpc_buffer.buf);
+      return _drpc_load32(uint32_t, pk->drpc_buffer.buf);
     default:
       return 0;
   }
@@ -75,10 +75,10 @@ static inline uint8_t drpc_get_code(drpc_decode_buffer_t* pk) {
   }
 }
 
-static inline uint8_t drpc_get_ping_interval(drpc_decode_buffer_t* pk) {
+static inline uint32_t drpc_get_ping_interval(drpc_decode_buffer_t* pk) {
   switch (pk->opcode) {
     case DRPC_OP_HELLO:
-      return _drpc_load32(size_t, pk->drpc_buffer.buf + sizeof(uint8_t));
+      return _drpc_load32(uint32_t, pk->drpc_buffer.buf + sizeof(uint8_t));
     default:
       return 0;
   }
