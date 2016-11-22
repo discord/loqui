@@ -34,6 +34,7 @@ cdef class DRPCSocketSession:
         self._ready_event = Event()
         self._ping_interval = 5
         self._is_ready = False
+        self._shutting_down = False
 
         if not self._is_client:
             self._on_request = on_request
@@ -69,6 +70,8 @@ cdef class DRPCSocketSession:
         if sock:
             self._watcher.request_switch()
 
+        self._cleanup_inflight_requests(ConnectionTerminated())
+
         if not self._close_event.is_set():
             self._close_event.set()
 
@@ -96,7 +99,6 @@ cdef class DRPCSocketSession:
         if self._close_event.wait(self._ping_interval):
             return
 
-        self._cleanup_inflight_requests(ConnectionTerminated())
         self._cleanup_socket()
 
     cdef _cleanup_inflight_requests(self, close_exception):
@@ -381,3 +383,13 @@ cdef class DRPCSocketSession:
         finally:
             sock_read_watcher.stop()
             sock_write_watcher.stop()
+
+    cdef bint defunct(self):
+        if self._sock is None:
+            print 'no more sock', self._sock
+            return True
+
+        if self._shutting_down:
+            return True
+
+        return False

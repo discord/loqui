@@ -45,7 +45,11 @@ def run_client_bench(client, concurrency):
             now = time.time()
             elapsed = now - last
             req_sec = (i - last_i) / elapsed
-            avg_time = request_time / (i - last_i)
+            if i - last_i:
+                avg_time = request_time / (i - last_i)
+            else:
+                avg_time = 0
+
             # max_age = max(now - r.start_time for r in in_flight) if in_flight else 0
             print '%s total requests (%.2f/sec). last log %.2f sec ago. %s failed, %s in flight, %.2f ms max, %.2f ms avg response time' % (
                 i, req_sec, elapsed, failed_requests, in_flight, max_age * 1000, avg_time * 1000

@@ -4,6 +4,7 @@ from gevent.event import Event
 
 from drpc.exceptions import ConnectionError
 from socket_session cimport DRPCSocketSession
+from exponential_backoff cimport Backoff
 
 from encoders import ENCODERS
 
@@ -13,6 +14,7 @@ cdef class DRPCClient:
     cdef object _session_event
     cdef tuple _address
     cdef int _connect_timeout
+    cdef Backoff _backoff
 
     def __init__(self, address):
         self._session = None
@@ -20,15 +22,23 @@ cdef class DRPCClient:
         self._session_event = Event()
         self._address = address
         self._connect_timeout = 5
+        self._backoff = Backoff(min_delay=0.25, max_delay=2)
 
     cdef connect(self):
+        if self._session is not None and self._session.defunct():
+            session = self._session
+            with self._session_lock:
+                if session is self._session:
+                    self._session_event.clear()
+                    self._session = None
+
         if self._session is not None:
             return
 
-        # if self._backoff.fails:
-        #     self._session_event.wait(self._backoff.current)
-        #    if self._session is not None:
-        #        return
+        if self._backoff.fails():
+           self._session_event.wait(self._backoff.current())
+           if self._session is not None:
+               return
 
         with self._session_lock:
             if self._session is not None:
@@ -43,18 +53,24 @@ cdef class DRPCClient:
                 self.handle_new_socket(sock)
                 sock.setblocking(False)
                 self._session = DRPCSocketSession(sock, ENCODERS)
-                # self._backoff.succeed()
+                self._backoff.succeed()
                 self._session_event.set()
                 print 'connected'
 
             except socket.error:
-                # self._backoff.fail()
+                self._backoff.fail()
                 raise ConnectionError('No connection available')
 
-    cpdef send_request(self, request_data, timeout=None):
-        self.connect()
-        response = self._session.send_request(request_data)
-        return response.get(timeout=timeout)
+    cpdef send_request(self, request_data, timeout=None, retries=3):
+        try:
+            self.connect()
+            response = self._session.send_request(request_data)
+            return response.get(timeout=timeout)
+        except ConnectionError:
+            if retries:
+                return self.send_request(request_data, timeout, retries - 1)
+
+            raise
 
     cpdef send_push(self, push_data):
         self.connect()

@@ -14,6 +14,7 @@ cdef class DRPCSocketSession:
     cdef object _close_event
     cdef object _ready_event
     cdef bint _is_ready
+    cdef bint _shutting_down
     cdef uint32_t _ping_interval
     cdef object _available_encoders
 
@@ -53,3 +54,4 @@ cdef class DRPCSocketSession:
     cdef _pick_best_encoding(self, list encodings)
     cpdef _ping_loop(self)
     cpdef _run_loop(self)
+    cdef bint defunct(self)
