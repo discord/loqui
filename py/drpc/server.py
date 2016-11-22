@@ -1,8 +1,4 @@
 import socket
-from SocketServer import _eintr_retry
-
-from gevent import select
-from gevent.event import Event
 from gevent.server import StreamServer
 
 from drpc.encoders import ENCODERS
@@ -30,8 +26,8 @@ class DRPCServer:
         session.join()
         print 'connection from', addr, 'done'
 
-    def handle_request(self, request):
+    def handle_request(self, request, session):
         pass
 
-    def handle_push(self, push):
+    def handle_push(self, push, session):
         pass

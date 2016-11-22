@@ -241,8 +241,9 @@ cdef class DRPCSocketSession:
         if self._on_request:
             # In this case, we set the inflight requests to the given request. That way send_response
             # will know if the seq is valid or not.
+            request.data = self._decode_data(request.data)
             self._inflight_requests[request.seq] = request
-            response = self._on_request(self._decode_data(request.data))
+            response = self._on_request(request, self)
             # If a response is given, we can return it to the sender right away.
             # Otherwise, it's the responsibility of the `_on_request` handler to eventually
             # call `send_response`.
@@ -257,7 +258,8 @@ cdef class DRPCSocketSession:
 
     cdef _handle_push(self, Push push):
         if self._on_push:
-            self._on_push(push)
+            push.data = self._decode_data(push.data)
+            self._on_push(push, self)
 
     cdef _handle_ping(self, Ping ping):
         # Nothing to do here - the stream handler handles sending pongs back for us.
