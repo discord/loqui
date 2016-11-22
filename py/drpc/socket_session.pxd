@@ -14,7 +14,6 @@ cdef class DRPCSocketSession:
     cdef object _close_event
     cdef object _ready_event
     cdef bint _is_ready
-    cdef bytes _write_buf
     cdef uint32_t _ping_interval
     cdef object _available_encoders
 

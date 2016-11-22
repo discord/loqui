@@ -263,7 +263,7 @@ cdef class DRPCStreamHandler:
         """
         return self.write_buffer.length - self.write_buffer_position
 
-    cpdef bytes write_buffer_get_bytes(self, size_t length):
+    cpdef bytes write_buffer_get_bytes(self, size_t length, bint consume=True):
         """
         Returns a bytes object that has at least n bytes from the write buffer. This function removes the data
         from the buffer. It's assumed that the caller will hold onto this data until it's successfully sent.
@@ -279,9 +279,20 @@ cdef class DRPCStreamHandler:
             return None
 
         cdef bytes write_buffer = PyBytes_FromStringAndSize(self.write_buffer.buf + self.write_buffer_position, length)
+        if consume:
+            self.write_buffer_position += length
+            self._reset_or_compact_write_buf()
+
+        return write_buffer
+
+    cpdef size_t write_buffer_consume_bytes(self, size_t length):
+        cdef size_t buffer_len_remaining = self.write_buffer_len()
+        if length > buffer_len_remaining:
+            length = buffer_len_remaining
+
         self.write_buffer_position += length
         self._reset_or_compact_write_buf()
-        return write_buffer
+        return buffer_len_remaining - length
 
     cpdef list on_bytes_received(self, bytes data):
         """

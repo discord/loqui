@@ -33,7 +33,6 @@ cdef class DRPCSocketSession:
         self._close_event = Event()
         self._ready_event = Event()
         self._ping_interval = 5
-        self._write_buf = b''
         self._is_ready = False
 
         if not self._is_client:
@@ -53,13 +52,6 @@ cdef class DRPCSocketSession:
         if self._stream_handler.write_buffer_len() == 0:
             return
 
-        cdef size_t buffer_size = PyBytes_GET_SIZE(self._write_buf)
-        cdef size_t request_size = OUTBUF_MAX - buffer_size
-
-        if request_size == 0:
-            return
-
-        self._write_buf += self._stream_handler.write_buffer_get_bytes(request_size)
         self._watcher.switch_if_write_unblocked()
 
     cdef shutdown(self):
@@ -73,8 +65,6 @@ cdef class DRPCSocketSession:
         self._sock = None
         if sock:
             sock.close()
-
-        self._write_buf = b''
 
         if sock:
             self._watcher.request_switch()
@@ -329,6 +319,7 @@ cdef class DRPCSocketSession:
         cdef object sock_recv = self._sock.recv
         cdef object sock_send = self._sock.send
         cdef object watcher_mark_ready = (<object> self._watcher).mark_ready
+        cdef size_t write_bytes_remaining
 
         sock_read_watcher = io(self._watcher.sock_fileno, READ)
         sock_write_watcher = io(self._watcher.sock_fileno, WRITE)
@@ -337,7 +328,7 @@ cdef class DRPCSocketSession:
             sock_read_watcher.start(watcher_mark_ready, self._watcher.sock_fileno, True)
 
             while self._sock:
-                if write_watcher_started == False and PyBytes_GET_SIZE(self._write_buf) > 0:
+                if write_watcher_started == False and self._stream_handler.write_buffer_len() > 0:
                     sock_write_watcher.start(watcher_mark_ready, self._watcher.sock_fileno, False)
 
                 self._watcher.wait()
@@ -363,28 +354,25 @@ cdef class DRPCSocketSession:
                 # We should attempt to write, if the watcher has notified us that the socket is ready
                 # to accept more data, or we aren't write blocked yet - and we have a write buffer.
                 sock_should_write = self._watcher.sock_write_ready or (
-                    not self._watcher.sock_write_blocked and PyBytes_GET_SIZE(self._write_buf) > 0
+                    not self._watcher.sock_write_blocked and self._stream_handler.write_buffer_len() > 0
                 )
 
                 if sock_should_write:
-                    bytes_written = sock_send(self._write_buf)
+                    bytes_written = sock_send(self._stream_handler.write_buffer_get_bytes(OUTBUF_MAX, False))
                     # No bytes have been written. It's safe to assume the socket is still (somehow) blocked
                     # and we don't need to do anything.
                     if not bytes_written:
                         self._watcher.sock_write_blocked = True
                         continue
 
-                    # Trim the buffer if it's shrunk.
-                    self._write_buf = self._write_buf[bytes_written:]
+                    write_bytes_remaining = self._stream_handler.write_buffer_consume_bytes(bytes_written)
                     # Did we completely write the buffer? If so - the socket isn't blocked anymore.
-                    self._watcher.sock_write_blocked = PyBytes_GET_SIZE(self._write_buf) > 0
-                    # Attempt to pull more data to send. Calling this here will not result in a switch.
-                    self._resume_sending()
+                    self._watcher.sock_write_blocked = write_bytes_remaining > 0
 
                     # If no data is available to send - we can stop the watcher. Otherwise,
                     # we will leave the watcher open, so the data filled into the buffer
                     # will attempt to be written upon the next tick of the event loop.
-                    if PyBytes_GET_SIZE(self._write_buf) == 0:
+                    if write_bytes_remaining == 0:
                         sock_write_watcher.stop()
                         write_watcher_started = False
 
