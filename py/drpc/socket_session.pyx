@@ -5,7 +5,6 @@ import gevent
 from gevent.event import AsyncResult, Event
 
 from libc.stdint cimport uint32_t
-from cpython cimport PyBytes_GET_SIZE
 
 from drpc.exceptions import NoEncoderAvailable, ConnectionTerminated
 from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
@@ -38,13 +37,17 @@ cdef class DRPCSocketSession:
 
         if not self._is_client:
             self._on_request = on_request
-            self._on_push = on_push
+
+        self._on_push = on_push
 
         gevent.spawn(self._ping_loop)
         gevent.spawn(self._run_loop)
 
         if not is_client:
             self._send_hello()
+
+    cpdef set_push_handler(self, object push_handler):
+        self._on_push = None
 
     cdef _resume_sending(self):
         if self._sock is None:
@@ -196,6 +199,9 @@ cdef class DRPCSocketSession:
         for event in events:
             if isinstance(event, Response):
                 self._handle_response(event)
+
+            elif isinstance(event, Push):
+                self._handle_push(event)
 
             elif isinstance(event, Ping):
                 self._handle_ping(event)

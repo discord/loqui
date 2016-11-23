@@ -13,17 +13,24 @@ cdef class DRPCClient:
     cdef DRPCSocketSession _session
     cdef object _session_lock
     cdef object _session_event
+    cdef object _push_handler
     cdef tuple _address
     cdef int _connect_timeout
     cdef Backoff _backoff
 
-    def __init__(self, address):
+    def __init__(self, address, push_handler):
         self._session = None
         self._session_lock = RLock()
         self._session_event = Event()
         self._address = address
         self._connect_timeout = 5
+        self._push_handler = push_handler
         self._backoff = Backoff(min_delay=0.25, max_delay=2)
+
+    cpdef set_push_handler(self, object push_handler):
+        self._push_handler = push_handler
+        if self._session:
+            self._session.set_push_handler(push_handler)
 
     cdef inline _clear_current_session(self):
         cdef DRPCSocketSession session = self._session
@@ -57,7 +64,7 @@ cdef class DRPCClient:
                 sock.connect(self._address)
                 self.handle_new_socket(sock)
                 sock.setblocking(False)
-                self._session = DRPCSocketSession(sock, ENCODERS)
+                self._session = DRPCSocketSession(sock, ENCODERS, on_push=self._push_handler)
                 self._backoff.succeed()
                 self._session_event.set()
                 logging.info('[DRPC] Connected to %s:%s', self._address[0], self._address[1])

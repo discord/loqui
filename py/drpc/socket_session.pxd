@@ -24,6 +24,7 @@ cdef class DRPCSocketSession:
     cdef object _encoder_dumps
     cdef bytes _encoding
 
+    cdef set_push_handler(self, object push_handler)
     cdef _resume_sending(self)
     cdef shutdown(self)
     cdef void _cleanup_socket(self)
