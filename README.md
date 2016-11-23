@@ -21,7 +21,7 @@ Each frame starts with the opcode as an unsigned 8 bit integer (`uint8`). The op
 | `PONG`            | `4`   | Both             | No            |
 | `REQUEST`         | `5`   | Client           | Yes           |
 | `RESPONSE`        | `6`   | Server           | Yes           |
-| `PUSH`            | `7`   | Client           | Yes           |
+| `PUSH`            | `7`   | BOTH             | Yes           |
 | `GOAWAY`          | `8`   | Both             | Yes           |
 | `ERROR`           | `9`   | Server           | Yes           |
 
@@ -74,7 +74,7 @@ request sequence.
 | `9`    | binary   | Payload Data     |
 
 ## `Push`
-The client can send pushes to the server. The server does not need to reply to these. These are good for one off messages to
+The client and server can send pushes to their remote connection. These are good for one off messages to
 the service that do not need to be acknowledged. 
 
 | Offset | Type     | Description      |
