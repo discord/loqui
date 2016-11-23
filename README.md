@@ -23,6 +23,7 @@ Each frame starts with the opcode as an unsigned 8 bit integer (`uint8`). The op
 | `RESPONSE`        | `6`   | Server           | Yes           |
 | `PUSH`            | `7`   | Client           | Yes           |
 | `GOAWAY`          | `8`   | Both             | Yes           |
+| `ERROR`           | `9`   | Server           | Yes           |
 
 Following the opcode is the frame header - and then if applicable - the payload.
 All integers are encoded in `Big Endian` format. 
@@ -49,7 +50,7 @@ and what encoding the server should speak while talking to the client.
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
 | `1`    | uint32   | Payload Size     | 
-| `5 `   | binary   | Payload Data     |
+| `5`    | binary   | Payload Data     |
 
 
 ## `Ping/Pong`
@@ -70,7 +71,7 @@ request sequence.
 | `0`    | uint8    | opcode           |
 | `1`    | uint32   | Sequence Num     | 
 | `5`    | uint32   | Payload Size     | 
-| `9 `   | binary   | Payload Data     |
+| `9`    | binary   | Payload Data     |
 
 ## `Push`
 The client can send pushes to the server. The server does not need to reply to these. These are good for one off messages to
@@ -80,7 +81,7 @@ the service that do not need to be acknowledged.
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
 | `1`    | uint32   | Payload Size     | 
-| `5 `   | binary   | Payload Data     |
+| `5`    | binary   | Payload Data     |
 
 ## `Go Away`
 The client or server is getting ready to shut down the connection. It sends this opcode to tell the other end to finish sending 
@@ -90,5 +91,16 @@ requests and to disconnect. The payload data can be empty, or a string with an e
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
 | `1`    | uint8    | close code       | 
-| `2 `   | uint32   | Payload Size     |
-| `6 `   | binary   | Payload Data     |
+| `2`    | uint32   | Payload Size     |
+| `6`    | binary   | Payload Data     |
+
+## `Error`
+The server had an internal error processing a given request for a specific seq.
+
+| Offset | Type     | Description      |
+| ------ | -------- | -----------------|
+| `0`    | uint8    | opcode           |
+| `1`    | uint8    | error code       |
+| `2`    | uint32   | Sequence Num     |
+| `6`    | uint32   | Payload Size     |
+| `10`   | binary   | Payload Data     |

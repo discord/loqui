@@ -36,3 +36,9 @@ cdef class GoAway:
 cdef class SelectEncoding:
     def __cinit__(self, bytes encoding):
         self.encoding = encoding
+
+cdef class Error:
+    def __cinit__(self, uint8_t code, uint32_t seq, bytes data):
+        self.code = code
+        self.seq = seq
+        self.data = data

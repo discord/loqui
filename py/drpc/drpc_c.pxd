@@ -21,6 +21,7 @@ cdef extern from "../../c/encoder.h":
     int drpc_append_response(drpc_buffer_t *b, uint32_t seq, uint32_t size, const char *data)
     int drpc_append_push(drpc_buffer_t *b, uint32_t size, const char *data)
     int drpc_append_goaway(drpc_buffer_t *b, uint8_t code, uint32_t size, const char *data)
+    int drpc_append_error(drpc_buffer_t *b, uint8_t code, uint32_t seq, uint32_t size, const char *data)
 
 cdef extern from "../../c/decoder.h":
     drpc_decoder_status drpc_decoder_read_data(drpc_decode_buffer_t *pk, size_t size, const char *data, size_t* consumed)
@@ -37,13 +38,14 @@ cdef extern from "../../c/constants.h":
 
     ctypedef enum drpc_opcodes:
         DRPC_OP_HELLO
+        DRPC_OP_SELECT_ENCODING
         DRPC_OP_PING
         DRPC_OP_PONG
         DRPC_OP_REQUEST
         DRPC_OP_RESPONSE
         DRPC_OP_PUSH
         DRPC_OP_GOAWAY
-        DRPC_OP_SELECT_ENCODING
+        DRPC_OP_ERROR
 
     ctypedef enum drpc_decoder_status:
         DRPC_DECODE_NEEDS_MORE

@@ -257,6 +257,30 @@ cdef class DRPCStreamHandler:
 
         return 1
 
+    cpdef uint32_t send_error(self, uint8_t code, uint32_t seq, bytes data) except 0:
+        """
+        Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
+        This function does not validate if the given seq is in-flight. It's assumed that the client will handle
+        duplicate responses correctly.
+
+        :param seq: The seq to reply to.
+        :param data: The data to respond with.
+        """
+        cdef int rv
+        cdef char *buffer = NULL
+        cdef size_t size = 0
+
+        if data:
+            rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
+            if rv < 0:
+                raise TypeError('data is not bytes!')
+
+        rv = drpc_c.drpc_append_error(&self.write_buffer, code, seq, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError('not enough memory to fulfill buffer')
+
+        return 1
+
     cpdef size_t write_buffer_len(self):
         """
         Gets the length of the write buffer - if non-zero, it means that we have data to write.

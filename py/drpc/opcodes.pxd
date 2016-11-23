@@ -28,3 +28,8 @@ cdef class GoAway:
 
 cdef class SelectEncoding:
     cdef readonly bytes encoding
+
+cdef class Error:
+    cdef readonly uint8_t code
+    cdef readonly uint32_t seq
+    cdef readonly bytes data

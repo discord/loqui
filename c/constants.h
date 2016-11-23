@@ -15,6 +15,7 @@ typedef enum {
   DRPC_OP_RESPONSE = 6,
   DRPC_OP_PUSH = 7,
   DRPC_OP_GOAWAY = 8,
+  DRPC_OP_ERROR = 9
 } drpc_opcodes;
 
 

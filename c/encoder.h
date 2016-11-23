@@ -123,6 +123,28 @@ static inline int drpc_append_goaway(drpc_buffer_t *b, uint8_t code, uint32_t si
   drpc_append(b, data, size);
 }
 
+static inline int drpc_append_error(drpc_buffer_t *b, uint8_t code, uint32_t seq, uint32_t size, const char* data) {
+  #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t)
+  unsigned char buf[SIZE];
+  buf[0] = DRPC_OP_GOAWAY;
+  buf[1] = code;
+  _drpc_store32(buf + 2, seq);
+  _drpc_store32(buf + 6, size);
+
+  int ret = drpc_buffer_write(b, (const char*) buf, SIZE);
+  #undef SIZE
+
+  if (ret < 0)
+    return ret;
+
+  if (size > 0) {
+    drpc_append(b, data, size);
+  }
+  else {
+    return 0;
+  }
+}
+
 #undef drpc_append
 
 #endif

@@ -1,4 +1,4 @@
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint32_t, uint8_t
 cimport drpc_c
 
 cdef class DRPCStreamHandler:
@@ -18,6 +18,7 @@ cdef class DRPCStreamHandler:
     cpdef uint32_t send_select_encoding(self, bytes data) except 0
     cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0
     cpdef uint32_t send_hello(self, uint32_t ping_interval, list available_encodings) except 0
+    cpdef uint32_t send_error(self, uint8_t code, uint32_t seq, bytes data) except 0
     cpdef size_t write_buffer_len(self)
     cpdef bytes write_buffer_get_bytes(self, size_t length, bint consume=?)
     cpdef size_t write_buffer_consume_bytes(self, size_t length)
