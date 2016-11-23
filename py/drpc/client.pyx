@@ -5,6 +5,7 @@ from gevent.event import Event
 from drpc.exceptions import ConnectionError
 from socket_session cimport DRPCSocketSession
 from exponential_backoff cimport Backoff
+import logging
 
 from encoders import ENCODERS
 
@@ -26,7 +27,6 @@ cdef class DRPCClient:
 
     cdef inline _clear_current_session(self):
         cdef DRPCSocketSession session = self._session
-        session = self._session
         with self._session_lock:
             if session is self._session:
                 self._backoff.fail()
@@ -50,7 +50,7 @@ cdef class DRPCClient:
                 return
 
             try:
-                print ('connect, address:%s, port:%s', self._address[0], self._address[1])
+                logging.info('[DRPC] Connecting to %s:%s', self._address[0], self._address[1])
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.settimeout(self._connect_timeout)
@@ -60,9 +60,10 @@ cdef class DRPCClient:
                 self._session = DRPCSocketSession(sock, ENCODERS)
                 self._backoff.succeed()
                 self._session_event.set()
-                print 'connected'
+                logging.info('[DRPC] Connected to %s:%s', self._address[0], self._address[1])
 
             except socket.error:
+                logging.exception('[DRPC] Connection to %s:%s failed.', self._address[0], self._address[1])
                 self._backoff.fail()
                 raise ConnectionError('No connection available')
 
