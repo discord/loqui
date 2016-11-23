@@ -19,6 +19,7 @@ cdef class DRPCStreamHandler:
     cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0
     cpdef uint32_t send_hello(self, uint32_t ping_interval, list available_encodings) except 0
     cpdef uint32_t send_error(self, uint8_t code, uint32_t seq, bytes data) except 0
+    cpdef uint32_t send_goaway(self, uint8_t code, bytes reason) except 0
     cpdef size_t write_buffer_len(self)
     cpdef bytes write_buffer_get_bytes(self, size_t length, bint consume=?)
     cpdef size_t write_buffer_consume_bytes(self, size_t length)

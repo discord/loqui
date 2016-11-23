@@ -24,7 +24,7 @@ cdef class Hello:
 
 cdef class GoAway:
     cdef readonly uint8_t code
-    cdef readonly bytes data
+    cdef readonly bytes reason
 
 cdef class SelectEncoding:
     cdef readonly bytes encoding

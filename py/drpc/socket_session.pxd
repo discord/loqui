@@ -1,4 +1,4 @@
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint32_t, uint8_t
 
 from stream_handler cimport DRPCStreamHandler
 from socket_watcher cimport SocketWatcher
@@ -10,11 +10,15 @@ cdef class DRPCSocketSession:
     cdef SocketWatcher _watcher
     cdef dict _inflight_requests
     cdef bint _is_client
-    cdef object _stop_event
-    cdef object _close_event
-    cdef object _ready_event
-    cdef bint _is_ready
+
     cdef bint _shutting_down
+    cdef object _shutdown_event
+
+    cdef object _close_event
+
+    cdef bint _is_ready
+    cdef object _ready_event
+
     cdef uint32_t _ping_interval
     cdef object _available_encoders
 
@@ -24,13 +28,18 @@ cdef class DRPCSocketSession:
     cdef object _encoder_dumps
     cdef bytes _encoding
 
-    cdef set_push_handler(self, object push_handler)
+    cpdef set_push_handler(self, object push_handler)
+    cpdef join(self, timeout=?)
+    cpdef terminate(self)
+    cpdef close(self, uint8_t code=?, bytes reason=?, block=?, block_timeout=?, close_timeout=?,
+                bint via_remote_goaway=?)
+
+    cdef bint defunct(self)
+
     cdef _resume_sending(self)
+    cpdef _close_timeout(self)
     cdef shutdown(self)
     cdef void _cleanup_socket(self)
-    cpdef close(self, bint block=?, int reason=?, timeout=?)
-    cpdef join(self, timeout=?)
-    cpdef _terminate(self)
     cdef _cleanup_inflight_requests(self, close_exception)
     cdef _encode_data(self, object data)
     cdef _decode_data(self, object data)
@@ -55,4 +64,3 @@ cdef class DRPCSocketSession:
     cdef _pick_best_encoding(self, list encodings)
     cpdef _ping_loop(self)
     cpdef _run_loop(self)
-    cdef bint defunct(self)

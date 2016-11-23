@@ -2,6 +2,8 @@ from cpython cimport *
 from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport uint32_t, uint8_t
+
+from exceptions import DRPCDecoderError
 cimport drpc_c
 cimport opcodes
 
@@ -137,7 +139,7 @@ cdef class DRPCStreamHandler:
         cdef uint32_t seq = self.next_seq()
         rv = drpc_c.drpc_append_ping(&self.write_buffer, seq)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return seq
 
@@ -150,7 +152,7 @@ cdef class DRPCStreamHandler:
         cdef int rv
         rv = drpc_c.drpc_append_pong(&self.write_buffer, seq)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return 1
 
@@ -167,11 +169,11 @@ cdef class DRPCStreamHandler:
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
-            raise TypeError('data is not bytes!')
+            raise TypeError()
 
         rv = drpc_c.drpc_append_request(&self.write_buffer, seq, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return seq
 
@@ -186,11 +188,11 @@ cdef class DRPCStreamHandler:
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
-            raise TypeError('data is not bytes!')
+            raise TypeError()
 
         rv = drpc_c.drpc_append_push(&self.write_buffer, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return 1
 
@@ -207,11 +209,11 @@ cdef class DRPCStreamHandler:
         cdef bytes data = b','.join([bytes(b) for b in available_encodings])
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
-            raise TypeError('data is not bytes!')
+            raise TypeError()
 
         rv = drpc_c.drpc_append_hello(&self.write_buffer, ping_interval, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return 1
 
@@ -226,11 +228,11 @@ cdef class DRPCStreamHandler:
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
-            raise TypeError('data is not bytes!')
+            raise TypeError()
 
         rv = drpc_c.drpc_append_select_encoding(&self.write_buffer, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return 1
 
@@ -249,11 +251,11 @@ cdef class DRPCStreamHandler:
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
-            raise TypeError('data is not bytes!')
+            raise TypeError()
 
         rv = drpc_c.drpc_append_response(&self.write_buffer, seq, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
 
         return 1
 
@@ -263,6 +265,7 @@ cdef class DRPCStreamHandler:
         This function does not validate if the given seq is in-flight. It's assumed that the client will handle
         duplicate responses correctly.
 
+        :param code: The error code
         :param seq: The seq to reply to.
         :param data: The data to respond with.
         """
@@ -273,11 +276,33 @@ cdef class DRPCStreamHandler:
         if data:
             rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
             if rv < 0:
-                raise TypeError('data is not bytes!')
+                raise TypeError()
 
         rv = drpc_c.drpc_append_error(&self.write_buffer, code, seq, size, <const char*> buffer)
         if rv < 0:
-            raise MemoryError('not enough memory to fulfill buffer')
+            raise MemoryError()
+
+        return 1
+
+    cpdef uint32_t send_goaway(self, uint8_t code, bytes reason) except 0:
+        """
+        Enqueues a goaway message to be sent - letting the remote end know that a connection termination is imminent.
+
+        :param code: The go away code
+        :param reason: A human readable string describing the reason for going away.
+        """
+        cdef int rv
+        cdef char *buffer = NULL
+        cdef size_t size = 0
+
+        if reason:
+            rv = PyBytes_AsStringAndSize(reason, &buffer, <Py_ssize_t*> &size)
+            if rv < 0:
+                raise TypeError()
+
+        rv = drpc_c.drpc_append_goaway(&self.write_buffer, code, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError()
 
         return 1
 
@@ -336,7 +361,7 @@ cdef class DRPCStreamHandler:
             decoder_status = drpc_c.drpc_decoder_read_data(&self.decode_buffer, size, buf, &consumed)
             if decoder_status < 0:
                 self._reset_decode_buf()
-                raise Exception('The decoder failed with status %s' % decoder_status)
+                raise DRPCDecoderError('The decoder failed with status %s' % decoder_status)
 
             if decoder_status == drpc_c.DRPC_DECODE_NEEDS_MORE:
                 break
@@ -345,7 +370,7 @@ cdef class DRPCStreamHandler:
                 received_payloads.append(self._consume_decode_buffer())
 
             else:
-                raise Exception('Unhandled decoder status %s' % decoder_status)
+                raise DRPCDecoderError('Unhandled decoder status %s' % decoder_status)
 
             size -= consumed
             buf += consumed

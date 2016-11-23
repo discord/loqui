@@ -28,6 +28,9 @@ class Server(DRPCServer):
     def handle_request(self, request, session):
         global i
         i += 1
+        if i and i % 50000 == 0:
+            session.close()
+
         return request.data
 
     def handle_push(self, push, session):

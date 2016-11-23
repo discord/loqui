@@ -29,9 +29,9 @@ cdef class Hello:
         self.supported_encodings = supported_encodings
 
 cdef class GoAway:
-    def __cinit__(self, uint8_t code, bytes data):
+    def __cinit__(self, uint8_t code, bytes reason):
         self.code = code
-        self.data = data
+        self.reason = reason
 
 cdef class SelectEncoding:
     def __cinit__(self, bytes encoding):

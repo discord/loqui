@@ -1,4 +1,6 @@
 import socket
+
+import gevent
 from gevent.lock import RLock
 from gevent.event import Event
 
@@ -12,16 +14,14 @@ from encoders import ENCODERS
 cdef class DRPCClient:
     cdef DRPCSocketSession _session
     cdef object _session_lock
-    cdef object _session_event
     cdef object _push_handler
     cdef tuple _address
     cdef int _connect_timeout
     cdef Backoff _backoff
 
-    def __init__(self, address, push_handler):
+    def __init__(self, address, push_handler=None):
         self._session = None
         self._session_lock = RLock()
-        self._session_event = Event()
         self._address = address
         self._connect_timeout = 5
         self._push_handler = push_handler
@@ -37,7 +37,6 @@ cdef class DRPCClient:
         with self._session_lock:
             if session is self._session:
                 self._backoff.fail()
-                self._session_event.clear()
                 self._session = None
 
     cdef connect(self):
@@ -47,14 +46,12 @@ cdef class DRPCClient:
             else:
                 return
 
-        if self._backoff.fails():
-            self._session_event.wait(self._backoff.current())
-            if self._session is not None:
-                return
-
         with self._session_lock:
             if self._session is not None:
                 return
+
+            if self._backoff.fails():
+                gevent.sleep(self._backoff.current())
 
             try:
                 logging.info('[DRPC] Connecting to %s:%s', self._address[0], self._address[1])
@@ -66,7 +63,6 @@ cdef class DRPCClient:
                 sock.setblocking(False)
                 self._session = DRPCSocketSession(sock, ENCODERS, on_push=self._push_handler)
                 self._backoff.succeed()
-                self._session_event.set()
                 logging.info('[DRPC] Connected to %s:%s', self._address[0], self._address[1])
 
             except socket.error:

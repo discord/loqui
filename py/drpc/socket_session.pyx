@@ -1,12 +1,14 @@
 import errno
+import logging
 import socket
 
 import gevent
 from gevent.event import AsyncResult, Event
 
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint32_t, uint8_t
 
-from drpc.exceptions import NoEncoderAvailable, ConnectionTerminated
+from drpc.exceptions import NoEncoderAvailable, ConnectionTerminated, DRPCDecoderError, StreamDefunct, \
+    NotClientException, NotServerException
 from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
 
 from socket_watcher cimport SocketWatcher
@@ -16,9 +18,12 @@ cdef size_t OUTBUF_MAX = 65535
 
 
 class CloseReasons(object):
+    NORMAL = 0
     PING_TIMEOUT = 1
     UNKNOWN_ENCODER = 2
     NO_MUTUAL_ENCODERS = 3
+    DIDNT_STOP_IN_TIME = 4
+    DECODER_ERROR = 5
 
 cdef class DRPCSocketSession:
     def __cinit__(self, object sock, object encoders, bint is_client=True, object on_request=None, object on_push=None):
@@ -28,7 +33,7 @@ cdef class DRPCSocketSession:
         self._watcher = SocketWatcher(self._sock.fileno())
         self._inflight_requests = {}
         self._available_encoders = encoders
-        self._stop_event = Event()
+        self._shutdown_event = Event()
         self._close_event = Event()
         self._ready_event = Event()
         self._ping_interval = 5
@@ -70,38 +75,59 @@ cdef class DRPCSocketSession:
         if sock:
             sock.close()
 
+        # Request a switch so that the socket event loop will exit.
         if sock:
             self._watcher.request_switch()
 
         self._cleanup_inflight_requests(ConnectionTerminated())
 
-        if not self._close_event.is_set():
-            self._close_event.set()
-
-    cpdef close(self, bint block=False, int reason=0, timeout=None):
-        print 'closing', reason
         # Unblock anything waiting on ready event.
         if not self._ready_event.is_set():
             self._ready_event.set()
 
         # Unblock anything waiting on stop event.
-        if not self._stop_event.is_set():
-            self._stop_event.set()
-            gevent.spawn(self._terminate)
-            # TODO: Send goaway.
-            # self._stream_handler.send_goaway()
+        if not self._shutdown_event.is_set():
+            self._shutdown_event.set()
+
+        # Unblock anything waiting on the close event.
+        if not self._close_event.is_set():
+            self._close_event.set()
+
+    cpdef close(self, uint8_t code=CloseReasons.NORMAL, bytes reason=None,
+                block=False, block_timeout=None, close_timeout=None, bint via_remote_goaway=False):
+
+        if not self._shutting_down:
+            self._shutting_down = True
+
+            # Unblock anything waiting on ready event.
+            if not self._ready_event.is_set():
+                self._ready_event.set()
+
+            # Unblock anything waiting on stop event.
+            if not self._shutdown_event.is_set():
+                self._shutdown_event.set()
+
+            # Send goaway to the remote node.
+            if not via_remote_goaway and self._sock:
+                self._stream_handler.send_goaway(code, reason)
+
+            # Spawn a greenlet that will wait
+            gevent.spawn(self._close_timeout)
 
         # If we are blocking, wait on close event to succeed.
         if block:
-            self.join(timeout)
+            self.join(block_timeout)
+
+    cpdef _close_timeout(self):
+        if self._close_event.wait(self._ping_interval):
+            return
+
+        self._cleanup_socket()
 
     cpdef join(self, timeout=None):
         self._close_event.wait(timeout=timeout)
 
-    cpdef _terminate(self):
-        if self._close_event.wait(self._ping_interval):
-            return
-
+    cpdef terminate(self):
         self._cleanup_socket()
 
     cdef _cleanup_inflight_requests(self, close_exception):
@@ -132,7 +158,10 @@ cdef class DRPCSocketSession:
 
     cpdef object send_request(self, object data):
         if not self._is_client:
-            raise RuntimeError('Servers cannot send requests')
+            raise NotClientException()
+
+        if self.defunct():
+            raise StreamDefunct
 
         cdef bytes encoded_data = self._encode_data(data)
         result = AsyncResult()
@@ -142,25 +171,33 @@ cdef class DRPCSocketSession:
         return result
 
     cpdef object send_push(self, object data):
-        if not self._is_client:
-            raise RuntimeError('Servers cannot send pushes')
+        if self.defunct():
+            raise StreamDefunct()
 
         self._stream_handler.send_push(data)
         self._resume_sending()
 
     cpdef object send_response(self, uint32_t seq, object data):
         if self._is_client:
-            raise RuntimeError('Clients cannot send responses')
+            raise NotServerException()
+
+        # if self.defunct():
+        #     raise StreamDefunct()
 
         request = self._inflight_requests.pop(seq)
-        if not request:
-            raise Exception('Sending response for unknown seq %s' % seq)
+        if request:
+            self._stream_handler.send_response(seq, self._encode_data(data))
+            self._resume_sending()
 
-        self._stream_handler.send_response(seq, self._encode_data(data))
-        self._resume_sending()
+        else:
+            logging.error('Sending response for unknown seq %s', seq)
+
         return None
 
     cpdef object send_ping(self):
+        if self.defunct():
+            raise StreamDefunct()
+
         result = AsyncResult()
         cdef uint32_t seq = self._stream_handler.send_ping()
         self._inflight_requests[seq] = result
@@ -169,13 +206,16 @@ cdef class DRPCSocketSession:
 
     cpdef object _send_select_encoding(self, bytes encoding):
         if not self._is_client:
-            raise RuntimeError('Servers cannot select encoding.')
+            raise NotClientException()
+
+        if self.defunct():
+            raise StreamDefunct()
 
         self._stream_handler.send_select_encoding(encoding)
 
     cpdef object _send_hello(self):
         if self._is_client:
-            raise RuntimeError('Clients cannot send hello.')
+            raise NotServerException()
 
         self._stream_handler.send_hello(int(self._ping_interval * 1000), list(self._available_encoders.keys()))
 
@@ -183,7 +223,12 @@ cdef class DRPCSocketSession:
         self.close(reason=CloseReasons.PING_TIMEOUT)
 
     cdef _handle_data_received(self, data):
-        events = self._stream_handler.on_bytes_received(data)
+        try:
+            events = self._stream_handler.on_bytes_received(data)
+
+        except DRPCDecoderError:
+            return self.close(code=CloseReasons.DECODER_ERROR)
+
         if not events:
             return
 
@@ -251,8 +296,11 @@ cdef class DRPCSocketSession:
     cdef _handle_response(self, Response response):
         request = self._inflight_requests.pop(response.seq)
         if request:
-            # If we've gotten a response for a request we've made.
-            request.set(self._decode_data(response.data))
+            try:
+                # If we've gotten a response for a request we've made.
+                request.set(self._decode_data(response.data))
+            except Exception as e:
+                request.set_exception(e)
 
     cdef _handle_push(self, Push push):
         if self._on_push:
@@ -286,7 +334,7 @@ cdef class DRPCSocketSession:
     cdef _handle_select_encoding(self, SelectEncoding select_encoding):
         encoder = self._available_encoders.get(select_encoding.encoding)
         if not encoder:
-            self.close(reason=CloseReasons.UNKNOWN_ENCODER)
+            self.close(code=CloseReasons.UNKNOWN_ENCODER, reason=b'Unknown encoding %s' % select_encoding.encoding)
 
         else:
             self._encoder_dumps = encoder.dumps
@@ -296,7 +344,8 @@ cdef class DRPCSocketSession:
             self._ready_event.set()
 
     cdef _handle_go_away(self, GoAway go_away):
-        pass
+        print "Got goaway on seq", self._stream_handler.current_seq()
+        self.close(via_remote_goaway=True, reason=go_away.reason, code=go_away.code)
 
     cdef _pick_best_encoding(self, list encodings):
         for encoding in encodings:
@@ -309,7 +358,7 @@ cdef class DRPCSocketSession:
     cpdef _ping_loop(self):
         while True:
             ping_result = self.send_ping()
-            if self._stop_event.wait(self._ping_interval):
+            if self._shutdown_event.wait(self._ping_interval):
                 return
 
             if not ping_result.ready():
@@ -355,6 +404,7 @@ cdef class DRPCSocketSession:
                     if not data:
                         self.close()
                         self._cleanup_socket()
+                        return
 
                     else:
                         self._handle_data_received(data)
@@ -366,7 +416,16 @@ cdef class DRPCSocketSession:
                 )
 
                 if sock_should_write:
-                    bytes_written = sock_send(self._stream_handler.write_buffer_get_bytes(OUTBUF_MAX, False))
+                    try:
+                        bytes_written = sock_send(self._stream_handler.write_buffer_get_bytes(OUTBUF_MAX, False))
+                    except socket.error as e:
+                        if e.errno in (errno.EAGAIN, errno.EINPROGRESS):
+                            bytes_written = 0
+
+                        else:
+                            self.close()
+                            self._cleanup_socket()
+
                     # No bytes have been written. It's safe to assume the socket is still (somehow) blocked
                     # and we don't need to do anything.
                     if not bytes_written:
@@ -383,6 +442,12 @@ cdef class DRPCSocketSession:
                     if write_bytes_remaining == 0:
                         sock_write_watcher.stop()
                         write_watcher_started = False
+
+                # If we are shutting down, have an empty write buffer, and no more in-flight requests,
+                # it's safe to terminate the socket.
+                if self._shutting_down and self._stream_handler.write_buffer_len() == 0 and not self._inflight_requests:
+                    print 'cleaning up socket because we are drained'
+                    self._cleanup_socket()
 
                 self._watcher.reset()
 
