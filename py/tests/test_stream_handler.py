@@ -7,7 +7,7 @@ from drpc.opcodes import Request
 
 
 def py_encode_request(seq, data):
-    header = struct.pack('>BII', 4, seq, len(data))
+    header = struct.pack('>BII', 5, seq, len(data))
     return header + data
 
 
@@ -26,7 +26,7 @@ def test_stream_handler_encode_request():
     assert seq == 1
 
     out_bytes = handler.write_buffer_get_bytes(handler.write_buffer_len())
-    header = struct.pack('>BII', 4, seq, len(data))
+    header = struct.pack('>BII', 5, seq, len(data))
 
     assert out_bytes == header + data
     assert handler.write_buffer_len() == 0
@@ -45,7 +45,7 @@ def test_stream_handler_encode_requests():
             assert handler.current_seq() == seq
             assert seq == i + 1
 
-            expected_data.append(struct.pack('>BII', 4, seq, len(data)))
+            expected_data.append(struct.pack('>BII', 5, seq, len(data)))
             expected_data.append(data)
 
         read_data = []
@@ -72,7 +72,7 @@ def test_stream_handler_encode_requests_interspersed():
             assert handler.current_seq() == seq
             assert seq == i + 1
 
-            expected_data.append(struct.pack('>BII', 4, seq, len(data)))
+            expected_data.append(struct.pack('>BII', 5, seq, len(data)))
             expected_data.append(data)
             if handler.write_buffer_len():
                 read_data.append(handler.write_buffer_get_bytes(min(handler.write_buffer_len(), chunk_size)))
