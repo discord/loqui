@@ -3,7 +3,7 @@ from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport uint32_t, uint8_t
 
-from exceptions import LOQUIDecoderError
+from exceptions import LoquiDecoderError
 cimport loqui_c
 cimport opcodes
 
@@ -361,7 +361,7 @@ cdef class LoquiStreamHandler:
             decoder_status = loqui_c.loqui_decoder_read_data(&self.decode_buffer, size, buf, &consumed)
             if decoder_status < 0:
                 self._reset_decode_buf()
-                raise LOQUIDecoderError('The decoder failed with status %s' % decoder_status)
+                raise LoquiDecoderError('The decoder failed with status %s' % decoder_status)
 
             if decoder_status == loqui_c.LOQUI_DECODE_NEEDS_MORE:
                 break
@@ -370,7 +370,7 @@ cdef class LoquiStreamHandler:
                 received_payloads.append(self._consume_decode_buffer())
 
             else:
-                raise LOQUIDecoderError('Unhandled decoder status %s' % decoder_status)
+                raise LoquiDecoderError('Unhandled decoder status %s' % decoder_status)
 
             size -= consumed
             buf += consumed
