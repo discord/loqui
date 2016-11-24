@@ -9,16 +9,24 @@ import (
 	"time"
 )
 
+// ServerHandler responses to Requests on Conn.
+//
+// Provided context should be used to request the request and writing
+// to the same context will reply to the rest. Not writing to the context
+// will result in an empty reply when the function returns.
 type ServerHandler interface {
 	ServeRequest(ctx RequestContext)
 }
 
+// ServerConfig fields are optional except SupportedEncodings.
 type ServerConfig struct {
 	PingInterval       time.Duration
 	SupportedEncodings []string
 	Concurrency        int
 }
 
+// Server implements http.Handler allowing a specific HTTP route to
+// to be upgraded to Loqui.
 type Server struct {
 	mu      sync.Mutex
 	conns   map[*Conn]bool
@@ -26,6 +34,7 @@ type Server struct {
 	config  ServerConfig
 }
 
+// NewServer allocates and returns a new Server.
 func NewServer(handler ServerHandler, config ServerConfig) *Server {
 	if config.PingInterval == 0 {
 		config.PingInterval = time.Millisecond * 30000
@@ -57,14 +66,6 @@ func (s *Server) upgrade(w http.ResponseWriter, req *http.Request) {
 	s.serveConn(conn)
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.Method == "POST" {
-		s.handler.ServeRequest(newHTTPRequestContext(w, req))
-	} else {
-		s.upgrade(w, req)
-	}
-}
-
 func (s *Server) serveConn(conn net.Conn) (err error) {
 	c := NewConn(conn, conn, conn, false)
 	c.pingInterval = s.config.PingInterval
@@ -81,4 +82,12 @@ func (s *Server) serveConn(conn net.Conn) (err error) {
 	}()
 
 	return c.Serve(s.config.Concurrency)
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method == "POST" {
+		s.handler.ServeRequest(newHTTPRequestContext(w, req))
+	} else {
+		s.upgrade(w, req)
+	}
 }

@@ -7,6 +7,16 @@ import (
 )
 
 func BenchmarkClient(b *testing.B) {
+	// type RequestHandler struct{}
+
+	// func (rh *RequestHandler) ServeRequest(ctx RequestContext) {
+	// }
+
+	// http.Handle("/_rpc", NewServer(new(RequestHandler), ServerConfig{
+	// 	SupportedEncodings: []string{"msgpack"},
+	// }))
+	// http.ListenAndServe(":8080", nil)
+
 	d := Dialer{
 		SupportedEncodings: []string{"msgpack"},
 	}

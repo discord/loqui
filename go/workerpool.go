@@ -26,10 +26,24 @@ func (wp workerPool) put(encoding string, seq uint32, payload *bytes.Buffer) {
 }
 
 func (wp workerPool) run(c *Conn) {
+	var seq uint32
+
+	// If something panics then send an error for the last seq
+	// and restart this goroutine.
+	defer func() {
+		if r := recover(); r != nil {
+			reason, _ := r.(string)
+			// TODO: pick a code
+			c.proto.writeError(seq, 0, reason)
+			go wp.run(c)
+		}
+	}()
+
 	for ctx := range wp {
+		seq = ctx.seq
 		c.handler.ServeRequest(ctx)
 		if !ctx.IsPush() {
-			c.proto.writeResponse(ctx.seq, ctx.wbuf.Bytes())
+			c.proto.writeResponse(seq, ctx.wbuf.Bytes())
 		}
 		releaseRequestContext(ctx)
 	}

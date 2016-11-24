@@ -13,10 +13,8 @@ import (
 	"time"
 )
 
-var (
-	// ErrBadHandshake is returned when the server response to opening handshake is invalid.
-	ErrBadHandshake = errors.New("loqui: bad handshake")
-)
+// ErrBadHandshake is returned when the server response to opening handshake is invalid.
+var ErrBadHandshake = errors.New("loqui: bad handshake")
 
 func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 	hostPort = u.Host
@@ -36,14 +34,19 @@ func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 	return hostPort, hostNoPort
 }
 
+// A Dialer contains options for connecting to a URL.
 type Dialer struct {
-	// HandshakeTimeout specifies the duration for the handshake to complete.
+	// SupportedEncodings contains a list of encodings that the client will
+	// negotiate with the server.
 	SupportedEncodings []string
-	HandshakeTimeout   time.Duration
+
+	// HandshakeTimeout specifies the duration for the handshake to complete.
+	HandshakeTimeout time.Duration
 }
 
-func (d *Dialer) Dial(urlStr string) (*Conn, error) {
-	u, err := url.Parse(urlStr)
+// Dial connects to a HTTP URL.
+func (d *Dialer) Dial(urlString string) (*Conn, error) {
+	u, err := url.Parse(urlString)
 	if err != nil {
 		return nil, err
 	}
@@ -89,16 +92,16 @@ func (d *Dialer) Dial(urlStr string) (*Conn, error) {
 	}
 
 	if u.Scheme == "https" {
-		cfg := tls.Config{
+		tlsConfig := tls.Config{
 			ServerName: hostNoPort,
 		}
-		tlsConn := tls.Client(netConn, &cfg)
+		tlsConn := tls.Client(netConn, &tlsConfig)
 		netConn = tlsConn
 		if err := tlsConn.Handshake(); err != nil {
 			return nil, err
 		}
-		if !cfg.InsecureSkipVerify {
-			if err := tlsConn.VerifyHostname(cfg.ServerName); err != nil {
+		if !tlsConfig.InsecureSkipVerify {
+			if err := tlsConn.VerifyHostname(tlsConfig.ServerName); err != nil {
 				return nil, err
 			}
 		}
@@ -128,7 +131,7 @@ func (d *Dialer) Dial(urlStr string) (*Conn, error) {
 	conn := NewConn(br, netConn, netConn, true)
 	conn.supportedEncodings = d.SupportedEncodings
 
-	netConn = nil // to avoid close in defer.
+	netConn = nil // Avoid close in defer.
 
 	return conn, nil
 }

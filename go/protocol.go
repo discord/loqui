@@ -10,12 +10,13 @@ import (
 
 type protocolHandler interface {
 	handleHello(version uint8, pingInterval uint32, encodings []string)
-	handleSetEncoding(encoding string)
+	handleSelectEncoding(encoding string)
 	handlePing(seq uint32)
 	handlePong(seq uint32)
 	handleRequest(seq uint32, payload *bytes.Buffer)
 	handleResponse(seq uint32, payload *bytes.Buffer)
 	handlePush(payload *bytes.Buffer)
+	handleError(seq uint32, code uint16, reason string)
 	handleGoAway(code uint16, reason string)
 }
 
@@ -107,7 +108,7 @@ func (pr *protocolReader) readHello() (version uint8, pingInterval uint32, encod
 	return
 }
 
-func (pr *protocolReader) readSetEncoding() (encoding string, err error) {
+func (pr *protocolReader) readSelectEncoding() (encoding string, err error) {
 	var payload *bytes.Buffer
 	payload, err = pr.readPayload()
 	if err == nil {
@@ -141,11 +142,23 @@ func (pr *protocolReader) readPush() (*bytes.Buffer, error) {
 	return pr.readPayload()
 }
 
+func (pr *protocolReader) readError() (seq uint32, code uint16, reason string, err error) {
+	seq, err = pr.readUint32()
+	code, err = pr.readUint16()
+	var payload *bytes.Buffer
+	payload, err = pr.readPayload()
+	if err == nil {
+		reason = string(payload.Bytes())
+	}
+	releaseBuffer(payload)
+	return
+}
+
 func (pr *protocolReader) readGoAway() (code uint16, reason string, err error) {
 	code, err = pr.readUint16()
 	var payload *bytes.Buffer
 	payload, err = pr.readPayload()
-	if err != nil {
+	if err == nil {
 		reason = string(payload.Bytes())
 	}
 	releaseBuffer(payload)
@@ -164,12 +177,12 @@ func (pr *protocolReader) process(ph protocolHandler) error {
 			return err
 		}
 		ph.handleHello(version, pingInterval, encodings)
-	case opSetEncoding:
-		encoding, err := pr.readSetEncoding()
+	case opSelectEncoding:
+		encoding, err := pr.readSelectEncoding()
 		if err != nil {
 			return err
 		}
-		ph.handleSetEncoding(encoding)
+		ph.handleSelectEncoding(encoding)
 	case opPing:
 		seq, err := pr.readPing()
 		if err != nil {
@@ -201,6 +214,12 @@ func (pr *protocolReader) process(ph protocolHandler) error {
 			return err
 		}
 		ph.handlePush(payload)
+	case opError:
+		seq, code, reason, err := pr.readError()
+		if err != nil {
+			return err
+		}
+		ph.handleError(seq, code, reason)
 	case opGoAway:
 		code, reason, err := pr.readGoAway()
 		if err != nil {
@@ -237,11 +256,11 @@ func (pw *protocolWriter) writeHello(pingInterval uint32, encodings []string) er
 	return err
 }
 
-func (pw *protocolWriter) writeSetEncoding(encoding string) error {
+func (pw *protocolWriter) writeSelectEncoding(encoding string) error {
 	const headerLen = 5
 	buf := acquireBuffer(headerLen)
 	header := buf.Bytes()
-	header[:1][0] = opSetEncoding
+	header[:1][0] = opSelectEncoding
 	binary.BigEndian.PutUint32(header[1:headerLen], uint32(len(encoding)))
 	_, err := pw.Write(append(header[:headerLen], encoding...))
 	releaseBuffer(buf)
@@ -279,12 +298,12 @@ func (pw *protocolWriter) writeRequestResponse(op uint8, seq uint32, payload []b
 	return
 }
 
-func (pw *protocolWriter) writeRequest(seq uint32, data []byte) error {
-	return pw.writeRequestResponse(opRequest, seq, data)
+func (pw *protocolWriter) writeRequest(seq uint32, payload []byte) error {
+	return pw.writeRequestResponse(opRequest, seq, payload)
 }
 
-func (pw *protocolWriter) writeResponse(seq uint32, data []byte) error {
-	return pw.writeRequestResponse(opResponse, seq, data)
+func (pw *protocolWriter) writeResponse(seq uint32, payload []byte) error {
+	return pw.writeRequestResponse(opResponse, seq, payload)
 }
 
 func (pw *protocolWriter) writePush(payload []byte) (err error) {
@@ -294,6 +313,19 @@ func (pw *protocolWriter) writePush(payload []byte) (err error) {
 	header[:1][0] = opPush
 	binary.BigEndian.PutUint32(header[1:headerLen], uint32(len(payload)))
 	_, err = pw.Write(append(header[:headerLen], payload...))
+	releaseBuffer(buf)
+	return
+}
+
+func (pw *protocolWriter) writeError(seq uint32, code uint16, reason string) (err error) {
+	const headerLen = 11
+	buf := acquireBuffer(headerLen)
+	header := buf.Bytes()
+	header[:1][0] = opError
+	binary.BigEndian.PutUint32(header[1:5], seq)
+	binary.BigEndian.PutUint16(header[5:7], code)
+	binary.BigEndian.PutUint32(header[7:headerLen], uint32(len(reason)))
+	_, err = pw.Write(append(header[:headerLen], reason...))
 	releaseBuffer(buf)
 	return
 }

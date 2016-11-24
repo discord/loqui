@@ -6,13 +6,14 @@ const (
 
 const (
 	opHello uint8 = iota + 1
-	opSetEncoding
+	opSelectEncoding
 	opPing
 	opPong
 	opRequest
 	opResponse
 	opPush
 	opGoAway
+	opError
 )
 
 const (

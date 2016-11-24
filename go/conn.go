@@ -3,6 +3,7 @@ package loqui
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -188,7 +189,7 @@ func (c *Conn) selectEncoding(encodings []string) bool {
 		for _, encoding := range encodings {
 			if encoding == supportedEncoding {
 				c.encoding = encoding
-				c.proto.writeSetEncoding(encoding)
+				c.proto.writeSelectEncoding(encoding)
 				return true
 			}
 		}
@@ -196,7 +197,61 @@ func (c *Conn) selectEncoding(encodings []string) bool {
 	return false
 }
 
+func (c *Conn) completeRequest(seq uint32, payload *bytes.Buffer, err error) {
+	c.mu.Lock()
+	req, ok := c.reqs[seq]
+	c.mu.Unlock()
+
+	if ok {
+		res := responsePool.Get().(*Response)
+		res.payload = payload
+
+		req.response = res
+		req.c <- err
+
+		if c.remoteClosed {
+			c.mu.Unlock()
+			noReqs := len(c.reqs) == 0
+			c.mu.Unlock()
+			if noReqs {
+				c.Terminate(CodeNormal)
+			}
+		}
+	} else if err == nil {
+		releaseBuffer(payload)
+	}
+}
+
+func (c *Conn) terminate() (err error) {
+	if c.terminated {
+		return
+	}
+
+	c.localClosed = true
+	c.remoteClosed = true
+	c.terminated = true
+	close(c.terminateCh)
+
+	c.mu.Lock()
+	for _, req := range c.reqs {
+		req.c <- io.EOF
+	}
+	c.mu.Unlock()
+
+	return c.c.Close()
+}
+
 // Public
+
+// Encoding returns the negotiated encoding.
+// If connection is not ready it waits.
+func (c *Conn) Encoding() (encoding string, err error) {
+	if err = c.ensureReady(); err != nil {
+		return
+	}
+	encoding = c.encoding
+	return
+}
 
 // Request provides a io.ReadCloser that contains the response payload.
 // Close MUST be called to avoid allocations.
@@ -256,25 +311,6 @@ func (c *Conn) Close(code uint16) (err error) {
 	return c.proto.writeGoAway(code, "")
 }
 
-func (c *Conn) terminate() (err error) {
-	if c.terminated {
-		return
-	}
-
-	c.localClosed = true
-	c.remoteClosed = true
-	c.terminated = true
-	close(c.terminateCh)
-
-	c.mu.Lock()
-	for _, req := range c.reqs {
-		req.c <- io.EOF
-	}
-	c.mu.Unlock()
-
-	return c.c.Close()
-}
-
 // Terminate sends a GoAway and immediately terminates the underlying connection.
 func (c *Conn) Terminate(code uint16) (err error) {
 	err = c.Close(code)
@@ -308,7 +344,7 @@ func (c *Conn) handleHello(version uint8, pingInterval uint32, encodings []strin
 	close(c.readyCh)
 }
 
-func (c *Conn) handleSetEncoding(encoding string) {
+func (c *Conn) handleSelectEncoding(encoding string) {
 	if c.ready {
 		c.Terminate(CodeInvalidOp)
 		return
@@ -351,28 +387,7 @@ func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
 		return
 	}
 
-	c.mu.Lock()
-	req, ok := c.reqs[seq]
-	c.mu.Unlock()
-
-	if ok {
-		res := responsePool.Get().(*Response)
-		res.payload = payload
-
-		req.response = res
-		req.c <- nil
-
-		if c.remoteClosed {
-			c.mu.Unlock()
-			noReqs := len(c.reqs) == 0
-			c.mu.Unlock()
-			if noReqs {
-				c.Terminate(CodeNormal)
-			}
-		}
-	} else {
-		releaseBuffer(payload)
-	}
+	c.completeRequest(seq, payload, nil)
 }
 
 func (c *Conn) handlePush(payload *bytes.Buffer) {
@@ -383,6 +398,10 @@ func (c *Conn) handlePush(payload *bytes.Buffer) {
 	}
 
 	c.wp.put(c.encoding, 0, payload)
+}
+
+func (c *Conn) handleError(seq uint32, code uint16, reason string) {
+	c.completeRequest(seq, nil, errors.New(reason))
 }
 
 func (c *Conn) handleGoAway(code uint16, reason string) {
