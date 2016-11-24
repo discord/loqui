@@ -2,7 +2,6 @@ import socket
 
 import gevent
 from gevent.lock import RLock
-from gevent.event import Event
 
 from drpc.exceptions import ConnectionError
 from socket_session cimport DRPCSocketSession
@@ -89,7 +88,7 @@ cdef class DRPCClient:
         pass
 
 
-cdef class DRPCHTTPUpgradeCient(DRPCClient):
+cdef class DRPCHTTPUpgradeClient(DRPCClient):
     def handle_new_socket(self, sock):
         upgrade_payload = '\r\n'.join([
             b'GET /_rpc HTTP/1.1',
