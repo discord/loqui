@@ -1,10 +1,10 @@
 from libc.stdint cimport uint32_t, uint8_t
-cimport drpc_c
+cimport loqui_c
 
-cdef class DRPCStreamHandler:
+cdef class LoquiStreamHandler:
     cdef uint32_t seq
-    cdef drpc_c.drpc_decode_buffer_t decode_buffer
-    cdef drpc_c.drpc_buffer_t write_buffer
+    cdef loqui_c.loqui_decode_buffer_t decode_buffer
+    cdef loqui_c.loqui_buffer_t write_buffer
     cdef size_t write_buffer_position
 
     cdef inline _reset_decode_buf(self)

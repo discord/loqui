@@ -1,16 +1,16 @@
-class DRPCException(Exception):
+class LoquiException(Exception):
     pass
 
 
-class DRPCDecoderError(DRPCException):
+class LoquiDecoderError(LoquiException):
     pass
 
 
-class NoEncoderAvailable(DRPCException):
+class NoEncoderAvailable(LoquiException):
     pass
 
 
-class ConnectionError(DRPCException):
+class ConnectionError(LoquiException):
     pass
 
 
@@ -26,7 +26,7 @@ class ConnectionPingTimeout(ConnectionError):
     pass
 
 
-class InvalidSendException(DRPCException):
+class InvalidSendException(LoquiException):
     pass
 
 

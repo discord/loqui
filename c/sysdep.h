@@ -1,5 +1,5 @@
 /*
- * MessagePack system dependencies modified for drpc.
+ * MessagePack system dependencies modified for loqui.
  *
  * Copyright (C) 2008-2010 FURUHASHI Sadayuki
  *
@@ -15,8 +15,8 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-#ifndef DRPC_SYSDEP_H__
-#define DRPC_SYSDEP_H__
+#ifndef LOQUI_SYSDEP_H__
+#define LOQUI_SYSDEP_H__
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -71,44 +71,44 @@ typedef unsigned __int64 uint64_t;
 
 #ifdef _WIN32
 #  if defined(ntohs)
-#    define _drpc_be16(x) ntohs(x)
+#    define _loqui_be16(x) ntohs(x)
 #  elif defined(_byteswap_ushort) || (defined(_MSC_VER) && _MSC_VER >= 1400)
-#    define _drpc_be16(x) ((uint16_t)_byteswap_ushort((unsigned short)x))
+#    define _loqui_be16(x) ((uint16_t)_byteswap_ushort((unsigned short)x))
 #  else
-#    define _drpc_be16(x) ( \
+#    define _loqui_be16(x) ( \
         ((((uint16_t)x) <<  8) ) | \
         ((((uint16_t)x) >>  8) ) )
 #  endif
 #else
-#  define _drpc_be16(x) ntohs(x)
+#  define _loqui_be16(x) ntohs(x)
 #endif
 
 #ifdef _WIN32
 #  if defined(ntohl)
-#    define _drpc_be32(x) ntohl(x)
+#    define _loqui_be32(x) ntohl(x)
 #  elif defined(_byteswap_ulong) || (defined(_MSC_VER) && _MSC_VER >= 1400)
-#    define _drpc_be32(x) ((uint32_t)_byteswap_ulong((unsigned long)x))
+#    define _loqui_be32(x) ((uint32_t)_byteswap_ulong((unsigned long)x))
 #  else
-#    define _drpc_be32(x) \
+#    define _loqui_be32(x) \
         ( ((((uint32_t)x) << 24)               ) | \
           ((((uint32_t)x) <<  8) & 0x00ff0000U ) | \
           ((((uint32_t)x) >>  8) & 0x0000ff00U ) | \
           ((((uint32_t)x) >> 24)               ) )
 #  endif
 #else
-#  define _drpc_be32(x) ntohl(x)
+#  define _loqui_be32(x) ntohl(x)
 #endif
 
 #if defined(_byteswap_uint64) || (defined(_MSC_VER) && _MSC_VER >= 1400)
-#  define _drpc_be64(x) (_byteswap_uint64(x))
+#  define _loqui_be64(x) (_byteswap_uint64(x))
 #elif defined(bswap_64)
-#  define _drpc_be64(x) bswap_64(x)
+#  define _loqui_be64(x) bswap_64(x)
 #elif defined(__DARWIN_OSSwapInt64)
-#  define _drpc_be64(x) __DARWIN_OSSwapInt64(x)
+#  define _loqui_be64(x) __DARWIN_OSSwapInt64(x)
 #elif defined(__linux__)
-#  define _drpc_be64(x) be64toh(x)
+#  define _loqui_be64(x) be64toh(x)
 #else
-#  define _drpc_be64(x) \
+#  define _loqui_be64(x) \
     ( ((((uint64_t)x) << 56)                         ) | \
       ((((uint64_t)x) << 40) & 0x00ff000000000000ULL ) | \
       ((((uint64_t)x) << 24) & 0x0000ff0000000000ULL ) | \
@@ -120,26 +120,26 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 
-#define _drpc_load16(cast, from) ((cast)( \
+#define _loqui_load16(cast, from) ((cast)( \
         (((uint16_t)((uint8_t*)(from))[0]) << 8) | \
         (((uint16_t)((uint8_t*)(from))[1])     ) ))
 
-#define _drpc_load32(cast, from) ((cast)( \
+#define _loqui_load32(cast, from) ((cast)( \
         (((uint32_t)((uint8_t*)(from))[0]) << 24) | \
         (((uint32_t)((uint8_t*)(from))[1]) << 16) | \
         (((uint32_t)((uint8_t*)(from))[2]) <<  8) | \
         (((uint32_t)((uint8_t*)(from))[3])      ) ))
 
 #else
-#define _drpc_be16(x) (x)
-#define _drpc_be32(x) (x)
-#define _drpc_be64(x) (x)
+#define _loqui_be16(x) (x)
+#define _loqui_be32(x) (x)
+#define _loqui_be64(x) (x)
 
-#define _drpc_load16(cast, from) ((cast)( \
+#define _loqui_load16(cast, from) ((cast)( \
         (((uint16_t)((uint8_t*)from)[0]) << 8) | \
         (((uint16_t)((uint8_t*)from)[1])     ) ))
 
-#define _drpc_load32(cast, from) ((cast)( \
+#define _loqui_load32(cast, from) ((cast)( \
         (((uint32_t)((uint8_t*)from)[0]) << 24) | \
         (((uint32_t)((uint8_t*)from)[1]) << 16) | \
         (((uint32_t)((uint8_t*)from)[2]) <<  8) | \
@@ -148,9 +148,9 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 
-#define _drpc_store16(to, num) \
-    do { uint16_t val = _drpc_be16(num); memcpy(to, &val, 2); } while(0)
-#define _drpc_store32(to, num) \
-    do { uint32_t val = _drpc_be32(num); memcpy(to, &val, 4); } while(0)
+#define _loqui_store16(to, num) \
+    do { uint16_t val = _loqui_be16(num); memcpy(to, &val, 2); } while(0)
+#define _loqui_store32(to, num) \
+    do { uint32_t val = _loqui_be32(num); memcpy(to, &val, 4); } while(0)
 
 #endif /* sysdep.h */

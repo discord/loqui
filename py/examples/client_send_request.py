@@ -1,4 +1,4 @@
-from drpc.client import DRPCClient
+from loqui.client import LoquiClient
 
-client = DRPCClient(('localhost', 4001))
+client = LoquiClient(('localhost', 4001))
 print client.send_request('hello world').data

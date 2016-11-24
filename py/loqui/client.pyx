@@ -3,26 +3,26 @@ import socket
 import gevent
 from gevent.lock import RLock
 
-from drpc.exceptions import ConnectionError
-from socket_session cimport DRPCSocketSession
+from exceptions import ConnectionError
+from socket_session cimport LoquiSocketSession
 from exponential_backoff cimport Backoff
 import logging
 
 from encoders import ENCODERS
 
-cdef class DRPCClient:
-    cdef DRPCSocketSession _session
+cdef class LoquiClient:
+    cdef LoquiSocketSession _session
     cdef object _session_lock
     cdef object _push_handler
     cdef tuple _address
     cdef int _connect_timeout
     cdef Backoff _backoff
 
-    def __init__(self, address, push_handler=None):
+    def __init__(self, address, push_handler=None, connect_timeout=5):
         self._session = None
         self._session_lock = RLock()
         self._address = address
-        self._connect_timeout = 5
+        self._connect_timeout = connect_timeout
         self._push_handler = push_handler
         self._backoff = Backoff(min_delay=0.25, max_delay=2)
 
@@ -32,7 +32,7 @@ cdef class DRPCClient:
             self._session.set_push_handler(push_handler)
 
     cdef inline _clear_current_session(self):
-        cdef DRPCSocketSession session = self._session
+        cdef LoquiSocketSession session = self._session
         with self._session_lock:
             if session is self._session:
                 self._backoff.fail()
@@ -53,19 +53,19 @@ cdef class DRPCClient:
                 gevent.sleep(self._backoff.current())
 
             try:
-                logging.info('[DRPC] Connecting to %s:%s', self._address[0], self._address[1])
+                logging.info('[Loqui] Connecting to %s:%s', self._address[0], self._address[1])
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.settimeout(self._connect_timeout)
                 sock.connect(self._address)
                 self.handle_new_socket(sock)
                 sock.setblocking(False)
-                self._session = DRPCSocketSession(sock, ENCODERS, on_push=self._push_handler)
+                self._session = LoquiSocketSession(sock, ENCODERS, on_push=self._push_handler)
                 self._backoff.succeed()
-                logging.info('[DRPC] Connected to %s:%s', self._address[0], self._address[1])
+                logging.info('[Loqui] Connected to %s:%s', self._address[0], self._address[1])
 
             except socket.error:
-                logging.exception('[DRPC] Connection to %s:%s failed.', self._address[0], self._address[1])
+                logging.exception('[Loqui] Connection to %s:%s failed.', self._address[0], self._address[1])
                 self._backoff.fail()
                 raise ConnectionError('No connection available')
 
@@ -88,12 +88,12 @@ cdef class DRPCClient:
         pass
 
 
-cdef class DRPCHTTPUpgradeClient(DRPCClient):
+cdef class LoquiHTTPUpgradeClient(LoquiClient):
     def handle_new_socket(self, sock):
         upgrade_payload = '\r\n'.join([
             b'GET /_rpc HTTP/1.1',
             (b'Host: %s' % self._address[0]),
-            b'Upgrade: drpc',
+            b'Upgrade: loqui',
             b'Connection: Upgrade',
             b'',
             b''
@@ -102,7 +102,7 @@ cdef class DRPCHTTPUpgradeClient(DRPCClient):
         sock.sendall(upgrade_payload)
         expected_handshake_response = '\r\n'.join([
             b'HTTP/1.1 101 Switching Protocols',
-            b'Upgrade: drpc',
+            b'Upgrade: loqui',
             b'Connection: Upgrade',
             b'',
             b''

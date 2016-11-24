@@ -1,11 +1,11 @@
 from libc.stdint cimport uint32_t, uint8_t
 
-from stream_handler cimport DRPCStreamHandler
+from stream_handler cimport LoquiStreamHandler
 from socket_watcher cimport SocketWatcher
 from opcodes cimport Ping, Pong, Hello, Request, Response, Push, SelectEncoding, GoAway
 
-cdef class DRPCSocketSession:
-    cdef DRPCStreamHandler _stream_handler
+cdef class LoquiSocketSession:
+    cdef LoquiStreamHandler _stream_handler
     cdef object _sock
     cdef SocketWatcher _watcher
     cdef dict _inflight_requests

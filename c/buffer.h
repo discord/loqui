@@ -1,5 +1,5 @@
-#ifndef DRPC_BUFFER_H__
-#define DRPC_BUFFER_H__
+#ifndef LOQUI_BUFFER_H__
+#define LOQUI_BUFFER_H__
 
 #include "sysdep.h"
 
@@ -7,17 +7,17 @@ typedef struct {
   char *buf;
   size_t length;
   size_t allocated_size;
-} drpc_buffer_t;
+} loqui_buffer_t;
 
 typedef struct {
-  drpc_buffer_t drpc_buffer;
+  loqui_buffer_t loqui_buffer;
   uint8_t opcode;
   size_t data_size_remaining;
   size_t header_size;
   uint8_t decode_complete;
-} drpc_decode_buffer_t;
+} loqui_decode_buffer_t;
 
-static inline int drpc_buffer_write(drpc_buffer_t *pk, const char *bytes, size_t l) {
+static inline int loqui_buffer_write(loqui_buffer_t *pk, const char *bytes, size_t l) {
   char *buf = pk->buf;
   size_t allocated_size = pk->allocated_size;
   size_t length = pk->length;
@@ -40,7 +40,7 @@ static inline int drpc_buffer_write(drpc_buffer_t *pk, const char *bytes, size_t
   return 0;
 }
 
-static inline int drpc_buffer_ensure_size(drpc_buffer_t *pk, size_t at_least_allocated_size) {
+static inline int loqui_buffer_ensure_size(loqui_buffer_t *pk, size_t at_least_allocated_size) {
   char *buf = pk->buf;
   size_t allocated_size = pk->allocated_size;
 

@@ -2,8 +2,8 @@ import struct
 
 import itertools
 
-from drpc.stream_handler import DRPCStreamHandler
-from drpc.opcodes import Request
+from loqui.stream_handler import LoquiStreamHandler
+from loqui.opcodes import Request
 
 
 def py_encode_request(seq, data):
@@ -17,7 +17,7 @@ def chunker(chunk_size, byt):
 
 
 def test_stream_handler_encode_request():
-    handler = DRPCStreamHandler()
+    handler = LoquiStreamHandler()
     data = b'hello world'
 
     assert handler.current_seq() == 0
@@ -35,7 +35,7 @@ def test_stream_handler_encode_request():
 def test_stream_handler_encode_requests():
     for chunk_size in xrange(1, 500):
 
-        handler = DRPCStreamHandler()
+        handler = LoquiStreamHandler()
         expected_data = []
         for i in xrange(1024):
             data = b'hello world - %i' % i
@@ -60,7 +60,7 @@ def test_stream_handler_encode_requests():
 def test_stream_handler_encode_requests_interspersed():
     for chunk_size in xrange(1, 500):
 
-        handler = DRPCStreamHandler()
+        handler = LoquiStreamHandler()
         expected_data = []
         read_data = []
 
@@ -85,14 +85,14 @@ def test_stream_handler_encode_requests_interspersed():
 
 
 def test_stream_handler_write_buffer_overread_is_ok():
-    handler = DRPCStreamHandler()
+    handler = LoquiStreamHandler()
     assert handler.write_buffer_get_bytes(1000) is None
     assert handler.write_buffer_get_bytes(0) is None
 
 
 def test_stream_handler_decode_full():
     payload = py_encode_request(1, b'this is a test')
-    handler = DRPCStreamHandler()
+    handler = LoquiStreamHandler()
 
     responses = handler.on_bytes_received(payload)
     assert len(responses) == 1
@@ -107,7 +107,7 @@ def test_stream_handler_decode_byte_by_byte():
 
     for i in xrange(1, len(payload)):
 
-        handler = DRPCStreamHandler()
+        handler = LoquiStreamHandler()
         chunk_get = chunker(i, payload)
         responses = []
         while True:

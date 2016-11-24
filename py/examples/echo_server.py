@@ -6,7 +6,7 @@ from gevent.monkey import patch_all
 patch_all()
 
 i = 0
-from drpc.server import DRPCServer
+from loqui.server import LoquiServer
 
 def log_loop():
     last_i = 0
@@ -24,7 +24,7 @@ def log_loop():
         last = now
 
 
-class Server(DRPCServer):
+class Server(LoquiServer):
     def handle_request(self, request, session):
         global i
         i += 1

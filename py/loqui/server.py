@@ -1,11 +1,11 @@
 import socket
 from gevent.server import StreamServer
 
-from drpc.encoders import ENCODERS
-from drpc.socket_session import DRPCSocketSession
+from loqui.encoders import ENCODERS
+from loqui.socket_session import LoquiSocketSession
 
 
-class DRPCServer:
+class LoquiServer:
     def __init__(self, server_address):
         self.server = StreamServer(server_address, self._handle_connection)
 
@@ -22,7 +22,7 @@ class DRPCServer:
         print 'handling connection from', sock
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(False)
-        session = DRPCSocketSession(sock, ENCODERS, False, self.handle_request, self.handle_push)
+        session = LoquiSocketSession(sock, ENCODERS, False, self.handle_request, self.handle_push)
         session.join()
         print 'connection from', addr, 'done'
 

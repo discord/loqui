@@ -12,11 +12,11 @@ except ImportError:
 
 
 extensions = []
-for file in glob.glob('py/drpc/*.%s' % ext):
+for file in glob.glob('py/loqui/*.%s' % ext):
     package = os.path.splitext(os.path.basename(file))[0]
     print package
     extensions.append(Extension(
-        'drpc.%s' % package,
+        'loqui.%s' % package,
         [file],
         extra_compile_args=['-O3']
     ))
@@ -25,16 +25,16 @@ if cythonize:
     extensions = cythonize(extensions)
 
 setup(
-    name='drpc',
+    name='loqui',
     version='0.0.1',
     author='Jake Heinz',
     author_email='jh@discordapp.com',
-    url="http://github.com/hammerandchisel/drpc",
+    url="http://github.com/hammerandchisel/loqui",
     description='A really simple stream based RPC - with a gevent client/server implementation',
     license='MIT',
     package_dir={
-        'drpc': 'py/drpc'
+        'loqui': 'py/loqui'
     },
-    packages=['drpc'],
+    packages=['loqui'],
     ext_modules=extensions,
 )

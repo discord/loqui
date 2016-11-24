@@ -1,8 +1,8 @@
-# drpc
-DRPC or Discord RPC (not to be confused with our other RPC) is an RPC protocol that 
-implements a very simple framing protocol over a raw socket. The framing protocol is similar to http2, except
-that we've chosen deliberately to not implement a bunch of stuff, like flow control, or server push. Instead, the RPC
-implements very simple request and response semantics, and a fire and forget client to server call called a "push". 
+# Loqui
+Loqui is a transport that implements a very simple framing protocol over a raw socket. The framing protocol is similar
+to http2, except that we've chosen deliberately to not implement a bunch of stuff, like flow control, or server push.
+Instead, the RPC implements very simple request and response semantics, and a fire and forget client to server call
+called a "push".
 
 The RPC protocol does not care how you encode your data - treating all data passed through it as opaque binaries. However,
 the protocol does support encoding negotiation, where the server sends the client a list of encodings it can speak, 
@@ -29,14 +29,14 @@ Following the opcode is the frame header - and then if applicable - the payload.
 All integers are encoded in `Big Endian` format. 
 
 ## `HELLO`
-The hello opcode is sent to the client upon connecting with the server. It advertises the server's DRPC version, the interval
+The hello opcode is sent to the client upon connecting with the server. It advertises the server's loqui version, the interval
 in which the server will ping (and that it expects the client to ping the server) - and the supported encodings within the 
 payload data, as a string of comma separated encodings.
 
 | Offset | Type     | Description      |
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
-| `1`    | uint8    | DRPC Version     |
+| `1`    | uint8    | Loqui Version    |
 | `2`    | uint32   | Ping Interval(ms)|
 | `6`    | uint32   | Payload Size     | 
 | `10`   | binary   | Payload Data     |

@@ -1,2 +1,2 @@
 include setup.py
-recursive-include py/drpc *.py *.c *.pyx *.pxd
+recursive-include py/loqui *.py *.c *.pyx *.pxd

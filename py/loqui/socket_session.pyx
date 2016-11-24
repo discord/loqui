@@ -7,12 +7,12 @@ from gevent.event import AsyncResult, Event
 
 from libc.stdint cimport uint32_t, uint8_t
 
-from drpc.exceptions import NoEncoderAvailable, ConnectionTerminated, DRPCDecoderError, StreamDefunct, \
+from loqui.exceptions import NoEncoderAvailable, ConnectionTerminated, LoquiDecoderError, StreamDefunct, \
     NotClientException, NotServerException
 from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
 
 from socket_watcher cimport SocketWatcher
-from stream_handler cimport DRPCStreamHandler
+from stream_handler cimport LoquiStreamHandler
 
 cdef size_t OUTBUF_MAX = 65535
 
@@ -25,10 +25,10 @@ class CloseReasons(object):
     DIDNT_STOP_IN_TIME = 4
     DECODER_ERROR = 5
 
-cdef class DRPCSocketSession:
+cdef class LoquiSocketSession:
     def __cinit__(self, object sock, object encoders, bint is_client=True, object on_request=None, object on_push=None):
         self._is_client = is_client
-        self._stream_handler = DRPCStreamHandler()
+        self._stream_handler = LoquiStreamHandler()
         self._sock = sock
         self._watcher = SocketWatcher(self._sock.fileno())
         self._inflight_requests = {}
@@ -226,7 +226,7 @@ cdef class DRPCSocketSession:
         try:
             events = self._stream_handler.on_bytes_received(data)
 
-        except DRPCDecoderError:
+        except LoquiDecoderError:
             return self.close(code=CloseReasons.DECODER_ERROR)
 
         if not events:

@@ -3,8 +3,8 @@ from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport uint32_t, uint8_t
 
-from exceptions import DRPCDecoderError
-cimport drpc_c
+from exceptions import LOQUIDecoderError
+cimport loqui_c
 cimport opcodes
 
 cdef size_t BIG_BUF_SIZE = 1024 * 1024 * 2
@@ -13,48 +13,48 @@ cdef size_t INITIAL_BUFFER_SIZE = 1024 * 512
 cdef uint32_t SEQ_MAX = (2 ** 32) - 2
 
 
-cdef inline void _reset_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
+cdef inline void _reset_buffer(loqui_c.loqui_buffer_t* loqui_buffer):
     """
     Ensures the buffer is in a reset state.
     """
-    if drpc_buffer.buf != NULL:
-        drpc_buffer.length = 0
+    if loqui_buffer.buf != NULL:
+        loqui_buffer.length = 0
 
     else:
-        drpc_buffer.buf = <char*> malloc(INITIAL_BUFFER_SIZE)
-        if drpc_buffer.buf == NULL:
+        loqui_buffer.buf = <char*> malloc(INITIAL_BUFFER_SIZE)
+        if loqui_buffer.buf == NULL:
             raise MemoryError('Unable to allocate buffer')
 
-        drpc_buffer.allocated_size = INITIAL_BUFFER_SIZE
-        drpc_buffer.length = 0
+        loqui_buffer.allocated_size = INITIAL_BUFFER_SIZE
+        loqui_buffer.length = 0
 
-cdef inline void _free_big_buffer(drpc_c.drpc_buffer_t* drpc_buffer):
+cdef inline void _free_big_buffer(loqui_c.loqui_buffer_t* loqui_buffer):
     """
     Frees the buffer if it's grown over `BIG_BUF_SIZE`.
     """
-    if drpc_buffer.allocated_size >= BIG_BUF_SIZE:
-        free(drpc_buffer.buf)
-        drpc_buffer.buf = NULL
-        drpc_buffer.length = 0
-        drpc_buffer.allocated_size = 0
+    if loqui_buffer.allocated_size >= BIG_BUF_SIZE:
+        free(loqui_buffer.buf)
+        loqui_buffer.buf = NULL
+        loqui_buffer.length = 0
+        loqui_buffer.allocated_size = 0
 
     # It's not too big, so we can reset the length to 0.
     else:
-        drpc_buffer.length = 0
+        loqui_buffer.length = 0
 
-cdef inline bytes _get_payload_from_decode_buffer(drpc_c.drpc_decode_buffer_t* decode_buffer):
+cdef inline bytes _get_payload_from_decode_buffer(loqui_c.loqui_decode_buffer_t* decode_buffer):
     """
     Get the payload part of the decode buffer. Copies the data after the headers in the buffer into a PyBytes object.
     """
-    cdef char* buf = decode_buffer.drpc_buffer.buf + decode_buffer.header_size
-    cdef size_t size = drpc_c.drpc_get_data_payload_size(decode_buffer)
+    cdef char* buf = decode_buffer.loqui_buffer.buf + decode_buffer.header_size
+    cdef size_t size = loqui_c.loqui_get_data_payload_size(decode_buffer)
     if size == 0:
         return None
 
     # this creates a copy into python world.
     return PyBytes_FromStringAndSize(buf, size)
 
-cdef class DRPCStreamHandler:
+cdef class LoquiStreamHandler:
     """
     The stream handler handles reading and parsing data, and maintaining a write buffer for events through the RPC.
     The handler does not track incoming or outgoing events, and does not validate the ordering of these events.
@@ -68,23 +68,23 @@ cdef class DRPCStreamHandler:
         self.write_buffer_position = 0
 
         _reset_buffer(&self.write_buffer)
-        _reset_buffer(&self.decode_buffer.drpc_buffer)
+        _reset_buffer(&self.decode_buffer.loqui_buffer)
 
     def __dealloc__(self):
         if self.write_buffer.buf != NULL:
             free(self.write_buffer.buf)
 
-        if self.decode_buffer.drpc_buffer.buf != NULL:
-            free(self.decode_buffer.drpc_buffer.buf)
+        if self.decode_buffer.loqui_buffer.buf != NULL:
+            free(self.decode_buffer.loqui_buffer.buf)
 
     cdef inline _reset_decode_buf(self):
         """
         Resets the decode buffer, re-allocating the buffer if it's grown too big - otherwise, reuse the same
         buffer.
         """
-        drpc_c.drpc_decoder_reset(&self.decode_buffer)
-        _free_big_buffer(&self.decode_buffer.drpc_buffer)
-        _reset_buffer(&self.decode_buffer.drpc_buffer)
+        loqui_c.loqui_decoder_reset(&self.decode_buffer)
+        _free_big_buffer(&self.decode_buffer.loqui_buffer)
+        _reset_buffer(&self.decode_buffer.loqui_buffer)
 
     cdef _reset_or_compact_write_buf(self):
         """
@@ -137,7 +137,7 @@ cdef class DRPCStreamHandler:
         """
         cdef int rv
         cdef uint32_t seq = self.next_seq()
-        rv = drpc_c.drpc_append_ping(&self.write_buffer, seq)
+        rv = loqui_c.loqui_append_ping(&self.write_buffer, seq)
         if rv < 0:
             raise MemoryError()
 
@@ -150,7 +150,7 @@ cdef class DRPCStreamHandler:
         :return:
         """
         cdef int rv
-        rv = drpc_c.drpc_append_pong(&self.write_buffer, seq)
+        rv = loqui_c.loqui_append_pong(&self.write_buffer, seq)
         if rv < 0:
             raise MemoryError()
 
@@ -171,7 +171,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = drpc_c.drpc_append_request(&self.write_buffer, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_request(&self.write_buffer, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -190,7 +190,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = drpc_c.drpc_append_push(&self.write_buffer, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_push(&self.write_buffer, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -211,7 +211,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = drpc_c.drpc_append_hello(&self.write_buffer, ping_interval, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_hello(&self.write_buffer, ping_interval, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -230,7 +230,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = drpc_c.drpc_append_select_encoding(&self.write_buffer, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_select_encoding(&self.write_buffer, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -253,7 +253,7 @@ cdef class DRPCStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = drpc_c.drpc_append_response(&self.write_buffer, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_response(&self.write_buffer, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -278,7 +278,7 @@ cdef class DRPCStreamHandler:
             if rv < 0:
                 raise TypeError()
 
-        rv = drpc_c.drpc_append_error(&self.write_buffer, code, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_error(&self.write_buffer, code, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -300,7 +300,7 @@ cdef class DRPCStreamHandler:
             if rv < 0:
                 raise TypeError()
 
-        rv = drpc_c.drpc_append_goaway(&self.write_buffer, code, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_goaway(&self.write_buffer, code, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -354,23 +354,23 @@ cdef class DRPCStreamHandler:
         cdef size_t size = PyBytes_Size(data)
         cdef char* buf = PyBytes_AS_STRING(data)
         cdef size_t consumed = 0
-        cdef drpc_c.drpc_decoder_status decoder_status
+        cdef loqui_c.loqui_decoder_status decoder_status
 
         cdef list received_payloads = []
         while size > 0:
-            decoder_status = drpc_c.drpc_decoder_read_data(&self.decode_buffer, size, buf, &consumed)
+            decoder_status = loqui_c.loqui_decoder_read_data(&self.decode_buffer, size, buf, &consumed)
             if decoder_status < 0:
                 self._reset_decode_buf()
-                raise DRPCDecoderError('The decoder failed with status %s' % decoder_status)
+                raise LOQUIDecoderError('The decoder failed with status %s' % decoder_status)
 
-            if decoder_status == drpc_c.DRPC_DECODE_NEEDS_MORE:
+            if decoder_status == loqui_c.LOQUI_DECODE_NEEDS_MORE:
                 break
 
-            elif decoder_status == drpc_c.DRPC_DECODE_COMPLETE:
+            elif decoder_status == loqui_c.LOQUI_DECODE_COMPLETE:
                 received_payloads.append(self._consume_decode_buffer())
 
             else:
-                raise DRPCDecoderError('Unhandled decoder status %s' % decoder_status)
+                raise LOQUIDecoderError('Unhandled decoder status %s' % decoder_status)
 
             size -= consumed
             buf += consumed
@@ -380,52 +380,52 @@ cdef class DRPCStreamHandler:
 
     cdef object _consume_decode_buffer(self):
         """
-        Consumes the decode buffer, returning an opcode Event. Call this once the decoder returns DRPC_DECODE_COMPLETE.
+        Consumes the decode buffer, returning an opcode Event. Call this once the decoder returns LOQUI_DECODE_COMPLETE.
         This function must be called before attempting to decode more data.
         """
         cdef uint8_t opcode = self.decode_buffer.opcode
         cdef object response
 
-        if opcode == drpc_c.DRPC_OP_RESPONSE:
+        if opcode == loqui_c.LOQUI_OP_RESPONSE:
             response = opcodes.Response(
-                drpc_c.drpc_get_seq(&self.decode_buffer),
+                loqui_c.loqui_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
-        elif opcode == drpc_c.DRPC_OP_REQUEST:
+        elif opcode == loqui_c.LOQUI_OP_REQUEST:
             response = opcodes.Request(
-                drpc_c.drpc_get_seq(&self.decode_buffer),
+                loqui_c.loqui_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
-        elif opcode == drpc_c.DRPC_OP_PUSH:
+        elif opcode == loqui_c.LOQUI_OP_PUSH:
             response = opcodes.Push(
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
-        elif opcode == drpc_c.DRPC_OP_PING:
+        elif opcode == loqui_c.LOQUI_OP_PING:
             response = opcodes.Ping(
-                drpc_c.drpc_get_seq(&self.decode_buffer)
+                loqui_c.loqui_get_seq(&self.decode_buffer)
             )
             self.send_pong(response.seq)
 
-        elif opcode == drpc_c.DRPC_OP_PONG:
+        elif opcode == loqui_c.LOQUI_OP_PONG:
             response = opcodes.Pong(
-                drpc_c.drpc_get_seq(&self.decode_buffer),
+                loqui_c.loqui_get_seq(&self.decode_buffer),
             )
 
-        elif opcode == drpc_c.DRPC_OP_GOAWAY:
+        elif opcode == loqui_c.LOQUI_OP_GOAWAY:
             response = opcodes.GoAway(
-                drpc_c.drpc_get_code(&self.decode_buffer),
+                loqui_c.loqui_get_code(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
-        elif opcode == drpc_c.DRPC_OP_HELLO:
+        elif opcode == loqui_c.LOQUI_OP_HELLO:
             response = opcodes.Hello(
-                drpc_c.drpc_get_version(&self.decode_buffer),
-                drpc_c.drpc_get_ping_interval(&self.decode_buffer),
+                loqui_c.loqui_get_version(&self.decode_buffer),
+                loqui_c.loqui_get_ping_interval(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer).split(',')
             )
-        elif opcode == drpc_c.DRPC_OP_SELECT_ENCODING:
+        elif opcode == loqui_c.LOQUI_OP_SELECT_ENCODING:
             response = opcodes.SelectEncoding(
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
