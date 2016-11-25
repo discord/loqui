@@ -44,6 +44,7 @@ type Conn struct {
 	handler   ServerHandler
 	wp        workerPool
 	readErrCh chan error
+	serving   bool
 
 	// Client
 	ready   bool
@@ -263,6 +264,25 @@ func (c *Conn) AwaitReady(timeout time.Duration) (err error) {
 	return nil
 }
 
+// Serve spawns a pool of workers to handle requests and pushes.
+// Does not return until connection is terminated.
+func (c *Conn) Serve(concurrency int) (err error) {
+	if err = c.proto.writeHello(uint32(c.pingInterval.Seconds()*1000), c.supportedEncodings); err != nil {
+		return
+	}
+
+	if c.handler == nil {
+		panic("handler is requried")
+	}
+
+	c.wp.start(c, concurrency)
+
+	c.serving = true
+	err = <-c.readErrCh
+	c.serving = false
+	return
+}
+
 // Encoding returns the negotiated encoding.
 // If connection is not ready it waits.
 func (c *Conn) Encoding() (encoding string, err error) {
@@ -324,18 +344,6 @@ func (c *Conn) Push(payload []byte) (err error) {
 	}
 
 	return c.proto.writePush(payload)
-}
-
-// Serve spawns a pool of workers to handle requests and pushes.
-// Does not return until connection is terminated.
-func (c *Conn) Serve(concurrency int) (err error) {
-	if err = c.proto.writeHello(uint32(c.pingInterval.Seconds()*1000), c.supportedEncodings); err != nil {
-		return
-	}
-
-	c.wp.start(c, concurrency)
-
-	return <-c.readErrCh
 }
 
 // Close performs a graceful shutdown of the connection by sending a GoAway.
@@ -428,7 +436,7 @@ func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
 }
 
 func (c *Conn) handlePush(payload *bytes.Buffer) {
-	if c.isClient {
+	if !c.serving {
 		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
