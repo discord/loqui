@@ -130,6 +130,7 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 
 	conn := NewConn(br, netConn, netConn, true)
 	conn.supportedEncodings = d.SupportedEncodings
+	conn.AwaitReady(d.HandshakeTimeout)
 
 	netConn = nil // Avoid close in defer.
 

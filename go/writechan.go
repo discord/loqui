@@ -6,8 +6,8 @@ import "bytes"
 type writeChan chan *bytes.Buffer
 
 func (ch writeChan) Write(p []byte) (n int, err error) {
-	buf := acquireBuffer(len(p))
-	n, err = buf.Write(p)
-	ch <- buf
+	b := acquireByteBuffer(len(p))
+	n, err = b.Write(p)
+	ch <- b
 	return
 }

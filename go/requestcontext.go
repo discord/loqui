@@ -56,7 +56,7 @@ func acquireRequestContext(rbuf *bytes.Buffer) *requestContext {
 }
 
 func releaseRequestContext(ctx *requestContext) {
-	releaseBuffer(ctx.rbuf)
+	releaseByteBuffer(ctx.rbuf)
 	ctx.rbuf = nil
 	requestContextPool.Put(ctx)
 }

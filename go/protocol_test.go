@@ -175,10 +175,10 @@ func TestGoAway(t *testing.T) {
 }
 
 func testProtocolOp(t *testing.T, expectedOp uint8, write func(pw *protocolWriter) error, read func(pr *protocolReader) error) {
-	buf := new(bytes.Buffer)
+	b := new(bytes.Buffer)
 
-	pw := newProtocolWriter(buf)
-	pr := newProtocolReader(buf)
+	pw := newProtocolWriter(b)
+	pr := newProtocolReader(b)
 
 	err := write(&pw)
 	if err != nil {

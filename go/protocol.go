@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strings"
 )
+
+var errUnknownOp = errors.New("loqui: unknown op")
 
 type protocolHandler interface {
 	handleHello(version uint8, pingInterval uint32, encodings []string)
@@ -74,21 +77,21 @@ func (pr *protocolReader) readUint32() (uint32, error) {
 	return binary.BigEndian.Uint32(v), nil
 }
 
-func (pr *protocolReader) readPayload() (payload *bytes.Buffer, err error) {
-	var len int
+func (pr *protocolReader) readPayload() (b *bytes.Buffer, err error) {
+	var l int
 	var v []byte
-	len, err = pr.readInt()
+	l, err = pr.readInt()
 	if err != nil {
 		return
 	}
-	payload = acquireBuffer(len)
-	v, err = pr.read(len)
+	b = acquireByteBuffer(l)
+	v, err = pr.read(l)
 	if err != nil {
-		releaseBuffer(payload)
-		payload = nil
+		releaseByteBuffer(b)
+		b = nil
 		return
 	}
-	payload.Write(v)
+	b.Write(v)
 	return
 }
 
@@ -98,13 +101,22 @@ func (pr *protocolReader) readOp() (uint8, error) {
 
 func (pr *protocolReader) readHello() (version uint8, pingInterval uint32, encodings []string, err error) {
 	version, err = pr.readUint8()
+	if err != nil {
+		return
+	}
 	pingInterval, err = pr.readUint32()
+	if err != nil {
+		return
+	}
 	var payload *bytes.Buffer
 	payload, err = pr.readPayload()
+	if err != nil {
+		return
+	}
 	if err == nil {
 		encodings = strings.Split(string(payload.Bytes()), ",")
 	}
-	releaseBuffer(payload)
+	releaseByteBuffer(payload)
 	return
 }
 
@@ -114,7 +126,7 @@ func (pr *protocolReader) readSelectEncoding() (encoding string, err error) {
 	if err == nil {
 		encoding = string(payload.Bytes())
 	}
-	releaseBuffer(payload)
+	releaseByteBuffer(payload)
 	return
 }
 
@@ -128,12 +140,18 @@ func (pr *protocolReader) readPong() (uint32, error) {
 
 func (pr *protocolReader) readRequest() (seq uint32, payload *bytes.Buffer, err error) {
 	seq, err = pr.readUint32()
+	if err != nil {
+		return
+	}
 	payload, err = pr.readPayload()
 	return
 }
 
 func (pr *protocolReader) readResponse() (seq uint32, payload *bytes.Buffer, err error) {
 	seq, err = pr.readUint32()
+	if err != nil {
+		return
+	}
 	payload, err = pr.readPayload()
 	return
 }
@@ -144,24 +162,33 @@ func (pr *protocolReader) readPush() (*bytes.Buffer, error) {
 
 func (pr *protocolReader) readError() (seq uint32, code uint16, reason string, err error) {
 	seq, err = pr.readUint32()
+	if err != nil {
+		return
+	}
 	code, err = pr.readUint16()
+	if err != nil {
+		return
+	}
 	var payload *bytes.Buffer
 	payload, err = pr.readPayload()
 	if err == nil {
 		reason = string(payload.Bytes())
 	}
-	releaseBuffer(payload)
+	releaseByteBuffer(payload)
 	return
 }
 
 func (pr *protocolReader) readGoAway() (code uint16, reason string, err error) {
 	code, err = pr.readUint16()
+	if err != nil {
+		return
+	}
 	var payload *bytes.Buffer
 	payload, err = pr.readPayload()
 	if err == nil {
 		reason = string(payload.Bytes())
 	}
-	releaseBuffer(payload)
+	releaseByteBuffer(payload)
 	return
 }
 
@@ -207,7 +234,6 @@ func (pr *protocolReader) process(ph protocolHandler) error {
 			return err
 		}
 		ph.handleResponse(seq, payload)
-		releaseBuffer(payload)
 	case opPush:
 		payload, err := pr.readPush()
 		if err != nil {
@@ -226,6 +252,8 @@ func (pr *protocolReader) process(ph protocolHandler) error {
 			return err
 		}
 		ph.handleGoAway(code, reason)
+	default:
+		return errUnknownOp
 	}
 	return nil
 }
@@ -244,37 +272,37 @@ func (pw *protocolWriter) Write(p []byte) (int, error) {
 
 func (pw *protocolWriter) writeHello(pingInterval uint32, encodings []string) error {
 	const headerLen = 10
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = opHello
 	header[1:2][0] = version
 	binary.BigEndian.PutUint32(header[2:6], pingInterval)
 	encodingsString := strings.Join(encodings, ",")
 	binary.BigEndian.PutUint32(header[6:headerLen], uint32(len(encodingsString)))
 	_, err := pw.Write(append(header[:headerLen], encodingsString...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return err
 }
 
 func (pw *protocolWriter) writeSelectEncoding(encoding string) error {
 	const headerLen = 5
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = opSelectEncoding
 	binary.BigEndian.PutUint32(header[1:headerLen], uint32(len(encoding)))
 	_, err := pw.Write(append(header[:headerLen], encoding...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return err
 }
 
 func (pw *protocolWriter) writePingPong(op uint8, seq uint32) error {
 	const headerLen = 5
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = op
 	binary.BigEndian.PutUint32(header[1:headerLen], seq)
 	_, err := pw.Write(header[:headerLen])
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return err
 }
 
@@ -288,13 +316,13 @@ func (pw *protocolWriter) writePong(seq uint32) error {
 
 func (pw *protocolWriter) writeRequestResponse(op uint8, seq uint32, payload []byte) (err error) {
 	const headerLen = 9
-	buf := acquireBuffer(headerLen + len(payload))
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen + len(payload))
+	header := b.Bytes()
 	header[:1][0] = op
 	binary.BigEndian.PutUint32(header[1:5], seq)
 	binary.BigEndian.PutUint32(header[5:headerLen], uint32(len(payload)))
 	_, err = pw.Write(append(header[:headerLen], payload...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return
 }
 
@@ -308,37 +336,37 @@ func (pw *protocolWriter) writeResponse(seq uint32, payload []byte) error {
 
 func (pw *protocolWriter) writePush(payload []byte) (err error) {
 	const headerLen = 5
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = opPush
 	binary.BigEndian.PutUint32(header[1:headerLen], uint32(len(payload)))
 	_, err = pw.Write(append(header[:headerLen], payload...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return
 }
 
 func (pw *protocolWriter) writeError(seq uint32, code uint16, reason string) (err error) {
 	const headerLen = 11
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = opError
 	binary.BigEndian.PutUint32(header[1:5], seq)
 	binary.BigEndian.PutUint16(header[5:7], code)
 	binary.BigEndian.PutUint32(header[7:headerLen], uint32(len(reason)))
 	_, err = pw.Write(append(header[:headerLen], reason...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return
 }
 
 func (pw *protocolWriter) writeGoAway(code uint16, reason string) (err error) {
 	const headerLen = 7
-	buf := acquireBuffer(headerLen)
-	header := buf.Bytes()
+	b := acquireByteBuffer(headerLen)
+	header := b.Bytes()
 	header[:1][0] = opGoAway
 	binary.BigEndian.PutUint16(header[1:3], code)
 	binary.BigEndian.PutUint32(header[3:headerLen], uint32(len(reason)))
 	_, err = pw.Write(append(header[:headerLen], reason...))
-	releaseBuffer(buf)
+	releaseByteBuffer(b)
 	return
 }
 

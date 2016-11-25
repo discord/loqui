@@ -16,7 +16,7 @@ func (r Response) Read(p []byte) (n int, err error) {
 
 // Close releases response back to the response pool.
 func (r *Response) Close() error {
-	releaseBuffer(r.payload)
+	releaseByteBuffer(r.payload)
 	r.payload = nil
 	responsePool.Put(r)
 	return nil

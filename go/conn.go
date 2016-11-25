@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+var (
+	// ErrTimeout is returned from timed out calls.
+	ErrTimeout = errors.New("loqui: timeout")
+
+	// ErrNotClient is returned from calls that only client can make.
+	ErrNotClient = errors.New("loqui: not client")
+
+	// ErrNotReady is returned when issuing calls before handshake is complete.
+	ErrNotReady = errors.New("loqui: not ready")
+)
+
 // Conn supports client/server of the protocol.
 type Conn struct {
 	mu sync.Mutex
@@ -133,16 +144,16 @@ func (c *Conn) writeLoop() {
 		select {
 		case <-c.terminateCh:
 			return
-		case buf := <-c.writeCh:
-			c.w.Write(buf.Bytes())
-			releaseBuffer(buf)
+		case b := <-c.writeCh:
+			c.w.ReadFrom(b)
+			releaseByteBuffer(b)
 			// Drain the write channel to to reduce syscalls.
 		drain:
 			for {
 				select {
-				case buf = <-c.writeCh:
-					c.w.Write(buf.Bytes())
-					releaseBuffer(buf)
+				case b = <-c.writeCh:
+					c.w.ReadFrom(b)
+					releaseByteBuffer(b)
 				default:
 					break drain
 				}
@@ -166,18 +177,6 @@ func (c *Conn) releaseRequest(req *request) {
 	delete(c.reqs, req.seq)
 	c.mu.Unlock()
 	requestPool.Put(req)
-}
-
-// Conns should not send any requests or pushes until ready.
-func (c *Conn) ensureReady() error {
-	if !c.ready {
-		select {
-		case <-c.readyCh:
-		case <-c.terminateCh:
-			return io.EOF
-		}
-	}
-	return nil
 }
 
 func (c *Conn) nextSeq() uint32 {
@@ -210,7 +209,7 @@ func (c *Conn) completeRequest(seq uint32, payload *bytes.Buffer, err error) {
 		req.c <- err
 
 		if c.remoteClosed {
-			c.mu.Unlock()
+			c.mu.Lock()
 			noReqs := len(c.reqs) == 0
 			c.mu.Unlock()
 			if noReqs {
@@ -218,7 +217,7 @@ func (c *Conn) completeRequest(seq uint32, payload *bytes.Buffer, err error) {
 			}
 		}
 	} else if err == nil {
-		releaseBuffer(payload)
+		releaseByteBuffer(payload)
 	}
 }
 
@@ -243,34 +242,72 @@ func (c *Conn) terminate() (err error) {
 
 // Public
 
+// AwaitReady ensures that the server has responded with hello.
+func (c *Conn) AwaitReady(timeout time.Duration) (err error) {
+	if !c.isClient {
+		return ErrNotClient
+	}
+
+	if !c.ready {
+		tc := acquireTimer(timeout)
+		select {
+		case <-c.readyCh:
+		case <-c.terminateCh:
+			err = io.EOF
+		case <-tc.C:
+			err = ErrTimeout
+		}
+		releaseTimer(tc)
+	}
+
+	return nil
+}
+
 // Encoding returns the negotiated encoding.
 // If connection is not ready it waits.
 func (c *Conn) Encoding() (encoding string, err error) {
-	if err = c.ensureReady(); err != nil {
-		return
+	if !c.ready {
+		err = ErrNotReady
+	} else {
+		encoding = c.encoding
 	}
-	encoding = c.encoding
 	return
 }
 
 // Request provides a io.ReadCloser that contains the response payload.
 // Close MUST be called to avoid allocations.
-func (c *Conn) Request(payload []byte) (res io.ReadCloser, err error) {
+func (c *Conn) Request(payload []byte) (io.ReadCloser, error) {
+	return c.RequestTimeout(payload, time.Second*5)
+}
+
+// RequestTimeout provides a io.ReadCloser that contains the response payload.
+// Close MUST be called to avoid allocations.
+func (c *Conn) RequestTimeout(payload []byte, timeout time.Duration) (res io.ReadCloser, err error) {
+	if !c.isClient {
+		return nil, ErrNotClient
+	}
+
 	if c.localClosed || c.remoteClosed {
 		return nil, io.EOF
 	}
 
-	if err = c.ensureReady(); err != nil {
-		return
+	if !c.ready {
+		return nil, ErrNotReady
 	}
 
+	tc := acquireTimer(timeout)
 	req := c.acquireRequest()
 	err = c.proto.writeRequest(req.seq, payload)
 	if err == nil {
-		err = <-req.c
-		res = req.response
+		select {
+		case err = <-req.c:
+			res = req.response
+		case <-tc.C:
+			err = ErrTimeout
+		}
 	}
 	c.releaseRequest(req)
+	releaseTimer(tc)
 
 	return
 }
@@ -282,8 +319,8 @@ func (c *Conn) Push(payload []byte) (err error) {
 		return io.EOF
 	}
 
-	if err = c.ensureReady(); err != nil {
-		return
+	if !c.ready {
+		return ErrNotReady
 	}
 
 	return c.proto.writePush(payload)
@@ -372,7 +409,7 @@ func (c *Conn) handlePong(seq uint32) {
 
 func (c *Conn) handleRequest(seq uint32, payload *bytes.Buffer) {
 	if c.isClient {
-		releaseBuffer(payload)
+		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
 	}
@@ -382,7 +419,7 @@ func (c *Conn) handleRequest(seq uint32, payload *bytes.Buffer) {
 
 func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
 	if !c.isClient {
-		releaseBuffer(payload)
+		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
 	}
@@ -392,7 +429,7 @@ func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
 
 func (c *Conn) handlePush(payload *bytes.Buffer) {
 	if c.isClient {
-		releaseBuffer(payload)
+		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
 	}
