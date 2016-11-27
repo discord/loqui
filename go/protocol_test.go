@@ -192,7 +192,7 @@ func testProtocolOp(t *testing.T, expectedOp uint8, write func(pw *protocolWrite
 	b := new(bytes.Buffer)
 
 	pw := newProtocolWriter(b)
-	pr := newProtocolReader(b)
+	pr := newProtocolReader(b, 4096)
 
 	err := write(&pw)
 	if err != nil {

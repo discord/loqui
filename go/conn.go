@@ -22,6 +22,15 @@ var (
 	ErrNotReady = errors.New("loqui: not ready")
 )
 
+type ConnConfig struct {
+	IsClient              bool
+	Handler               ServerHandler
+	PingInterval          time.Duration
+	SupportedEncodings    []string
+	SupportedCompressions []string
+	MaxPayloadSize        int
+}
+
 // Conn supports client/server of the protocol.
 type Conn struct {
 	mu sync.Mutex
@@ -66,13 +75,17 @@ type Conn struct {
 // NewConn creates a connection instance out of any ReadWriteCloser combo.
 //
 // Behavior changes depending on side of the connection using the isClient option.
-func NewConn(r io.Reader, w io.Writer, c io.Closer, isClient bool) (conn *Conn) {
+func NewConn(r io.Reader, w io.Writer, c io.Closer, config ConnConfig) (conn *Conn) {
 	writeCh := make(writeChan, 1000)
 
 	conn = &Conn{
 		version: version,
 
-		isClient: isClient,
+		isClient:              config.IsClient,
+		pingInterval:          config.PingInterval,
+		handler:               config.Handler,
+		supportedEncodings:    config.SupportedEncodings,
+		supportedCompressions: config.SupportedCompressions,
 
 		// Writes are buffered and flushed by the writeLoop to avoid excessive system calls.
 		w:       bufio.NewWriterSize(w, 65536),
@@ -81,7 +94,7 @@ func NewConn(r io.Reader, w io.Writer, c io.Closer, isClient bool) (conn *Conn) 
 		c: c,
 
 		proto: protocol{
-			newProtocolReader(r),
+			newProtocolReader(r, config.MaxPayloadSize),
 			newProtocolWriter(writeCh),
 		},
 
@@ -93,9 +106,11 @@ func NewConn(r io.Reader, w io.Writer, c io.Closer, isClient bool) (conn *Conn) 
 		readErrCh: make(chan error, 1),
 	}
 
-	if isClient {
+	if conn.isClient {
 		conn.reqs = make(map[uint32]*request)
-	} else {
+	}
+
+	if conn.handler != nil {
 		conn.wp = newWorkerPool()
 	}
 
@@ -264,8 +279,8 @@ func (c *Conn) terminate() (err error) {
 
 // Public
 
-// AwaitReady ensures that the server has responded with HELLO_ACK.
-func (c *Conn) AwaitReady(timeout time.Duration) (err error) {
+// Handshake ensures that the server has responded with HELLO_ACK.
+func (c *Conn) Handshake(timeout time.Duration) (err error) {
 	if !c.isClient {
 		return ErrNotClient
 	}

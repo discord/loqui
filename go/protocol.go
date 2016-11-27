@@ -6,12 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"strings"
 )
 
 var (
 	errUnknownOp         = errors.New("loqui: unknown op")
 	errNotEnoughSettings = errors.New("loqui: not enough settings")
+	errPayloadTooLarge   = errors.New("loqui: payload too large")
 )
 
 type protocolHandler interface {
@@ -27,19 +29,24 @@ type protocolHandler interface {
 }
 
 type protocolReader struct {
-	buf *bytes.Buffer
-	br  *bufio.Reader
+	buf            *bytes.Buffer
+	br             *bufio.Reader
+	maxPayloadSize int
 }
 
-func newProtocolReader(r io.Reader) protocolReader {
+func newProtocolReader(r io.Reader, maxPayloadSize int) protocolReader {
 	var br *bufio.Reader
 	var ok bool
 	if br, ok = r.(*bufio.Reader); !ok {
 		br = bufio.NewReader(r)
 	}
+	if maxPayloadSize <= 0 {
+		maxPayloadSize = math.MaxInt32
+	}
 	return protocolReader{
-		buf: new(bytes.Buffer),
-		br:  br,
+		buf:            new(bytes.Buffer),
+		br:             br,
+		maxPayloadSize: maxPayloadSize,
 	}
 }
 
@@ -85,6 +92,10 @@ func (pr *protocolReader) readPayload() (b *bytes.Buffer, err error) {
 	var v []byte
 	l, err = pr.readInt()
 	if err != nil {
+		return
+	}
+	if l > pr.maxPayloadSize {
+		err = errPayloadTooLarge
 		return
 	}
 	b = acquireByteBuffer(l)
@@ -412,9 +423,9 @@ type protocol struct {
 	protocolWriter
 }
 
-func newProtocol(rw io.ReadWriter) protocol {
+func newProtocol(rw io.ReadWriter, maxPayloadSize int) protocol {
 	return protocol{
-		newProtocolReader(rw),
+		newProtocolReader(rw, maxPayloadSize),
 		newProtocolWriter(rw),
 	}
 }

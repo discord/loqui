@@ -24,6 +24,7 @@ type ServerConfig struct {
 	SupportedEncodings    []string
 	SupportedCompressions []string
 	Concurrency           int
+	MaxPayloadSize        int
 }
 
 // Server implements http.Handler allowing a specific HTTP route to
@@ -68,11 +69,14 @@ func (s *Server) upgrade(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) serveConn(conn net.Conn) (err error) {
-	c := NewConn(conn, conn, conn, false)
-	c.pingInterval = s.config.PingInterval
-	c.handler = s.handler
-	c.supportedEncodings = s.config.SupportedEncodings
-	c.supportedCompressions = s.config.SupportedCompressions
+	c := NewConn(conn, conn, conn, ConnConfig{
+		IsClient:              false,
+		Handler:               s.handler,
+		PingInterval:          s.config.PingInterval,
+		SupportedEncodings:    s.config.SupportedEncodings,
+		SupportedCompressions: s.config.SupportedCompressions,
+		MaxPayloadSize:        s.config.MaxPayloadSize,
+	})
 
 	s.mu.Lock()
 	s.conns[c] = true

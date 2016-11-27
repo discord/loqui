@@ -44,6 +44,10 @@ type Dialer struct {
 	// negotiate with the server.
 	SupportedCompressions []string
 
+	// MaxPayloadSize ensures the connection does not try to process any payload
+	// larger than this size to avoid OOM from bad actors.
+	MaxPayloadSize int
+
 	// HandshakeTimeout specifies the duration for the handshake to complete.
 	HandshakeTimeout time.Duration
 }
@@ -132,10 +136,13 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 
 	netConn.SetDeadline(time.Time{})
 
-	conn := NewConn(br, netConn, netConn, true)
-	conn.supportedEncodings = d.SupportedEncodings
-	conn.supportedCompressions = d.SupportedCompressions
-	if err := conn.AwaitReady(d.HandshakeTimeout); err != nil {
+	conn := NewConn(br, netConn, netConn, ConnConfig{
+		IsClient:              true,
+		SupportedEncodings:    d.SupportedEncodings,
+		SupportedCompressions: d.SupportedCompressions,
+		MaxPayloadSize:        d.MaxPayloadSize,
+	})
+	if err := conn.Handshake(d.HandshakeTimeout); err != nil {
 		return nil, err
 	}
 

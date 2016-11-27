@@ -14,7 +14,7 @@ func TestSelectEncoding(t *testing.T) {
 	defer server.Close(0)
 
 	encoding, err := client.Encoding()
-	expectedEncoding := "msgpack"
+	expectedEncoding := "json"
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -47,17 +47,19 @@ func (s serverHandler) ServeRequest(ctx RequestContext) {
 func newPair() (*Conn, *Conn) {
 	a, b := net.Pipe()
 
-	client := NewConn(a, a, a, true)
-	server := NewConn(b, b, b, false)
-	server.handler = make(serverHandler, 1024)
-
-	encodings := []string{"msgpack", "json"}
-	client.supportedEncodings = encodings
-	server.supportedEncodings = encodings
-	server.pingInterval = time.Second * 5
+	client := NewConn(a, a, a, ConnConfig{
+		IsClient:           true,
+		SupportedEncodings: []string{"msgpack", "json"},
+	})
+	server := NewConn(b, b, b, ConnConfig{
+		IsClient:           false,
+		Handler:            make(serverHandler, 1024),
+		PingInterval:       time.Second * 5,
+		SupportedEncodings: []string{"json"},
+	})
 
 	go server.Serve(100)
-	client.AwaitReady(time.Second)
+	client.Handshake(time.Second)
 
 	return client, server
 }
