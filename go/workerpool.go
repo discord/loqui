@@ -35,8 +35,7 @@ func (wp workerPool) run(c *Conn) {
 	defer func() {
 		if r := recover(); r != nil {
 			reason, _ := r.(string)
-			// TODO: pick a code
-			c.proto.writeError(FlagNone, seq, 0, reason)
+			c.proto.writeError(FlagNone, seq, CodeInternalServerError, reason)
 			go wp.run(c)
 		}
 	}()

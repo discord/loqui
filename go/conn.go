@@ -451,13 +451,12 @@ func (c *Conn) handleHelloAck(flags uint8, pingInterval uint32, encoding string,
 	}
 
 	if !validEncoding {
-		c.Terminate(CodeNoCommonEncoding)
+		c.Terminate(CodeInvalidEncoding)
 		return
 	}
 
 	if !validCompression {
-		// TODO: different opcode for invalid compression
-		c.Terminate(CodeNoCommonEncoding)
+		c.Terminate(CodeInvalidCompression)
 		return
 	}
 

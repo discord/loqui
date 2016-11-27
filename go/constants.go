@@ -25,8 +25,14 @@ const (
 	CodeUnsupportedVersion
 	// CodeNoCommonEncoding is sent when there are no common encodings.
 	CodeNoCommonEncoding
+	// CodeInvalidEncoding is sent by the client if the server chooses and invalid encoding.
+	CodeInvalidEncoding
+	// CodeInvalidCompression is sent by the client if the server chooses and invalid compression.
+	CodeInvalidCompression
 	// CodePingTimeout is sent when connection does not receive a pong within ping interval.
 	CodePingTimeout
+	// CodeInternalServerError is sent when a single request dies due to an error.
+	CodeInternalServerError
 )
 
 const (

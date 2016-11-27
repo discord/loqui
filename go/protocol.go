@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-var errUnknownOp = errors.New("loqui: unknown op")
+var (
+	errUnknownOp         = errors.New("loqui: unknown op")
+	errNotEnoughSettings = errors.New("loqui: not enough settings")
+)
 
 type protocolHandler interface {
 	handleHello(flags uint8, version uint8, encodings []string, compressions []string)
@@ -114,7 +117,10 @@ func (pr *protocolReader) readHello() (version uint8, encodings []string, compre
 		return
 	}
 	settings := strings.Split(string(payload.Bytes()), "|")
-	// TODO: ensure there are 2 values
+	if len(settings) < 2 {
+		err = errNotEnoughSettings
+		return
+	}
 	if settings[0] != "" {
 		encodings = strings.Split(settings[0], ",")
 	}
@@ -136,7 +142,10 @@ func (pr *protocolReader) readHelloAck() (pingInterval uint32, encoding string, 
 		return
 	}
 	settings := strings.Split(string(payload.Bytes()), "|")
-	// TODO: ensure there are 2 values
+	if len(settings) < 2 {
+		err = errNotEnoughSettings
+		return
+	}
 	encoding = settings[0]
 	compression = settings[1]
 	releaseByteBuffer(payload)
