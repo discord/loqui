@@ -146,14 +146,14 @@ func (c *Conn) writeLoop() {
 		case <-c.terminateCh:
 			return
 		case b := <-c.writeCh:
-			c.w.ReadFrom(b)
+			c.w.Write(b.Bytes())
 			releaseByteBuffer(b)
 			// Drain the write channel to to reduce syscalls.
 		drain:
 			for {
 				select {
 				case b = <-c.writeCh:
-					c.w.ReadFrom(b)
+					c.w.Write(b.Bytes())
 					releaseByteBuffer(b)
 				default:
 					break drain
