@@ -41,7 +41,7 @@ func NewServer(handler ServerHandler, config ServerConfig) *Server {
 	}
 
 	if config.Concurrency == 0 {
-		config.Concurrency = 50
+		config.Concurrency = 10
 	}
 
 	return &Server{
