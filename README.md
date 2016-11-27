@@ -100,7 +100,7 @@ The server had an internal error processing a given request for a specific seq.
 | Offset | Type     | Description      |
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
-| `1`    | uint8    | error code       |
-| `2`    | uint32   | Sequence Num     |
-| `6`    | uint32   | Payload Size     |
-| `10`   | binary   | Payload Data     |
+| `1`    | uint32   | Sequence Num     |
+| `6`    | uint16   | error code       |
+| `8`    | uint32   | Payload Size     |
+| `12`   | binary   | Payload Data     |
