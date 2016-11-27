@@ -276,6 +276,7 @@ func (c *Conn) Serve(concurrency int) (err error) {
 	}
 
 	c.wp.start(c, concurrency)
+	defer c.wp.stop()
 
 	c.serving = true
 	err = <-c.readErrCh
