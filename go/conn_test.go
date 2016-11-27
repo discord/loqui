@@ -27,7 +27,7 @@ func TestRequest(t *testing.T) {
 	client, _ := newPair()
 
 	expectedPayload := []byte("hello world")
-	b, err := client.RequestTimeout(expectedPayload, time.Second)
+	b, err := client.RequestTimeout(expectedPayload, false, time.Second)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}

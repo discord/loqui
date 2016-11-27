@@ -6,36 +6,50 @@ import (
 	"testing"
 )
 
+var expectedFlags uint8 = 1 << 5
+
 func TestProtocolHello(t *testing.T) {
-	var expectedPingInterval uint32 = 30000
+	expectedVersion := uint8(1)
 	expectedEncodings := []string{"a", "b"}
+	expectedCompressions := []string{"c", "d"}
 	testProtocolOp(t, opHello,
 		func(pw *protocolWriter) error {
-			return pw.writeHello(expectedPingInterval, expectedEncodings)
+			return pw.writeHello(expectedFlags, expectedVersion, expectedEncodings, expectedCompressions)
 		},
 		func(pr *protocolReader) error {
-			_, pingInterval, encodings, err := pr.readHello()
-			if pingInterval != expectedPingInterval {
-				t.Fatalf("unexpected pingInterval: %d. Expecting %d", pingInterval, expectedPingInterval)
+			version, encodings, compressions, err := pr.readHello()
+			if version != expectedVersion {
+				t.Fatalf("unexpected version: %d. Expecting %d", version, expectedVersion)
 			}
 			if !reflect.DeepEqual(encodings, expectedEncodings) {
 				t.Fatalf("unexpected encodings: %v. Expecting %v", encodings, expectedEncodings)
+			}
+			if !reflect.DeepEqual(compressions, expectedCompressions) {
+				t.Fatalf("unexpected compressions: %v. Expecting %v", compressions, expectedCompressions)
 			}
 			return err
 		},
 	)
 }
 
-func TestProtocolSelectEncoding(t *testing.T) {
+func TestProtocolHelloAck(t *testing.T) {
+	var expectedPingInterval uint32 = 30000
 	expectedEncoding := "a"
-	testProtocolOp(t, opSelectEncoding,
+	expectedCompression := "c"
+	testProtocolOp(t, opHelloAck,
 		func(pw *protocolWriter) error {
-			return pw.writeSelectEncoding(expectedEncoding)
+			return pw.writeHelloAck(expectedFlags, expectedPingInterval, expectedEncoding, expectedCompression)
 		},
 		func(pr *protocolReader) error {
-			encoding, err := pr.readSelectEncoding()
+			pingInterval, encoding, compression, err := pr.readHelloAck()
+			if pingInterval != expectedPingInterval {
+				t.Fatalf("unexpected pingInterval: %d. Expecting %d", pingInterval, expectedPingInterval)
+			}
 			if encoding != expectedEncoding {
 				t.Fatalf("unexpected encoding: %s. Expecting %s", encoding, expectedEncoding)
+			}
+			if compression != expectedCompression {
+				t.Fatalf("unexpected compression: %s. Expecting %s", compression, expectedCompression)
 			}
 			return err
 		},
@@ -46,7 +60,7 @@ func TestProtocolPing(t *testing.T) {
 	var expectedSeq uint32 = 111
 	testProtocolOp(t, opPing,
 		func(pw *protocolWriter) error {
-			return pw.writePing(expectedSeq)
+			return pw.writePing(expectedFlags, expectedSeq)
 		},
 		func(pr *protocolReader) error {
 			seq, err := pr.readPing()
@@ -62,7 +76,7 @@ func TestProtocolPong(t *testing.T) {
 	var expectedSeq uint32 = 111
 	testProtocolOp(t, opPong,
 		func(pw *protocolWriter) error {
-			return pw.writePong(expectedSeq)
+			return pw.writePong(expectedFlags, expectedSeq)
 		},
 		func(pr *protocolReader) error {
 			seq, err := pr.readPong()
@@ -79,7 +93,7 @@ func TestProtocolRequest(t *testing.T) {
 	expectedPayload := []byte("hello world")
 	testProtocolOp(t, opRequest,
 		func(pw *protocolWriter) error {
-			return pw.writeRequest(expectedSeq, expectedPayload)
+			return pw.writeRequest(expectedFlags, expectedSeq, expectedPayload)
 		},
 		func(pr *protocolReader) error {
 			seq, payload, err := pr.readRequest()
@@ -99,7 +113,7 @@ func TestProtocolResponse(t *testing.T) {
 	expectedPayload := []byte("hello world")
 	testProtocolOp(t, opResponse,
 		func(pw *protocolWriter) error {
-			return pw.writeResponse(expectedSeq, expectedPayload)
+			return pw.writeResponse(expectedFlags, expectedSeq, expectedPayload)
 		},
 		func(pr *protocolReader) error {
 			seq, payload, err := pr.readResponse()
@@ -118,7 +132,7 @@ func TestProtocolPush(t *testing.T) {
 	expectedPayload := []byte("hello world")
 	testProtocolOp(t, opPush,
 		func(pw *protocolWriter) error {
-			return pw.writePush(expectedPayload)
+			return pw.writePush(expectedFlags, expectedPayload)
 		},
 		func(pr *protocolReader) error {
 			payload, err := pr.readPush()
@@ -136,7 +150,7 @@ func TestProtocolError(t *testing.T) {
 	expectedReason := "testing"
 	testProtocolOp(t, opError,
 		func(pw *protocolWriter) error {
-			return pw.writeError(expectedSeq, expectedCode, expectedReason)
+			return pw.writeError(expectedFlags, expectedSeq, expectedCode, expectedReason)
 		},
 		func(pr *protocolReader) error {
 			seq, code, reason, err := pr.readError()
@@ -159,7 +173,7 @@ func TestGoAway(t *testing.T) {
 	expectedReason := "testing"
 	testProtocolOp(t, opGoAway,
 		func(pw *protocolWriter) error {
-			return pw.writeGoAway(expectedCode, expectedReason)
+			return pw.writeGoAway(expectedFlags, expectedCode, expectedReason)
 		},
 		func(pr *protocolReader) error {
 			code, reason, err := pr.readGoAway()
@@ -192,6 +206,15 @@ func testProtocolOp(t *testing.T, expectedOp uint8, write func(pw *protocolWrite
 
 	if op != expectedOp {
 		t.Fatalf("unexpected op: %d. Expecting %d", op, expectedOp)
+	}
+
+	flags, err := pr.readFlags()
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	if flags != expectedFlags {
+		t.Fatalf("unexpected flags: %d. Expecting %d", flags, expectedFlags)
 	}
 
 	err = read(&pr)

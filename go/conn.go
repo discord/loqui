@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,11 +54,13 @@ type Conn struct {
 	reqs map[uint32]*request
 
 	// Config
-	isClient           bool
-	version            uint8
-	pingInterval       time.Duration
-	supportedEncodings []string
-	encoding           string
+	isClient              bool
+	version               uint8
+	pingInterval          time.Duration
+	supportedEncodings    []string
+	supportedCompressions []string
+	encoding              string
+	compression           string
 }
 
 // NewConn creates a connection instance out of any ReadWriteCloser combo.
@@ -67,6 +70,8 @@ func NewConn(r io.Reader, w io.Writer, c io.Closer, isClient bool) (conn *Conn) 
 	writeCh := make(writeChan, 1000)
 
 	conn = &Conn{
+		version: version,
+
 		isClient: isClient,
 
 		// Writes are buffered and flushed by the writeLoop to avoid excessive system calls.
@@ -110,7 +115,7 @@ func (c *Conn) pingLoop() {
 
 	for {
 		seq := c.nextSeq()
-		if err := c.proto.writePing(seq); err != nil {
+		if err := c.proto.writePing(FlagNone, seq); err != nil {
 			return
 		}
 
@@ -184,17 +189,33 @@ func (c *Conn) nextSeq() uint32 {
 	return atomic.AddUint32(&c.seq, 1)
 }
 
-func (c *Conn) selectEncoding(encodings []string) bool {
+func (c *Conn) sendHelloAck(encodings []string, compressions []string) bool {
+compressions:
+	for _, supportedEncoding := range c.supportedCompressions {
+		for _, compression := range compressions {
+			if compression == supportedEncoding {
+				c.compression = compression
+				break compressions
+			}
+		}
+	}
+
+encodings:
 	for _, supportedEncoding := range c.supportedEncodings {
 		for _, encoding := range encodings {
 			if encoding == supportedEncoding {
 				c.encoding = encoding
-				c.proto.writeSelectEncoding(encoding)
-				return true
+				break encodings
 			}
 		}
 	}
-	return false
+
+	if c.encoding == "" {
+		return false
+	}
+
+	c.proto.writeHelloAck(FlagNone, uint32(c.pingInterval.Seconds()*1000), c.encoding, c.compression)
+	return true
 }
 
 func (c *Conn) completeRequest(seq uint32, payload *bytes.Buffer, err error) {
@@ -243,10 +264,15 @@ func (c *Conn) terminate() (err error) {
 
 // Public
 
-// AwaitReady ensures that the server has responded with hello.
+// AwaitReady ensures that the server has responded with HELLO_ACK.
 func (c *Conn) AwaitReady(timeout time.Duration) (err error) {
 	if !c.isClient {
 		return ErrNotClient
+	}
+
+	err = c.proto.writeHello(FlagNone, c.version, c.supportedEncodings, c.supportedCompressions)
+	if err != nil {
+		return
 	}
 
 	if !c.ready {
@@ -267,10 +293,6 @@ func (c *Conn) AwaitReady(timeout time.Duration) (err error) {
 // Serve spawns a pool of workers to handle requests and pushes.
 // Does not return until connection is terminated.
 func (c *Conn) Serve(concurrency int) (err error) {
-	if err = c.proto.writeHello(uint32(c.pingInterval.Seconds()*1000), c.supportedEncodings); err != nil {
-		return
-	}
-
 	if c.handler == nil {
 		panic("handler is requried")
 	}
@@ -297,13 +319,13 @@ func (c *Conn) Encoding() (encoding string, err error) {
 
 // Request provides a io.ReadCloser that contains the response payload.
 // Close MUST be called to avoid allocations.
-func (c *Conn) Request(payload []byte) (io.ReadCloser, error) {
-	return c.RequestTimeout(payload, time.Second*5)
+func (c *Conn) Request(payload []byte, compressed bool) (io.ReadCloser, error) {
+	return c.RequestTimeout(payload, compressed, time.Second*5)
 }
 
 // RequestTimeout provides a io.ReadCloser that contains the response payload.
 // Close MUST be called to avoid allocations.
-func (c *Conn) RequestTimeout(payload []byte, timeout time.Duration) (res io.ReadCloser, err error) {
+func (c *Conn) RequestTimeout(payload []byte, compressed bool, timeout time.Duration) (res io.ReadCloser, err error) {
 	if !c.isClient {
 		return nil, ErrNotClient
 	}
@@ -316,9 +338,14 @@ func (c *Conn) RequestTimeout(payload []byte, timeout time.Duration) (res io.Rea
 		return nil, ErrNotReady
 	}
 
+	flags := FlagNone
+	if compressed {
+		flags = flags & FlagCompressed
+	}
+
 	tc := acquireTimer(timeout)
 	req := c.acquireRequest()
-	err = c.proto.writeRequest(req.seq, payload)
+	err = c.proto.writeRequest(flags, req.seq, payload)
 	if err == nil {
 		select {
 		case err = <-req.c:
@@ -335,7 +362,7 @@ func (c *Conn) RequestTimeout(payload []byte, timeout time.Duration) (res io.Rea
 
 // Push sends a payload to the other side of the connection.
 // There is no backpressure and the only errors that can return are socket errors.
-func (c *Conn) Push(payload []byte) (err error) {
+func (c *Conn) Push(payload []byte, compressed bool) (err error) {
 	if c.localClosed || c.remoteClosed {
 		return io.EOF
 	}
@@ -344,7 +371,12 @@ func (c *Conn) Push(payload []byte) (err error) {
 		return ErrNotReady
 	}
 
-	return c.proto.writePush(payload)
+	flags := FlagNone
+	if compressed {
+		flags = flags & FlagCompressed
+	}
+
+	return c.proto.writePush(flags, payload)
 }
 
 // Close performs a graceful shutdown of the connection by sending a GoAway.
@@ -354,11 +386,12 @@ func (c *Conn) Close(code uint16) (err error) {
 	}
 
 	c.localClosed = true
-	return c.proto.writeGoAway(code, "")
+	return c.proto.writeGoAway(FlagNone, code, "")
 }
 
 // Terminate sends a GoAway and immediately terminates the underlying connection.
 func (c *Conn) Terminate(code uint16) (err error) {
+	log.Println("TERMAINATING", code)
 	err = c.Close(code)
 	if err != nil {
 		return
@@ -368,65 +401,89 @@ func (c *Conn) Terminate(code uint16) (err error) {
 
 // ProtocolHandler
 
-func (c *Conn) handleHello(version uint8, pingInterval uint32, encodings []string) {
-	if !c.isClient {
+func (c *Conn) handleHello(flags uint8, version uint8, encodings []string, compressions []string) {
+	if c.isClient || c.ready {
 		c.Terminate(CodeInvalidOp)
 		return
 	}
 
-	if !c.selectEncoding(encodings) {
-		c.Terminate(CodeInvalidEncoding)
+	if c.version < version {
+		c.Terminate(CodeUnsupportedVersion)
 		return
 	}
 
-	if c.ready {
-		c.Terminate(CodeInvalidOp)
+	if !c.sendHelloAck(encodings, compressions) {
+		c.Terminate(CodeNoCommonEncoding)
 		return
 	}
 
 	c.version = version
-	c.pingInterval = time.Duration(pingInterval) * time.Millisecond
 	c.ready = true
 	close(c.readyCh)
 }
 
-func (c *Conn) handleSelectEncoding(encoding string) {
-	if c.ready {
+func (c *Conn) handleHelloAck(flags uint8, pingInterval uint32, encoding string, compression string) {
+	if !c.isClient || c.ready {
 		c.Terminate(CodeInvalidOp)
 		return
 	}
 
-	for _, supportedEncoding := range c.supportedEncodings {
-		if supportedEncoding == encoding {
-			c.encoding = encoding
-			c.ready = true
-			close(c.readyCh)
-			return
+	c.pingInterval = time.Duration(pingInterval) * time.Millisecond
+
+	validCompression := compression == ""
+	if !validCompression {
+		for _, supportedCompression := range c.supportedCompressions {
+			if supportedCompression == compression {
+				c.compression = compression
+				validCompression = true
+				break
+			}
 		}
 	}
 
-	c.Terminate(CodeInvalidEncoding)
+	validEncoding := false
+	for _, supportedEncoding := range c.supportedEncodings {
+		if supportedEncoding == encoding {
+			c.encoding = encoding
+			validEncoding = true
+			break
+		}
+	}
+
+	if !validEncoding {
+		c.Terminate(CodeNoCommonEncoding)
+		return
+	}
+
+	if !validCompression {
+		// TODO: different opcode for invalid compression
+		c.Terminate(CodeNoCommonEncoding)
+		return
+	}
+
+	c.ready = true
+	close(c.readyCh)
 }
 
-func (c *Conn) handlePing(seq uint32) {
-	c.proto.writePong(seq)
+func (c *Conn) handlePing(flags uint8, seq uint32) {
+	c.proto.writePong(FlagNone, seq)
 }
 
-func (c *Conn) handlePong(seq uint32) {
+func (c *Conn) handlePong(flags uint8, seq uint32) {
 	c.pongCh <- seq
 }
 
-func (c *Conn) handleRequest(seq uint32, payload *bytes.Buffer) {
+func (c *Conn) handleRequest(flags uint8, seq uint32, payload *bytes.Buffer) {
 	if c.isClient {
 		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
 	}
 
-	c.wp.put(c.encoding, seq, payload)
+	c.wp.put(c.encoding, c.compression, flags&FlagCompressed == FlagCompressed, seq, payload)
 }
 
-func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
+func (c *Conn) handleResponse(flags uint8, seq uint32, payload *bytes.Buffer) {
 	if !c.isClient {
 		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
@@ -436,21 +493,21 @@ func (c *Conn) handleResponse(seq uint32, payload *bytes.Buffer) {
 	c.completeRequest(seq, payload, nil)
 }
 
-func (c *Conn) handlePush(payload *bytes.Buffer) {
+func (c *Conn) handlePush(flags uint8, payload *bytes.Buffer) {
 	if !c.serving {
 		releaseByteBuffer(payload)
 		c.Terminate(CodeInvalidOp)
 		return
 	}
 
-	c.wp.put(c.encoding, 0, payload)
+	c.wp.put(c.encoding, c.compression, flags&FlagCompressed == FlagCompressed, 0, payload)
 }
 
-func (c *Conn) handleError(seq uint32, code uint16, reason string) {
+func (c *Conn) handleError(flags uint8, seq uint32, code uint16, reason string) {
 	c.completeRequest(seq, nil, errors.New(reason))
 }
 
-func (c *Conn) handleGoAway(code uint16, reason string) {
+func (c *Conn) handleGoAway(flags uint8, code uint16, reason string) {
 	c.remoteClosed = true
 
 	if c.localClosed {

@@ -20,9 +20,10 @@ type ServerHandler interface {
 
 // ServerConfig fields are optional except SupportedEncodings.
 type ServerConfig struct {
-	PingInterval       time.Duration
-	SupportedEncodings []string
-	Concurrency        int
+	PingInterval          time.Duration
+	SupportedEncodings    []string
+	SupportedCompressions []string
+	Concurrency           int
 }
 
 // Server implements http.Handler allowing a specific HTTP route to
@@ -71,6 +72,7 @@ func (s *Server) serveConn(conn net.Conn) (err error) {
 	c.pingInterval = s.config.PingInterval
 	c.handler = s.handler
 	c.supportedEncodings = s.config.SupportedEncodings
+	c.supportedCompressions = s.config.SupportedCompressions
 
 	s.mu.Lock()
 	s.conns[c] = true

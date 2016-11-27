@@ -40,6 +40,10 @@ type Dialer struct {
 	// negotiate with the server.
 	SupportedEncodings []string
 
+	// SupportedCompressions contains a list of compressions that the client will
+	// negotiate with the server.
+	SupportedCompressions []string
+
 	// HandshakeTimeout specifies the duration for the handshake to complete.
 	HandshakeTimeout time.Duration
 }
@@ -130,7 +134,10 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 
 	conn := NewConn(br, netConn, netConn, true)
 	conn.supportedEncodings = d.SupportedEncodings
-	conn.AwaitReady(d.HandshakeTimeout)
+	conn.supportedCompressions = d.SupportedCompressions
+	if err := conn.AwaitReady(d.HandshakeTimeout); err != nil {
+		return nil, err
+	}
 
 	netConn = nil // Avoid close in defer.
 
