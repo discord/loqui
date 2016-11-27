@@ -142,7 +142,8 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 		SupportedCompressions: d.SupportedCompressions,
 		MaxPayloadSize:        d.MaxPayloadSize,
 	})
-	if err := conn.Handshake(d.HandshakeTimeout); err != nil {
+
+	if err := conn.Handshake(time.Now().Sub(deadline)); err != nil {
 		return nil, err
 	}
 
