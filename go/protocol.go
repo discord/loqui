@@ -44,7 +44,7 @@ func (pr *protocolReader) read(n int) (v []byte, err error) {
 	pr.buf.Reset()
 	pr.buf.Grow(n)
 	v = pr.buf.Bytes()[:n]
-	_, err = pr.br.Read(v)
+	_, err = io.ReadFull(pr.br, v)
 	return
 }
 
