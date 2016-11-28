@@ -195,7 +195,7 @@ cdef class LoquiSocketSession:
         cdef bytes encoded_data
         cdef uint8_t flags
 
-        request = self._inflight_requests.pop(seq)
+        request = self._inflight_requests.pop(seq, None)
         if request:
             flags, encoded_data = self._encode_data(data)
             self._stream_handler.send_response(flags, seq, encoded_data)
@@ -232,7 +232,7 @@ cdef class LoquiSocketSession:
         self._stream_handler.send_hello(0, list(self._available_encoders.keys()), list(self._available_compressors.keys()))
 
     cdef _handle_ping_timeout(self):
-        self.close(reason=CloseReasons.PING_TIMEOUT)
+        self.close(code=CloseReasons.PING_TIMEOUT)
 
     cdef _handle_data_received(self, data):
         try:
@@ -310,7 +310,7 @@ cdef class LoquiSocketSession:
                 self.send_response(request.seq, response)
 
     cdef _handle_response(self, Response response):
-        request = self._inflight_requests.pop(response.seq)
+        request = self._inflight_requests.pop(response.seq, None)
         if request:
             try:
                 # If we've gotten a response for a request we've made.
@@ -328,7 +328,7 @@ cdef class LoquiSocketSession:
         pass
 
     cdef _handle_pong(self, Pong pong):
-        ping_request = self._inflight_requests.pop(pong.seq)
+        ping_request = self._inflight_requests.pop(pong.seq, None)
         if ping_request:
             ping_request.set(pong)
 
@@ -364,7 +364,7 @@ cdef class LoquiSocketSession:
         self.close(via_remote_goaway=True, reason=go_away.reason, code=go_away.code)
 
     cdef _handle_error(self, Error error):
-        request = self._inflight_requests.pop(error.seq)
+        request = self._inflight_requests.pop(error.seq, None)
         if request:
             request.set_exception(LoquiErrorReceived(error.code, error.data))
 
@@ -384,6 +384,7 @@ cdef class LoquiSocketSession:
 
             if not ping_result.ready():
                 self._handle_ping_timeout()
+                return
 
     cpdef _run_loop(self):
         loop = gevent.get_hub().loop

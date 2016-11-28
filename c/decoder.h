@@ -14,7 +14,7 @@ static inline size_t _loqui_get_header_size(uint8_t opcode) {
     case LOQUI_OP_HELLO:
       return sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t);
     case LOQUI_OP_HELLO_ACK:
-      return sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
+      return sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
     case LOQUI_OP_ERROR:
       return sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t);
     case LOQUI_OP_PING:
@@ -47,7 +47,7 @@ static inline size_t loqui_get_data_payload_size(loqui_decode_buffer_t* pk) {
     case LOQUI_OP_GOAWAY:
       return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t));
     case LOQUI_OP_ERROR:
-      return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t));
+      return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint16_t));
     case LOQUI_OP_HELLO:
       return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t));
     default:
@@ -61,9 +61,8 @@ static inline uint32_t loqui_get_seq(loqui_decode_buffer_t* pk) {
     case LOQUI_OP_RESPONSE:
     case LOQUI_OP_PING:
     case LOQUI_OP_PONG:
-      return _loqui_load32(uint32_t, pk->loqui_buffer.buf + sizeof(uint8_t));
     case LOQUI_OP_ERROR:
-      return _loqui_load32(uint32_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t));
+      return _loqui_load32(uint32_t, pk->loqui_buffer.buf + sizeof(uint8_t));
     default:
       return 0;
   }
@@ -91,8 +90,8 @@ static inline uint16_t loqui_get_code(loqui_decode_buffer_t* pk) {
 
 static inline uint32_t loqui_get_ping_interval(loqui_decode_buffer_t* pk) {
   switch (pk->opcode) {
-    case LOQUI_OP_HELLO:
-      return _loqui_load32(uint32_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t));
+    case LOQUI_OP_HELLO_ACK:
+      return _loqui_load32(uint32_t, pk->loqui_buffer.buf + sizeof(uint8_t));
     default:
       return 0;
   }

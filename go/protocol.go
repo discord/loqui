@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	errUnknownOp         = errors.New("loqui: unknown op")
+	errUnknownOp = errors.New("loqui: unknown op")
 	errNotEnoughSettings = errors.New("loqui: not enough settings")
-	errPayloadTooLarge   = errors.New("loqui: payload too large")
+	errPayloadTooLarge = errors.New("loqui: payload too large")
 )
 
 type protocolHandler interface {
