@@ -113,13 +113,13 @@ static inline int loqui_append_push(loqui_buffer_t *b, uint8_t flags, uint32_t s
   return loqui_append(b, data, size);
 }
 
-static inline int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint8_t code, uint32_t size, const char* data) {
-  #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t)
+static inline int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint16_t code, uint32_t size, const char* data) {
+  #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint32_t)
   unsigned char buf[SIZE];
   buf[0] = LOQUI_OP_GOAWAY;
   buf[1] = flags;
-  buf[2] = code;
-  _loqui_store32(buf + 3, size);
+  _loqui_store16(buf + 2, size);
+  _loqui_store32(buf + 4, size);
 
   int ret = loqui_buffer_write(b, (const char*) buf, SIZE);
   #undef SIZE
@@ -130,14 +130,14 @@ static inline int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint8_t 
   return loqui_append(b, data, size);
 }
 
-static inline int loqui_append_error(loqui_buffer_t *b, uint8_t flags, uint8_t code, uint32_t seq, uint32_t size, const char* data) {
-  #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t)
+static inline int loqui_append_error(loqui_buffer_t *b, uint8_t flags, uint16_t code, uint32_t seq, uint32_t size, const char* data) {
+  #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t)
   unsigned char buf[SIZE];
   buf[0] = LOQUI_OP_GOAWAY;
   buf[1] = flags;
-  buf[2] = code;
-  _loqui_store32(buf + 3, seq);
-  _loqui_store32(buf + 7, size);
+  _loqui_store32(buf + 2, seq);
+  _loqui_store16(buf + 6, code);
+  _loqui_store32(buf + 8, size);
 
   int ret = loqui_buffer_write(b, (const char*) buf, SIZE);
   #undef SIZE

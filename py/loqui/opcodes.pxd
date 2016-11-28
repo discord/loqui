@@ -1,4 +1,4 @@
-from libc.stdint cimport uint32_t, uint8_t
+from libc.stdint cimport uint32_t, uint8_t, uint16_t
 
 cdef class Response:
     cdef readonly uint8_t flags
@@ -36,11 +36,11 @@ cdef class HelloAck:
 
 cdef class GoAway:
     cdef readonly uint8_t flags
-    cdef readonly uint8_t code
+    cdef readonly uint16_t code
     cdef readonly bytes reason
 
 cdef class Error:
     cdef readonly uint8_t flags
-    cdef readonly uint8_t code
+    cdef readonly uint16_t code
     cdef readonly uint32_t seq
     cdef readonly bytes data

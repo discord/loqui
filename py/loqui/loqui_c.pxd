@@ -1,4 +1,4 @@
-from libc.stdint cimport uint32_t, uint8_t
+from libc.stdint cimport uint32_t, uint8_t, uint16_t
 
 cdef extern from "../../c/buffer.h":
     ctypedef struct loqui_buffer_t:
@@ -20,8 +20,8 @@ cdef extern from "../../c/encoder.h":
     int loqui_append_request(loqui_buffer_t *b, uint8_t flags, uint32_t seq, uint32_t size, const char *data)
     int loqui_append_response(loqui_buffer_t *b, uint8_t flags, uint32_t seq, uint32_t size, const char *data)
     int loqui_append_push(loqui_buffer_t *b, uint8_t flags, uint32_t size, const char *data)
-    int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint8_t code, uint32_t size, const char *data)
-    int loqui_append_error(loqui_buffer_t *b, uint8_t flags, uint8_t code, uint32_t seq, uint32_t size, const char *data)
+    int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint16_t code, uint32_t size, const char *data)
+    int loqui_append_error(loqui_buffer_t *b, uint8_t flags, uint16_t code, uint32_t seq, uint32_t size, const char *data)
 
 cdef extern from "../../c/decoder.h":
     loqui_decoder_status loqui_decoder_read_data(loqui_decode_buffer_t *pk, size_t size, const char *data, size_t* consumed)
@@ -30,7 +30,7 @@ cdef extern from "../../c/decoder.h":
     size_t loqui_get_data_payload_size(loqui_decode_buffer_t *pk)
     uint8_t loqui_get_version(loqui_decode_buffer_t *pk)
     uint8_t loqui_get_flags(loqui_decode_buffer_t *pk)
-    uint8_t loqui_get_code(loqui_decode_buffer_t *pk)
+    uint16_t loqui_get_code(loqui_decode_buffer_t *pk)
     uint32_t loqui_get_ping_interval(loqui_decode_buffer_t *pk)
 
 cdef extern from "../../c/constants.h":

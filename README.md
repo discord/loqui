@@ -49,8 +49,8 @@ The helloAck opcode is sent by the server upon receiving hello from the client. 
 | `0`    | uint8   | opcode            |
 | `1`    | uint8   | flags             |
 | `2`    | uint32  | Ping Interval(ms) |
-| `3`    | uint32  | Payload Size      |
-| `7`    | binary  | Payload Data      |
+| `6`    | uint32  | Payload Size      |
+| `10`   | binary  | Payload Data      |
 
 
 ## `Ping/Pong`
@@ -94,9 +94,9 @@ requests and to disconnect. The payload data can be empty, or a string with an e
 | ------ | -------- | -----------------|
 | `0`    | uint8    | opcode           |
 | `1`    | uint8    | flags            |
-| `2`    | uint8    | close code       |
-| `3`    | uint32   | Payload Size     |
-| `7`    | binary   | Payload Data     |
+| `2`    | uint16   | close code       |
+| `4`    | uint32   | Payload Size     |
+| `8`    | binary   | Payload Data     |
 
 ## `Error`
 The server had an internal error processing a given request for a specific seq.
@@ -106,6 +106,6 @@ The server had an internal error processing a given request for a specific seq.
 | `0`    | uint8    | opcode           |
 | `1`    | uint8    | flags            |
 | `2`    | uint32   | Sequence Num     |
-| `7`    | uint16   | error code       |
-| `9`    | uint32   | Payload Size     |
-| `13`   | binary   | Payload Data     |
+| `6`    | uint16   | error code       |
+| `8`    | uint32   | Payload Size     |
+| `12`   | binary   | Payload Data     |
