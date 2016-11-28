@@ -97,3 +97,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.upgrade(w, req)
 	}
 }
+
+// Stop sends a graceful close request to all active connections.
+func (s *Server) Stop() {
+	s.mu.Lock()
+	for conn := range s.conns {
+		conn.Close(CodeNormal)
+	}
+	s.mu.Unlock()
+}
