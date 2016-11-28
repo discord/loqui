@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +21,7 @@ var (
 	ErrNotReady = errors.New("loqui: not ready")
 )
 
+// ConnConfig configures a Conn.
 type ConnConfig struct {
 	IsClient              bool
 	Handler               ServerHandler
@@ -406,12 +406,16 @@ func (c *Conn) Close(code uint16) (err error) {
 
 // Terminate sends a GoAway and immediately terminates the underlying connection.
 func (c *Conn) Terminate(code uint16) (err error) {
-	log.Println("TERMAINATING", code)
 	err = c.Close(code)
 	if err != nil {
 		return
 	}
 	return c.terminate()
+}
+
+// Closed returns if the connection is closed on either side.
+func (c *Conn) Closed() bool {
+	return c.localClosed || c.remoteClosed
 }
 
 // ProtocolHandler
@@ -518,7 +522,7 @@ func (c *Conn) handlePush(flags uint8, payload *bytes.Buffer) {
 }
 
 func (c *Conn) handleError(flags uint8, seq uint32, code uint16, reason string) {
-	c.completeRequest(seq, nil, errors.New(reason))
+	c.completeRequest(seq, nil, &RequestError{code, reason})
 }
 
 func (c *Conn) handleGoAway(flags uint8, code uint16, reason string) {
@@ -527,4 +531,14 @@ func (c *Conn) handleGoAway(flags uint8, code uint16, reason string) {
 	if c.localClosed {
 		c.Terminate(CodeNormal)
 	}
+}
+
+// RequestError to a request when an OP_ERROR arrives.
+type RequestError struct {
+	Code   uint16
+	Reason string
+}
+
+func (err *RequestError) Error() string {
+	return err.Reason
 }
