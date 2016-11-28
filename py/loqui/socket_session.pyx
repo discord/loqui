@@ -8,8 +8,8 @@ from gevent.event import AsyncResult, Event
 from libc.stdint cimport uint32_t, uint8_t
 
 from loqui.exceptions import NoEncoderAvailable, ConnectionTerminated, LoquiDecoderError, StreamDefunct, \
-    NotClientException, NotServerException
-from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, SelectEncoding
+    NotClientException, NotServerException, LoquiErrorReceived
+from opcodes cimport Request, Response, Ping, Pong, Push, Hello, GoAway, HelloAck, Error
 
 from socket_watcher cimport SocketWatcher
 from stream_handler cimport LoquiStreamHandler
@@ -33,6 +33,7 @@ cdef class LoquiSocketSession:
         self._watcher = SocketWatcher(self._sock.fileno())
         self._inflight_requests = {}
         self._available_encoders = encoders
+        self._available_compressors = {}
         self._shutdown_event = Event()
         self._close_event = Event()
         self._ready_event = Event()
@@ -48,7 +49,7 @@ cdef class LoquiSocketSession:
         gevent.spawn(self._ping_loop)
         gevent.spawn(self._run_loop)
 
-        if not is_client:
+        if is_client:
             self._send_hello()
 
     cpdef set_push_handler(self, object push_handler):
@@ -109,7 +110,7 @@ cdef class LoquiSocketSession:
 
             # Send goaway to the remote node.
             if not via_remote_goaway and self._sock:
-                self._stream_handler.send_goaway(code, reason)
+                self._stream_handler.send_goaway(0, code, reason)
 
             # Spawn a greenlet that will wait
             gevent.spawn(self._close_timeout)
@@ -145,9 +146,9 @@ cdef class LoquiSocketSession:
         if not self._encoder_dumps:
             raise NoEncoderAvailable()
 
-        return self._encoder_dumps(data)
+        return 0, self._encoder_dumps(data)
 
-    cdef _decode_data(self, object data):
+    cdef _decode_data(self, uint8_t flags, object data):
         if not self._is_ready:
             self._ready_event.wait()
 
@@ -163,9 +164,12 @@ cdef class LoquiSocketSession:
         if self.defunct():
             raise StreamDefunct
 
-        cdef bytes encoded_data = self._encode_data(data)
+        cdef bytes encoded_data
+        cdef uint8_t flags
+        flags, encoded_data = self._encode_data(data)
+
         result = AsyncResult()
-        cdef uint32_t seq = self._stream_handler.send_request(encoded_data)
+        cdef uint32_t seq = self._stream_handler.send_request(flags, encoded_data)
         self._inflight_requests[seq] = result
         self._resume_sending()
         return result
@@ -174,19 +178,27 @@ cdef class LoquiSocketSession:
         if self.defunct():
             raise StreamDefunct()
 
-        self._stream_handler.send_push(data)
+        cdef bytes encoded_data
+        cdef uint8_t flags
+        flags, encoded_data = self._encode_data(data)
+
+        self._stream_handler.send_push(flags, encoded_data)
         self._resume_sending()
 
     cpdef object send_response(self, uint32_t seq, object data):
         if self._is_client:
             raise NotServerException()
 
-        # if self.defunct():
-        #     raise StreamDefunct()
+        if self.defunct():
+            return
+
+        cdef bytes encoded_data
+        cdef uint8_t flags
 
         request = self._inflight_requests.pop(seq)
         if request:
-            self._stream_handler.send_response(seq, self._encode_data(data))
+            flags, encoded_data = self._encode_data(data)
+            self._stream_handler.send_response(flags, seq, encoded_data)
             self._resume_sending()
 
         else:
@@ -199,25 +211,25 @@ cdef class LoquiSocketSession:
             raise StreamDefunct()
 
         result = AsyncResult()
-        cdef uint32_t seq = self._stream_handler.send_ping()
+        cdef uint32_t seq = self._stream_handler.send_ping(0)
         self._inflight_requests[seq] = result
         self._resume_sending()
         return result
 
-    cpdef object _send_select_encoding(self, bytes encoding):
-        if not self._is_client:
-            raise NotClientException()
+    cpdef object _send_hello_ack(self, bytes selected_encoding, bytes selected_compressor):
+        if self._is_client:
+            raise NotServerException()
 
         if self.defunct():
             raise StreamDefunct()
 
-        self._stream_handler.send_select_encoding(encoding)
+        self._stream_handler.send_hello_ack(0, int(self._ping_interval * 1000), selected_encoding, selected_compressor)
 
     cpdef object _send_hello(self):
-        if self._is_client:
-            raise NotServerException()
+        if not self._is_client:
+            raise NotClientException()
 
-        self._stream_handler.send_hello(int(self._ping_interval * 1000), list(self._available_encoders.keys()))
+        self._stream_handler.send_hello(0, list(self._available_encoders.keys()), list(self._available_compressors.keys()))
 
     cdef _handle_ping_timeout(self):
         self.close(reason=CloseReasons.PING_TIMEOUT)
@@ -226,7 +238,8 @@ cdef class LoquiSocketSession:
         try:
             events = self._stream_handler.on_bytes_received(data)
 
-        except LoquiDecoderError:
+        except LoquiDecoderError as e:
+            print e
             return self.close(code=CloseReasons.DECODER_ERROR)
 
         if not events:
@@ -254,11 +267,14 @@ cdef class LoquiSocketSession:
             elif isinstance(event, Pong):
                 self._handle_pong(event)
 
-            elif isinstance(event, Hello):
-                self._handle_hello(event)
-
             elif isinstance(event, GoAway):
                 self._handle_go_away(event)
+
+            elif isinstance(event, HelloAck):
+                self._handle_hello_ack(event)
+
+            elif isinstance(event, Error):
+                self._handle_error(event)
 
     cdef _handle_server_events(self, list events):
         for event in events:
@@ -277,14 +293,14 @@ cdef class LoquiSocketSession:
             elif isinstance(event, GoAway):
                 self._handle_go_away(event)
 
-            elif isinstance(event, SelectEncoding):
-                self._handle_select_encoding(event)
+            elif isinstance(event, Hello):
+                self._handle_hello(event)
 
     cdef _handle_request(self, Request request):
         if self._on_request:
             # In this case, we set the inflight requests to the given request. That way send_response
             # will know if the seq is valid or not.
-            request.data = self._decode_data(request.data)
+            request.data = self._decode_data(request.flags, request.data)
             self._inflight_requests[request.seq] = request
             response = self._on_request(request, self)
             # If a response is given, we can return it to the sender right away.
@@ -298,13 +314,13 @@ cdef class LoquiSocketSession:
         if request:
             try:
                 # If we've gotten a response for a request we've made.
-                request.set(self._decode_data(response.data))
+                request.set(self._decode_data(response.flags, response.data))
             except Exception as e:
                 request.set_exception(e)
 
     cdef _handle_push(self, Push push):
         if self._on_push:
-            push.data = self._decode_data(push.data)
+            push.data = self._decode_data(push.flags, push.data)
             self._on_push(push, self)
 
     cdef _handle_ping(self, Ping ping):
@@ -317,7 +333,6 @@ cdef class LoquiSocketSession:
             ping_request.set(pong)
 
     cdef _handle_hello(self, Hello hello):
-        self._ping_interval = int(hello.ping_interval / 1000)
         encoding, encoder = self._pick_best_encoding(hello.supported_encodings)
 
         if not encoding:
@@ -327,25 +342,31 @@ cdef class LoquiSocketSession:
             self._encoder_dumps = encoder.dumps
             self._encoder_loads = encoder.loads
             self._encoding = encoding
-            self._send_select_encoding(encoding)
+            self._send_hello_ack(encoding, None)
             self._is_ready = True
             self._ready_event.set()
 
-    cdef _handle_select_encoding(self, SelectEncoding select_encoding):
-        encoder = self._available_encoders.get(select_encoding.encoding)
+    cdef _handle_hello_ack(self, HelloAck hello_ack):
+        encoder = self._available_encoders.get(hello_ack.selected_encoding)
         if not encoder:
-            self.close(code=CloseReasons.UNKNOWN_ENCODER, reason=b'Unknown encoding %s' % select_encoding.encoding)
+            self.close(code=CloseReasons.UNKNOWN_ENCODER, reason=b'Unknown encoding %s' % hello_ack.selected_encoding)
 
         else:
+            self._ping_interval = int(hello_ack.ping_interval / 1000)
             self._encoder_dumps = encoder.dumps
             self._encoder_loads = encoder.loads
-            self._encoding = select_encoding.encoding
+            self._encoding = hello_ack.selected_encoding
             self._is_ready = True
             self._ready_event.set()
 
     cdef _handle_go_away(self, GoAway go_away):
-        print "Got goaway on seq", self._stream_handler.current_seq()
+        print "Got goaway on seq", self._stream_handler.current_seq(), go_away.code
         self.close(via_remote_goaway=True, reason=go_away.reason, code=go_away.code)
+
+    cdef _handle_error(self, Error error):
+        request = self._inflight_requests.pop(error.seq)
+        if request:
+            request.set_exception(LoquiErrorReceived(error.code, error.data))
 
     cdef _pick_best_encoding(self, list encodings):
         for encoding in encodings:
