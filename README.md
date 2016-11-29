@@ -9,7 +9,7 @@ the protocol does support encoding negotiation, where the server sends the clien
 and the client picks the encoding it wants to use, and sends it back.
 
 # The protocol
-The protocol is 8 opcodes, with a binary frame format.
+The protocol is 9 opcodes, with a binary frame format.
 
 Each frame starts with the opcode as an unsigned 8 bit integer (`uint8`). The opcodes are:
 
