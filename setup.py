@@ -33,7 +33,7 @@ setup(
     description='A really simple stream based RPC - with a gevent client/server implementation',
     license='MIT',
     package_dir={
-        'loqui': 'py/loqui'
+        '': 'py'
     },
     packages=['loqui'],
     ext_modules=extensions,
