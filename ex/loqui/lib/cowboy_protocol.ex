@@ -15,6 +15,8 @@ defmodule Loqui.CowboyProtocol do
 
   require Logger
 
+  alias Loqui.{Parser, Messages}
+
   defstruct socket_pid: nil,
             transport: nil,
             env: nil,
@@ -106,7 +108,7 @@ defmodule Loqui.CowboyProtocol do
   end
 
   def socket_data(state, data) do
-    case Loqui.Parser.handle_data(data) do
+    case Parser.handle_data(data) do
       {:ok, request, extra} ->
         case handle_request(request, state) do
           {:ok, state} -> socket_data(state, extra)
@@ -118,14 +120,13 @@ defmodule Loqui.CowboyProtocol do
 
   defp send_response(state, seq, response) do
     response = encode(state, response)
-    do_send(state, <<@opcode_response, 0, seq :: unsigned-integer-size(32), byte_size(response) :: unsigned-integer-size(32), response :: binary>>)
+    do_send(state, Messages.make_response(0, seq, response))
   end
 
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
-    do_send(state, <<@opcode_error, 0, code :: unsigned-integer-size(8), seq :: unsigned-integer-size(32),
-                     byte_size(reason) :: unsigned-integer-size(32), reason :: binary>>)
+    do_send(state, Messages.make_error(0, code, seq, reason))
   end
 
   defp handler_request(%{handler: handler, handler_state: handler_state}, request) do
@@ -149,13 +150,12 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :timeout), do: goaway(state, 4, "Timeout")
 
   def goaway(state, code, reason) do
-    Logger.info "goaway reason=#{inspect reason}"
-    msg = <<@opcode_goaway, 0, code :: unsigned-integer-size(8), byte_size(reason) :: unsigned-integer-size(32), reason :: binary>>
-    do_send(state, msg)
+    do_send(state, Messages.make_goaway(0, code, reason))
     close(state, reason)
   end
 
-  defp handle_request({:hello, flags, version, encodings, compressions}, %{ping_interval: ping_interval}=state) do
+  defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval}=state) do
+    # TODO go away no support version
     common_encodings = MapSet.intersection(encodings, @supported_encodings) |> MapSet.to_list()
     if common_encodings == [] do
       goaway(state, :no_common_encoding)
@@ -164,17 +164,15 @@ defmodule Loqui.CowboyProtocol do
       flags = 0
       encoding = List.first(common_encodings)
       settings_payload = "#{encoding}|"
-      msg = <<@opcode_hello_ack, flags, ping_interval :: unsigned-integer-size(32),
-              byte_size(settings_payload) :: unsigned-integer-size(32), settings_payload :: binary>>
-      do_send(state, msg)
+      do_send(state, Messages.make_hello_ack(flags, ping_interval, settings_payload))
       {:ok, %{state | encoding: encoding}}
     end
   end
-  defp handle_request({:ping, flags, seq}, state) do
-    do_send(state, <<@opcode_pong, 0, seq :: unsigned-integer-size(32)>>)
+  defp handle_request({:ping, _flags, seq}, state) do
+    do_send(state, Messages.make_pong(0, seq))
     {:ok, state}
   end
-  defp handle_request({:request, flags, seq, request}, state) do
+  defp handle_request({:request, _flags, seq, request}, state) do
     request = decode(state, request)
     {response, handler_state} = handler_request(state, request)
     case response do
@@ -185,12 +183,12 @@ defmodule Loqui.CowboyProtocol do
     end
     {:ok, %{state | handler_state: handler_state}}
   end
-  defp handle_request({:push, flags, request}, state) do
+  defp handle_request({:push, _flags, request}, state) do
     request = decode(state, request)
     {_, handler_state} = handler_push(state, request)
     {:ok, %{state | handler_state: handler_state}}
   end
-  defp handle_request(request, flags, state) do
+  defp handle_request(request, state) do
     Logger.info "unknown request. request=#{inspect request}"
     {:ok, state}
   end

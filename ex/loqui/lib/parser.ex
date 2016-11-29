@@ -19,19 +19,6 @@ defmodule Loqui.Parser do
     quote do: unsigned-integer-size(32)
   end
 
-  defp parse_settings(settings) do
-    String.split(settings, "|") |> Enum.map(&parse_setting/1)
-  end
-
-  defp parse_setting(setting) do
-    setting = String.trim(setting)
-    if setting == "" do
-      MapSet.new()
-    else
-      MapSet.new(String.split(setting, ","))
-    end
-  end
-
   def handle_data(<<@opcode_hello :: uint8, flags :: uint8, version :: uint8, psize :: uint32, payload :: binary-size(psize), rest :: binary>>) do
     settings = parse_settings(payload)
     [encodings, compressions] = settings
@@ -61,4 +48,18 @@ defmodule Loqui.Parser do
   def handle_data(data) do
     {:continue, data}
   end
+
+  defp parse_settings(settings) do
+    String.split(settings, "|") |> Enum.map(&parse_setting/1)
+  end
+
+  defp parse_setting(setting) do
+    setting = String.trim(setting)
+    if setting == "" do
+      MapSet.new()
+    else
+      MapSet.new(String.split(setting, ","))
+    end
+  end
+
 end
