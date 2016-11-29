@@ -475,5 +475,5 @@ cdef class LoquiStreamHandler:
                 self.write_buffer.length - self.write_buffer_position
             )
 
-            self.write_buffer_position -= self.write_buffer_position
             self.write_buffer.length -= self.write_buffer_position
+            self.write_buffer_position -= self.write_buffer_position
