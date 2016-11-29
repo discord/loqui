@@ -13,13 +13,19 @@ type RequestContext interface {
 	Write([]byte) (int, error)
 	Read(p []byte) (n int, err error)
 	Encoding() string
+	Compression() string
+	ReadCompressed() bool
+	SetWriteCompressed(bool)
 }
 
 type requestContext struct {
-	wbuf     *bytes.Buffer
-	rbuf     *bytes.Buffer
-	seq      uint32
-	encoding string
+	wbuf        *bytes.Buffer
+	wcompressed bool
+	rbuf        *bytes.Buffer
+	rcompressed bool
+	seq         uint32
+	encoding    string
+	compression string
 }
 
 func (ctx *requestContext) Write(p []byte) (n int, err error) {
@@ -40,6 +46,18 @@ func (ctx *requestContext) IsPush() bool {
 
 func (ctx *requestContext) Encoding() string {
 	return ctx.encoding
+}
+
+func (ctx *requestContext) Compression() string {
+	return ctx.compression
+}
+
+func (ctx *requestContext) ReadCompressed() bool {
+	return ctx.rcompressed
+}
+
+func (ctx *requestContext) SetWriteCompressed(compressed bool) {
+	ctx.wcompressed = compressed
 }
 
 var requestContextPool = sync.Pool{
@@ -94,4 +112,15 @@ func (ctx *httpRequestContext) IsPush() bool {
 
 func (ctx *httpRequestContext) Encoding() string {
 	return ctx.encoding
+}
+
+func (ctx *httpRequestContext) Compression() string {
+	return ""
+}
+
+func (ctx *httpRequestContext) ReadCompressed() bool {
+	return false
+}
+
+func (ctx *httpRequestContext) SetWriteCompressed(compressed bool) {
 }

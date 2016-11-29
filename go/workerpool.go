@@ -18,9 +18,11 @@ func (wp workerPool) stop() {
 	close(wp)
 }
 
-func (wp workerPool) put(encoding string, seq uint32, payload *bytes.Buffer) {
+func (wp workerPool) put(encoding string, compression string, compressed bool, seq uint32, payload *bytes.Buffer) {
 	ctx := acquireRequestContext(payload)
 	ctx.encoding = encoding
+	ctx.compression = compression
+	ctx.rcompressed = compressed
 	ctx.seq = seq
 	wp <- ctx
 }
@@ -33,8 +35,7 @@ func (wp workerPool) run(c *Conn) {
 	defer func() {
 		if r := recover(); r != nil {
 			reason, _ := r.(string)
-			// TODO: pick a code
-			c.proto.writeError(seq, 0, reason)
+			c.proto.writeError(FlagNone, seq, CodeInternalServerError, reason)
 			go wp.run(c)
 		}
 	}()
@@ -43,7 +44,11 @@ func (wp workerPool) run(c *Conn) {
 		seq = ctx.seq
 		c.handler.ServeRequest(ctx)
 		if !ctx.IsPush() {
-			c.proto.writeResponse(seq, ctx.wbuf.Bytes())
+			flags := FlagNone
+			if ctx.wcompressed {
+				flags = flags & FlagCompressed
+			}
+			c.proto.writeResponse(flags, seq, ctx.wbuf.Bytes())
 		}
 		releaseRequestContext(ctx)
 	}

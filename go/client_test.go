@@ -15,7 +15,7 @@ func BenchmarkClient(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			res, err := client.Request(payload)
+			res, err := client.Request(payload, false)
 			if err != nil {
 				b.Fatalf("unexpected error: %s", err)
 			} else {
