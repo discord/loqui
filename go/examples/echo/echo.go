@@ -10,12 +10,12 @@ import (
 type serverHandler []byte
 
 func (s serverHandler) ServeRequest(ctx loqui.RequestContext) {
-	io.CopyBuffer(ctx, ctx, nil)
+	io.CopyBuffer(ctx, ctx, s)
 }
 
 func main() {
 	defaultServer := loqui.NewServer(
-		&serverHandler{},
+		make(serverHandler, 4096),
 		loqui.ServerConfig{SupportedEncodings: []string{"msgpack"}},
 	)
 	http.Handle("/_rpc", defaultServer)
