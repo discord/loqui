@@ -36,3 +36,7 @@ class NotClientException(InvalidSendException):
 
 class NotServerException(InvalidSendException):
     pass
+
+
+class LoquiErrorReceived(LoquiException):
+    pass

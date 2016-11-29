@@ -77,39 +77,6 @@ cdef class LoquiStreamHandler:
         if self.decode_buffer.loqui_buffer.buf != NULL:
             free(self.decode_buffer.loqui_buffer.buf)
 
-    cdef inline _reset_decode_buf(self):
-        """
-        Resets the decode buffer, re-allocating the buffer if it's grown too big - otherwise, reuse the same
-        buffer.
-        """
-        loqui_c.loqui_decoder_reset(&self.decode_buffer)
-        _free_big_buffer(&self.decode_buffer.loqui_buffer)
-        _reset_buffer(&self.decode_buffer.loqui_buffer)
-
-    cdef _reset_or_compact_write_buf(self):
-        """
-        If the write buffer is larger than `BIG_BUF_SIZE`, free it, so that writing large data does not hold onto
-        the big buffer. Otherwise, try and compact the buffer - by moving bytes towards the end of the buffer
-        to the beginning, so that it can continue to be written to without needing a re-allocation.
-        """
-
-        # The buffer has been fully written. Shrink it if needed, otherwise reset the position to the beginning.
-        if self.write_buffer_position == self.write_buffer.length:
-            _free_big_buffer(&self.write_buffer)
-            _reset_buffer(&self.write_buffer)
-            self.write_buffer_position = 0
-
-        # Attempt to compact the buffer.
-        elif self.write_buffer.length > self.write_buffer_position > self.write_buffer.allocated_size / 2:
-            memcpy(
-                self.write_buffer.buf,
-                self.write_buffer.buf + self.write_buffer_position,
-                self.write_buffer.length - self.write_buffer_position
-            )
-
-            self.write_buffer_position -= self.write_buffer_position
-            self.write_buffer.length -= self.write_buffer_position
-
     cpdef uint32_t current_seq(self):
         """
         Returns the latest seq issued.
@@ -130,35 +97,38 @@ cdef class LoquiStreamHandler:
 
         return next_seq
 
-    cpdef uint32_t send_ping(self) except 0:
+    cpdef uint32_t send_ping(self, uint8_t flags) except 0:
         """
         Enqueue a ping to be sent.
+        :param flags: Ping flags
         :return: Returns the seq of the ping being sent.
         """
         cdef int rv
         cdef uint32_t seq = self.next_seq()
-        rv = loqui_c.loqui_append_ping(&self.write_buffer, seq)
+        rv = loqui_c.loqui_append_ping(&self.write_buffer, flags, seq)
         if rv < 0:
             raise MemoryError()
 
         return seq
 
-    cpdef uint32_t send_pong(self, uint32_t seq) except 0:
+    cpdef uint32_t send_pong(self, uint8_t flags, uint32_t seq) except 0:
         """
         Enqueues a pong to be sent.
+        :param flags: Pong flags
         :param seq: The seq to pong.
         :return:
         """
         cdef int rv
-        rv = loqui_c.loqui_append_pong(&self.write_buffer, seq)
+        rv = loqui_c.loqui_append_pong(&self.write_buffer, flags, seq)
         if rv < 0:
             raise MemoryError()
 
         return 1
 
-    cpdef uint32_t send_request(self, bytes data) except 0:
+    cpdef uint32_t send_request(self, uint8_t flags, bytes data) except 0:
         """
         Enqueues a request type message to be sent, with the given bytes `data` as the payload.
+        :param flags: Request flags
         :param data: The data to send
         :return: The seq of the request being sent.
         """
@@ -171,15 +141,16 @@ cdef class LoquiStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = loqui_c.loqui_append_request(&self.write_buffer, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_request(&self.write_buffer, flags, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
         return seq
 
-    cpdef uint32_t send_push(self, bytes data) except 0:
+    cpdef uint32_t send_push(self, uint8_t flags, bytes data) except 0:
         """
         Enqueues a push type message to be sent, with the given bytes `data` as the payload.
+        :param flags: Push flags
         :param data: The data to send
         """
         cdef int rv
@@ -190,58 +161,72 @@ cdef class LoquiStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = loqui_c.loqui_append_push(&self.write_buffer, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_push(&self.write_buffer, flags, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
         return 1
 
-    cpdef uint32_t send_hello(self, uint32_t ping_interval, list available_encodings) except 0:
+    cpdef uint32_t send_hello(self, uint8_t flags, list supported_encodings, list supported_compressors) except 0:
         """
-        Enqueues a hello type message to be sent, with the given bytes `data` as the payload.
+        Enqueues a hello type message to be sent, with the given supported encodings and compressors
 
-        :param ping_interval: Ping interval in milliseconds
-        :param available_encodings: Available encodings that the server understands
-        """
-        cdef int rv
-        cdef char *buffer
-        cdef size_t size
-        cdef bytes data = b','.join([bytes(b) for b in available_encodings])
-        rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
-        if rv < 0:
-            raise TypeError()
-
-        rv = loqui_c.loqui_append_hello(&self.write_buffer, ping_interval, size, <const char*> buffer)
-        if rv < 0:
-            raise MemoryError()
-
-        return 1
-
-    cpdef uint32_t send_select_encoding(self, bytes data) except 0:
-        """
-        Enqueues a select_encoding type message to be sent, with the given bytes `data` as the payload.
-        :param data: The data to send
+        :param flags: Hello flags.
+        :param supported_encodings: Available encodings that the client understands
+        :param supported_compressors: Available compressors that the client understands
         """
         cdef int rv
         cdef char *buffer
         cdef size_t size
+        cdef bytes data = bytes(b'%s|%s' % (
+            b','.join([bytes(b) for b in supported_encodings]),
+            b','.join([bytes(b) for b in supported_compressors])
+        ))
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
         if rv < 0:
             raise TypeError()
 
-        rv = loqui_c.loqui_append_select_encoding(&self.write_buffer, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_hello(&self.write_buffer, flags, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
         return 1
 
-    cpdef uint32_t send_response(self, uint32_t seq, bytes data) except 0:
+    cpdef uint32_t send_hello_ack(self, uint8_t flags, uint32_t ping_interval,  bytes selected_encoding, bytes selected_compressor) except 0:
+        """
+        Acknowledges a hello, and handshakes - establishing a loqui socket session.
+
+        :param flags: Hello Ack flags.
+        :param ping_interval: How often in (ms) the client should be expected to ping
+        :param selected_encoding: The encoding the server selected.
+        :param selected_compressor: The compressor the server selected
+        """
+        cdef int rv
+        cdef char *buffer
+        cdef size_t size
+        cdef bytes data = bytes(b'%s|%s' % (
+            selected_encoding,
+            selected_compressor or ''
+        ))
+
+        rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)
+        if rv < 0:
+            raise TypeError()
+
+        rv = loqui_c.loqui_append_hello_ack(&self.write_buffer, flags, ping_interval, size, <const char*> buffer)
+        if rv < 0:
+            raise MemoryError()
+
+        return 1
+
+    cpdef uint32_t send_response(self, uint8_t flags, uint32_t seq, bytes data) except 0:
         """
         Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
         This function does not validate if the given seq is in-flight. It's assumed that the client will handle
         duplicate responses correctly.
 
+        :param flags: Response flags.
         :param seq: The seq to reply to.
         :param data: The data to respond with.
         """
@@ -253,18 +238,19 @@ cdef class LoquiStreamHandler:
         if rv < 0:
             raise TypeError()
 
-        rv = loqui_c.loqui_append_response(&self.write_buffer, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_response(&self.write_buffer, flags, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
         return 1
 
-    cpdef uint32_t send_error(self, uint8_t code, uint32_t seq, bytes data) except 0:
+    cpdef uint32_t send_error(self, uint8_t flags, uint8_t code, uint32_t seq, bytes data) except 0:
         """
         Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
         This function does not validate if the given seq is in-flight. It's assumed that the client will handle
         duplicate responses correctly.
 
+        :param flags: Error flags.
         :param code: The error code
         :param seq: The seq to reply to.
         :param data: The data to respond with.
@@ -278,16 +264,17 @@ cdef class LoquiStreamHandler:
             if rv < 0:
                 raise TypeError()
 
-        rv = loqui_c.loqui_append_error(&self.write_buffer, code, seq, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_error(&self.write_buffer, flags, code, seq, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
         return 1
 
-    cpdef uint32_t send_goaway(self, uint8_t code, bytes reason) except 0:
+    cpdef uint32_t send_goaway(self, uint8_t flags, uint8_t code, bytes reason) except 0:
         """
         Enqueues a goaway message to be sent - letting the remote end know that a connection termination is imminent.
 
+        :param flags: Goaway flags
         :param code: The go away code
         :param reason: A human readable string describing the reason for going away.
         """
@@ -300,7 +287,7 @@ cdef class LoquiStreamHandler:
             if rv < 0:
                 raise TypeError()
 
-        rv = loqui_c.loqui_append_goaway(&self.write_buffer, code, size, <const char*> buffer)
+        rv = loqui_c.loqui_append_goaway(&self.write_buffer, flags, code, size, <const char*> buffer)
         if rv < 0:
             raise MemoryError()
 
@@ -388,47 +375,105 @@ cdef class LoquiStreamHandler:
 
         if opcode == loqui_c.LOQUI_OP_RESPONSE:
             response = opcodes.Response(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == loqui_c.LOQUI_OP_REQUEST:
             response = opcodes.Request(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == loqui_c.LOQUI_OP_PUSH:
             response = opcodes.Push(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         elif opcode == loqui_c.LOQUI_OP_PING:
             response = opcodes.Ping(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_seq(&self.decode_buffer)
             )
-            self.send_pong(response.seq)
+            self.send_pong(response.flags, response.seq)
 
         elif opcode == loqui_c.LOQUI_OP_PONG:
             response = opcodes.Pong(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_seq(&self.decode_buffer),
             )
 
         elif opcode == loqui_c.LOQUI_OP_GOAWAY:
             response = opcodes.GoAway(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_code(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
         elif opcode == loqui_c.LOQUI_OP_HELLO:
+            payload = _get_payload_from_decode_buffer(&self.decode_buffer)
+            supported_encodings, supported_compressions = payload.split(b'|')
+
             response = opcodes.Hello(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
                 loqui_c.loqui_get_version(&self.decode_buffer),
-                loqui_c.loqui_get_ping_interval(&self.decode_buffer),
-                _get_payload_from_decode_buffer(&self.decode_buffer).split(',')
+                supported_encodings.split(b','),
+                supported_compressions.split(b',')
             )
-        elif opcode == loqui_c.LOQUI_OP_SELECT_ENCODING:
-            response = opcodes.SelectEncoding(
+
+        elif opcode == loqui_c.LOQUI_OP_HELLO_ACK:
+            payload = _get_payload_from_decode_buffer(&self.decode_buffer)
+            selected_encoding, selected_compression = payload.split(b'|')
+
+            response = opcodes.HelloAck(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
+                loqui_c.loqui_get_ping_interval(&self.decode_buffer),
+                selected_encoding,
+                selected_compression
+            )
+
+        elif opcode == loqui_c.LOQUI_OP_ERROR:
+            response = opcodes.Error(
+                loqui_c.loqui_get_flags(&self.decode_buffer),
+                loqui_c.loqui_get_code(&self.decode_buffer),
+                loqui_c.loqui_get_seq(&self.decode_buffer),
                 _get_payload_from_decode_buffer(&self.decode_buffer)
             )
 
         self._reset_decode_buf()
         return response
+
+    cdef inline _reset_decode_buf(self):
+        """
+        Resets the decode buffer, re-allocating the buffer if it's grown too big - otherwise, reuse the same
+        buffer.
+        """
+        loqui_c.loqui_decoder_reset(&self.decode_buffer)
+        _free_big_buffer(&self.decode_buffer.loqui_buffer)
+        _reset_buffer(&self.decode_buffer.loqui_buffer)
+
+    cdef _reset_or_compact_write_buf(self):
+        """
+        If the write buffer is larger than `BIG_BUF_SIZE`, free it, so that writing large data does not hold onto
+        the big buffer. Otherwise, try and compact the buffer - by moving bytes towards the end of the buffer
+        to the beginning, so that it can continue to be written to without needing a re-allocation.
+        """
+
+        # The buffer has been fully written. Shrink it if needed, otherwise reset the position to the beginning.
+        if self.write_buffer_position == self.write_buffer.length:
+            _free_big_buffer(&self.write_buffer)
+            _reset_buffer(&self.write_buffer)
+            self.write_buffer_position = 0
+
+        # Attempt to compact the buffer.
+        elif self.write_buffer.length > self.write_buffer_position > self.write_buffer.allocated_size / 2:
+            memcpy(
+                self.write_buffer.buf,
+                self.write_buffer.buf + self.write_buffer_position,
+                self.write_buffer.length - self.write_buffer_position
+            )
+
+            self.write_buffer_position -= self.write_buffer_position
+            self.write_buffer.length -= self.write_buffer_position
