@@ -1,12 +1,10 @@
 # Loqui
 Loqui is a transport that implements a very simple framing protocol over a raw socket. The framing protocol is similar
-to http2, except that we've chosen deliberately to not implement a bunch of stuff, like flow control, or server push.
-Instead, the RPC implements very simple request and response semantics, and a fire and forget client to server call
-called a "push".
+to http2, except that we've chosen deliberately to not implement a bunch of stuff, like flow control.
+Instead, the RPC implements very simple request and response semantics. For our purposes, requests and responses are both adequately small so we can just send the entire payload in one frame, instead of having streams (like http2 does).
 
 The RPC protocol does not care how you encode your data - treating all data passed through it as opaque binaries. However,
-the protocol does support encoding negotiation, where the server sends the client a list of encodings it can speak,
-and the client picks the encoding it wants to use, and sends it back.
+the protocol does support encoding negotiation, and compression where the client sends the server a list of encodings it can speak and compression algos it can use, and the server picks the encoding and compression it wants to use. Compression can be toggled on a per frame basis with frame flags.
 
 # The protocol
 The protocol is 9 opcodes, with a binary frame format.

@@ -193,10 +193,12 @@ func (c *Client) dial() (conn *Conn, err error) {
 			return
 		}
 
-		c.conn, err = c.d.Dial(c.urlString)
+		conn, err = c.d.Dial(c.urlString)
 		if err != nil {
 			return
 		}
+
+		c.conn = conn
 	}
 
 	c.backoff.Succeed()
