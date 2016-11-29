@@ -9,7 +9,7 @@ defmodule Loqui.CowboyProtocol do
   @opcode_goaway 8
   @opcode_error 9
 
-  @version 1
+  @supported_versions [1]
   @supported_encodings MapSet.new(["erlpack"])
   @supported_compressions MapSet.new()
 
@@ -25,6 +25,7 @@ defmodule Loqui.CowboyProtocol do
             handler_opts: nil,
             handler_state: nil,
             ping_interval: nil,
+            version: nil,
             encoding: nil,
             timeout: :infinity,
             timeout_ref: nil,
@@ -155,17 +156,20 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval}=state) do
-    # TODO go away no support version
     common_encodings = MapSet.intersection(encodings, @supported_encodings) |> MapSet.to_list()
-    if common_encodings == [] do
-      goaway(state, :no_common_encoding)
-      {:shutdown, :no_common_encoding}
-    else
-      flags = 0
-      encoding = List.first(common_encodings)
-      settings_payload = "#{encoding}|"
-      do_send(state, Messages.make_hello_ack(flags, ping_interval, settings_payload))
-      {:ok, %{state | encoding: encoding}}
+    cond do
+      !Enum.member?(@supported_versions, version) ->
+        goaway(state, :unsupported_version)
+        {:shutdown, :unsupported_version}
+      common_encodings == [] ->
+        goaway(state, :no_common_encoding)
+        {:shutdown, :no_common_encoding}
+      true ->
+        flags = 0
+        encoding = List.first(common_encodings)
+        settings_payload = "#{encoding}|"
+        do_send(state, Messages.make_hello_ack(flags, ping_interval, settings_payload))
+        {:ok, %{state | version: version, encoding: encoding}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
