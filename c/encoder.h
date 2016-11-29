@@ -118,7 +118,7 @@ static inline int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint16_t
   unsigned char buf[SIZE];
   buf[0] = LOQUI_OP_GOAWAY;
   buf[1] = flags;
-  _loqui_store16(buf + 2, size);
+  _loqui_store16(buf + 2, code);
   _loqui_store32(buf + 4, size);
 
   int ret = loqui_buffer_write(b, (const char*) buf, SIZE);
@@ -133,7 +133,7 @@ static inline int loqui_append_goaway(loqui_buffer_t *b, uint8_t flags, uint16_t
 static inline int loqui_append_error(loqui_buffer_t *b, uint8_t flags, uint16_t code, uint32_t seq, uint32_t size, const char* data) {
   #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t)
   unsigned char buf[SIZE];
-  buf[0] = LOQUI_OP_GOAWAY;
+  buf[0] = LOQUI_OP_ERROR;
   buf[1] = flags;
   _loqui_store32(buf + 2, seq);
   _loqui_store16(buf + 6, code);

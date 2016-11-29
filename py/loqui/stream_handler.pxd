@@ -1,4 +1,4 @@
-from libc.stdint cimport uint32_t, uint8_t
+from libc.stdint cimport uint32_t, uint8_t, uint16_t
 cimport loqui_c
 
 cdef class LoquiStreamHandler:
@@ -17,8 +17,8 @@ cdef class LoquiStreamHandler:
     cpdef uint32_t send_response(self, uint8_t flags, uint32_t seq, bytes data) except 0
     cpdef uint32_t send_hello(self, uint8_t flags, list supported_encodings, list supported_compressors) except 0
     cpdef uint32_t send_hello_ack(self, uint8_t flags, uint32_t ping_interval, bytes selected_encoding, bytes selected_compressor) except 0
-    cpdef uint32_t send_error(self, uint8_t flags, uint8_t code, uint32_t seq, bytes data) except 0
-    cpdef uint32_t send_goaway(self, uint8_t flags, uint8_t code, bytes reason) except 0
+    cpdef uint32_t send_error(self, uint8_t flags, uint16_t code, uint32_t seq, bytes data) except 0
+    cpdef uint32_t send_goaway(self, uint8_t flags, uint16_t code, bytes reason) except 0
 
     cpdef size_t write_buffer_len(self)
     cpdef bytes write_buffer_get_bytes(self, size_t length, bint consume=?)

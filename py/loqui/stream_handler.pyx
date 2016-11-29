@@ -1,7 +1,7 @@
 from cpython cimport *
 from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
-from libc.stdint cimport uint32_t, uint8_t
+from libc.stdint cimport uint32_t, uint8_t, uint16_t
 
 from exceptions import LoquiDecoderError
 cimport loqui_c
@@ -244,7 +244,7 @@ cdef class LoquiStreamHandler:
 
         return 1
 
-    cpdef uint32_t send_error(self, uint8_t flags, uint8_t code, uint32_t seq, bytes data) except 0:
+    cpdef uint32_t send_error(self, uint8_t flags, uint16_t code, uint32_t seq, bytes data) except 0:
         """
         Enqueues a response type message to be sent, with the given seq and bytes `data` as the payload.
         This function does not validate if the given seq is in-flight. It's assumed that the client will handle
@@ -270,7 +270,7 @@ cdef class LoquiStreamHandler:
 
         return 1
 
-    cpdef uint32_t send_goaway(self, uint8_t flags, uint8_t code, bytes reason) except 0:
+    cpdef uint32_t send_goaway(self, uint8_t flags, uint16_t code, bytes reason) except 0:
         """
         Enqueues a goaway message to be sent - letting the remote end know that a connection termination is imminent.
 

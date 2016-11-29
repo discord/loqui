@@ -42,13 +42,13 @@ cdef class HelloAck:
         self.selected_compression = selected_compression
 
 cdef class GoAway:
-    def __cinit__(self, uint8_t flags, uint8_t code, bytes reason):
+    def __cinit__(self, uint8_t flags, uint16_t code, bytes reason):
         self.flags = flags
         self.code = code
         self.reason = reason
 
 cdef class Error:
-    def __cinit__(self, uint8_t flags, uint8_t code, uint32_t seq, bytes data):
+    def __cinit__(self, uint8_t flags, uint16_t code, uint32_t seq, bytes data):
         self.flags = flags
         self.code = code
         self.seq = seq

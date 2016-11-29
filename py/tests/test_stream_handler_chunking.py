@@ -1,35 +1,13 @@
-import struct
-
 import itertools
+import harness
 
 from loqui.stream_handler import LoquiStreamHandler
 from loqui.opcodes import Request
 
 
-def py_encode_request(seq, data):
-    header = struct.pack('>BII', 5, seq, len(data))
-    return header + data
-
-
 def chunker(chunk_size, byt):
     biter = iter(byt)
     return lambda: b''.join(itertools.islice(biter, 0, chunk_size))
-
-
-def test_stream_handler_encode_request():
-    handler = LoquiStreamHandler()
-    data = b'hello world'
-
-    assert handler.current_seq() == 0
-    seq = handler.send_request(data)
-    assert handler.current_seq() == seq
-    assert seq == 1
-
-    out_bytes = handler.write_buffer_get_bytes(handler.write_buffer_len())
-    header = struct.pack('>BII', 5, seq, len(data))
-
-    assert out_bytes == header + data
-    assert handler.write_buffer_len() == 0
 
 
 def test_stream_handler_encode_requests():
@@ -41,12 +19,11 @@ def test_stream_handler_encode_requests():
             data = b'hello world - %i' % i
 
             assert handler.current_seq() == i
-            seq = handler.send_request(data)
+            seq = handler.send_request(1, data)
             assert handler.current_seq() == seq
             assert seq == i + 1
 
-            expected_data.append(struct.pack('>BII', 5, seq, len(data)))
-            expected_data.append(data)
+            expected_data.append(harness.encode_request(1, seq, data))
 
         read_data = []
 
@@ -68,12 +45,12 @@ def test_stream_handler_encode_requests_interspersed():
             data = b'hello world - %i' % i
 
             assert handler.current_seq() == i
-            seq = handler.send_request(data)
+            seq = handler.send_request(5, data)
             assert handler.current_seq() == seq
             assert seq == i + 1
 
-            expected_data.append(struct.pack('>BII', 5, seq, len(data)))
-            expected_data.append(data)
+            expected_data.append(harness.encode_request(5, seq, data))
+
             if handler.write_buffer_len():
                 read_data.append(handler.write_buffer_get_bytes(min(handler.write_buffer_len(), chunk_size)))
 
@@ -91,7 +68,7 @@ def test_stream_handler_write_buffer_overread_is_ok():
 
 
 def test_stream_handler_decode_full():
-    payload = py_encode_request(1, b'this is a test')
+    payload = harness.encode_request(37, 1, b'this is a test')
     handler = LoquiStreamHandler()
 
     responses = handler.on_bytes_received(payload)
@@ -99,11 +76,12 @@ def test_stream_handler_decode_full():
     response = responses[0]
     assert isinstance(response, Request)
     assert response.seq == 1
+    assert response.flags == 37
     assert response.data == b'this is a test'
 
 
 def test_stream_handler_decode_byte_by_byte():
-    payload = py_encode_request(1, b'this is a test') + py_encode_request(2, b'this is a test 2')
+    payload = harness.encode_request(0, 1, b'this is a test') + harness.encode_request(5, 2, b'this is a test 2')
 
     for i in xrange(1, len(payload)):
 
@@ -121,8 +99,10 @@ def test_stream_handler_decode_byte_by_byte():
         response = responses[0]
         assert isinstance(response, Request)
         assert response.seq == 1
+        assert response.flags == 0
         assert response.data == b'this is a test'
         response = responses[1]
         assert isinstance(response, Request)
         assert response.seq == 2
+        assert response.flags == 5
         assert response.data == b'this is a test 2'

@@ -45,7 +45,7 @@ static inline size_t loqui_get_data_payload_size(loqui_decode_buffer_t* pk) {
     case LOQUI_OP_PUSH:
       return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t));
     case LOQUI_OP_GOAWAY:
-      return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint8_t));
+      return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint16_t));
     case LOQUI_OP_ERROR:
       return _loqui_load32(size_t, pk->loqui_buffer.buf + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint16_t));
     case LOQUI_OP_HELLO:
