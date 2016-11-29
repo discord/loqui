@@ -71,13 +71,12 @@ defmodule Loqui.CowboyProtocol do
   def loqui_handshake(%{req: req}=state) do
     :cowboy_req.upgrade_reply(101, [{"Upgrade", "loqui"}], req)
     receive do
-			{:cowboy_req, :resp_sent} -> :ok
-		after
+      {:cowboy_req, :resp_sent} -> :ok
+    after
       0 -> :ok
-		end
+    end
 
-		state = handler_loop_timeout(state)
-		handler_before_loop(state, <<>>)
+    handler_loop_timeout(state) |> handler_before_loop(<<>>)
   end
 
   def handler_before_loop(%{socket_pid: socket_pid, transport: transport, hibnerate: true}=state, so_far) do
@@ -103,7 +102,7 @@ defmodule Loqui.CowboyProtocol do
           handler_loop(state, so_far)
         end
       other ->
-        Logger.info "unknown message. message=#{inspect other}"
+        Logger.info "[loqui] unknown message. message=#{inspect other}"
         handler_loop(state, so_far)
     end
   end
@@ -117,42 +116,6 @@ defmodule Loqui.CowboyProtocol do
         end
       {:continue, extra} -> handler_before_loop(state, extra)
     end
-  end
-
-  defp send_response(state, seq, response) do
-    response = encode(state, response)
-    do_send(state, Messages.make_response(0, seq, response))
-  end
-
-  defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
-  defp send_error(state, seq, code, reason) do
-    reason = encode(state, reason)
-    do_send(state, Messages.make_error(0, code, seq, reason))
-  end
-
-  defp handler_request(%{handler: handler, handler_state: handler_state}, request) do
-    handler.handle_request(request, handler_state)
-  end
-  defp handler_push(%{handler: handler, handler_state: handler_state}, request) do
-    handler.handle_push(request, handler_state)
-  end
-  defp handler_terminate(%{handler: handler, req: req, handler_state: handler_state}, reason) do
-    handler.loqui_terminate(reason, req, handler_state)
-  end
-
-  defp close(%{transport: transport, socket_pid: socket_pid, env: env, req: req}=state, reason) do
-    handler_terminate(state, reason)
-    transport.close(socket_pid)
-    {:ok, req, Keyword.put(env, :result, :closed)}
-  end
-
-  def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
-  def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
-  def goaway(state, :timeout), do: goaway(state, 4, "Timeout")
-
-  def goaway(state, code, reason) do
-    do_send(state, Messages.make_goaway(0, code, reason))
-    close(state, reason)
   end
 
   defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval}=state) do
@@ -197,9 +160,45 @@ defmodule Loqui.CowboyProtocol do
     {:ok, state}
   end
 
+  defp send_response(state, seq, response) do
+    response = encode(state, response)
+    do_send(state, Messages.make_response(0, seq, response))
+  end
+
+  defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
+  defp send_error(state, seq, code, reason) do
+    reason = encode(state, reason)
+    do_send(state, Messages.make_error(0, code, seq, reason))
+  end
+
+  def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
+  def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
+  def goaway(state, :timeout), do: goaway(state, 4, "Timeout")
+
+  def goaway(state, code, reason) do
+    do_send(state, Messages.make_goaway(0, code, reason))
+    close(state, reason)
+  end
+
   defp do_send(%{transport: transport, socket_pid: socket_pid}=state, msg) do
     transport.send(socket_pid, msg)
     state
+  end
+
+  defp handler_request(%{handler: handler, handler_state: handler_state}, request) do
+    handler.handle_request(request, handler_state)
+  end
+  defp handler_push(%{handler: handler, handler_state: handler_state}, request) do
+    handler.handle_push(request, handler_state)
+  end
+  defp handler_terminate(%{handler: handler, req: req, handler_state: handler_state}, reason) do
+    handler.loqui_terminate(reason, req, handler_state)
+  end
+
+  defp close(%{transport: transport, socket_pid: socket_pid, env: env, req: req}=state, reason) do
+    handler_terminate(state, reason)
+    transport.close(socket_pid)
+    {:ok, req, Keyword.put(env, :result, :closed)}
   end
 
   def encode(%{encoding: "erlpack"}, msg), do: :erlang.term_to_binary(msg)
