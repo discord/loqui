@@ -1,21 +1,12 @@
 defmodule Loqui.CowboyProtocol do
-  @opcode_hello 1
-  @opcode_hello_ack 2
-  @opcode_ping 3
-  @opcode_pong 4
-  @opcode_request 5
-  @opcode_response 6
-  @opcode_push 7
-  @opcode_goaway 8
-  @opcode_error 9
+  use Loqui.Opcodes
+  alias Loqui.{Parser, Messages}
+  require Logger
 
   @supported_versions [1]
   @supported_encodings MapSet.new(["erlpack"])
   @supported_compressions MapSet.new()
 
-  require Logger
-
-  alias Loqui.{Parser, Messages}
 
   defstruct socket_pid: nil,
             transport: nil,
@@ -106,7 +97,7 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  def socket_data(state, data) do
+  defp socket_data(state, data) do
     case Parser.handle_data(data) do
       {:ok, request, extra} ->
         case handle_request(request, state) do
