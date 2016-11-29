@@ -3,10 +3,10 @@ defmodule Loqui.CowboyProtocol do
   alias Loqui.{Parser, Messages}
   require Logger
 
+  @default_ping_interval 5_000
   @supported_versions [1]
-  @supported_encodings MapSet.new(["erlpack"])
-  @supported_compressions MapSet.new()
-
+  @default_supported_encodings MapSet.new(["erlpack"])
+  @default_supported_compressions MapSet.new()
 
   defstruct socket_pid: nil,
             transport: nil,
@@ -16,6 +16,8 @@ defmodule Loqui.CowboyProtocol do
             handler_opts: nil,
             handler_state: nil,
             ping_interval: nil,
+            supported_encodings: nil,
+            supported_compressions: nil,
             version: nil,
             encoding: nil,
             timeout: :infinity,
@@ -41,17 +43,17 @@ defmodule Loqui.CowboyProtocol do
 
   def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
-      {:ok, req, ping_interval, handler_state} ->
-        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval}
+      {:ok, req, handler_state, opts} ->
+        state = %{state | req: req, handler_state: handler_state} |> set_opts(opts)
         loqui_handshake(state)
-      {:ok, req, ping_interval, handler_state, :hibernate} ->
-        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, hibnerate: true}
+      {:ok, req, handler_state, opts, :hibernate} ->
+        state = %{state | req: req, handler_state: handler_state, hibnerate: true} |> set_opts(opts)
         loqui_handshake(state)
-      {:ok, req, ping_interval, handler_state, timeout} ->
-        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout}
+      {:ok, req, handler_state, opts, timeout} ->
+        state = %{state | req: req, handler_state: handler_state, timeout: timeout} |> set_opts(opts)
         loqui_handshake(state)
-      {:ok, req, ping_interval, handler_state, timeout, :hibernate} ->
-        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout, hibernate: true}
+      {:ok, req, handler_state, opts, timeout, :hibernate} ->
+        state = %{state | req: req, handler_state: handler_state, timeout: timeout, hibernate: true} |> set_opts(opts)
         loqui_handshake(state)
       {:shutdown, req} ->
         {:ok, req, Keyword.put(env, :result, :closed)}
@@ -108,8 +110,8 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval}=state) do
-    common_encodings = MapSet.intersection(encodings, @supported_encodings) |> MapSet.to_list()
+  defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval, supported_encodings: supported_encodings}=state) do
+    common_encodings = MapSet.intersection(encodings, supported_encodings) |> MapSet.to_list()
     cond do
       !Enum.member?(@supported_versions, version) ->
         goaway(state, :unsupported_version)
@@ -180,6 +182,16 @@ defmodule Loqui.CowboyProtocol do
     handler_terminate(state, reason)
     transport.close(socket_pid)
     {:ok, req, Keyword.put(env, :result, :closed)}
+  end
+
+  defp set_opts(state, opts) do
+    ping_interval = Keyword.get(opts, :ping_interval, @default_ping_interval)
+    supported_encodings = Keyword.get(opts, :supported_encodings, @default_supported_encodings)
+    supported_compressions = Keyword.get(opts, :supported_compressions, @default_supported_compressions)
+    %{state |
+      ping_interval: ping_interval,
+      supported_encodings:
+      supported_encodings, supported_compressions: supported_compressions}
   end
 
   def encode(%{encoding: "erlpack"}, msg), do: :erlang.term_to_binary(msg)
