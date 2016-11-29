@@ -41,20 +41,20 @@ defmodule Loqui.CowboyProtocol do
 
   def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
-      {:ok, req2, ping_interval, handler_state} ->
-        state = %{state | req: req2, handler_state: handler_state, ping_interval: ping_interval}
+      {:ok, req, ping_interval, handler_state} ->
+        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval}
         loqui_handshake(state)
-      {:ok, req2, ping_interval, handler_state, :hibernate} ->
-        state = %{state | req: req2, handler_state: handler_state, ping_interval: ping_interval, hibnerate: true}
+      {:ok, req, ping_interval, handler_state, :hibernate} ->
+        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, hibnerate: true}
         loqui_handshake(state)
-      {:ok, req2, ping_interval, handler_state, timeout} ->
-        state = %{state | req: req2, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout}
+      {:ok, req, ping_interval, handler_state, timeout} ->
+        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout}
         loqui_handshake(state)
-      {:ok, req2, ping_interval, handler_state, timeout, :hibernate} ->
-        state = %{state | req: req2, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout, hibernate: true}
+      {:ok, req, ping_interval, handler_state, timeout, :hibernate} ->
+        state = %{state | req: req, handler_state: handler_state, ping_interval: ping_interval, timeout: timeout, hibernate: true}
         loqui_handshake(state)
-      {:shutdown, req2} ->
-        {:ok, req2, Keyword.put(env, :result, :closed)}
+      {:shutdown, req} ->
+        {:ok, req, Keyword.put(env, :result, :closed)}
     end
   end
 
