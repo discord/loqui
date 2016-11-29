@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   @opcode_hello 1
-  @opcode_select_encoding 2
+  @opcode_hello_ack 2
   @opcode_ping 3
   @opcode_pong 4
   @opcode_request 5
@@ -10,7 +10,8 @@ defmodule Loqui.CowboyProtocol do
   @opcode_error 9
 
   @version 1
-  @encodings ["erlpack"]
+  @supported_encodings MapSet.new(["erlpack"])
+  @supported_compressions MapSet.new()
 
   require Logger
 
@@ -73,7 +74,6 @@ defmodule Loqui.CowboyProtocol do
 		end
 
 		state = handler_loop_timeout(state)
-		send_hello(state)
 		handler_before_loop(state, <<>>)
   end
 
@@ -118,13 +118,13 @@ defmodule Loqui.CowboyProtocol do
 
   defp send_response(state, seq, response) do
     response = encode(state, response)
-    do_send(state, <<@opcode_response, seq :: unsigned-integer-size(32), byte_size(response) :: unsigned-integer-size(32), response :: binary>>)
+    do_send(state, <<@opcode_response, 0, seq :: unsigned-integer-size(32), byte_size(response) :: unsigned-integer-size(32), response :: binary>>)
   end
 
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
-    do_send(state, <<@opcode_error, code :: unsigned-integer-size(8), seq :: unsigned-integer-size(32),
+    do_send(state, <<@opcode_error, 0, code :: unsigned-integer-size(8), seq :: unsigned-integer-size(32),
                      byte_size(reason) :: unsigned-integer-size(32), reason :: binary>>)
   end
 
@@ -144,29 +144,37 @@ defmodule Loqui.CowboyProtocol do
     {:ok, req, Keyword.put(env, :result, :closed)}
   end
 
-  # TODO: get proper error codes
-  def goaway(state, :invalid_encoding), do: goaway(state, 2, "invalid_encoding")
-  def goaway(state, :timeout), do: goaway(state, 3, "timeout")
+  def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
+  def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
+  def goaway(state, :timeout), do: goaway(state, 4, "Timeout")
 
   def goaway(state, code, reason) do
-    msg = <<@opcode_goaway, code :: unsigned-integer-size(8), byte_size(reason) :: unsigned-integer-size(32), reason :: binary>>
+    Logger.info "goaway reason=#{inspect reason}"
+    msg = <<@opcode_goaway, 0, code :: unsigned-integer-size(8), byte_size(reason) :: unsigned-integer-size(32), reason :: binary>>
     do_send(state, msg)
     close(state, reason)
   end
 
-  defp handle_request({:ping, seq}, state) do
-    do_send(state, <<@opcode_pong, seq :: unsigned-integer-size(32)>>)
-    {:ok, state}
-  end
-  defp handle_request({:select_encoding, encoding}, state) do
-    if Enum.member?(@encodings, encoding) do
-      {:ok, %{state | encoding: encoding}}
+  defp handle_request({:hello, flags, version, encodings, compressions}, %{ping_interval: ping_interval}=state) do
+    common_encodings = MapSet.intersection(encodings, @supported_encodings) |> MapSet.to_list()
+    if common_encodings == [] do
+      goaway(state, :no_common_encoding)
+      {:shutdown, :no_common_encoding}
     else
-      goaway(state, :invalid_encoding)
-      {:shutdown, :invalid_encoding}
+      flags = 0
+      encoding = List.first(common_encodings)
+      settings_payload = "#{encoding}|"
+      msg = <<@opcode_hello_ack, flags, ping_interval :: unsigned-integer-size(32),
+              byte_size(settings_payload) :: unsigned-integer-size(32), settings_payload :: binary>>
+      do_send(state, msg)
+      {:ok, %{state | encoding: encoding}}
     end
   end
-  defp handle_request({:request, seq, request}, state) do
+  defp handle_request({:ping, flags, seq}, state) do
+    do_send(state, <<@opcode_pong, 0, seq :: unsigned-integer-size(32)>>)
+    {:ok, state}
+  end
+  defp handle_request({:request, flags, seq, request}, state) do
     request = decode(state, request)
     {response, handler_state} = handler_request(state, request)
     case response do
@@ -177,21 +185,14 @@ defmodule Loqui.CowboyProtocol do
     end
     {:ok, %{state | handler_state: handler_state}}
   end
-  defp handle_request({:push, request}, state) do
+  defp handle_request({:push, flags, request}, state) do
     request = decode(state, request)
     {_, handler_state} = handler_push(state, request)
     {:ok, %{state | handler_state: handler_state}}
   end
-  defp handle_request(request, state) do
+  defp handle_request(request, flags, state) do
     Logger.info "unknown request. request=#{inspect request}"
     {:ok, state}
-  end
-
-  defp send_hello(%{ping_interval: ping_interval}=state) do
-    encodings_payload = Enum.join(@encodings, ",")
-    msg = <<@opcode_hello, @version, ping_interval :: unsigned-integer-size(32),
-            byte_size(encodings_payload) :: unsigned-integer-size(32), encodings_payload :: binary>>
-    do_send(state, msg)
   end
 
   defp do_send(%{transport: transport, socket_pid: socket_pid}=state, msg) do
