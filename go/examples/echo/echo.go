@@ -2,8 +2,9 @@ package main
 
 import (
 	"io"
-	"github.com/hammerandchisel/loqui/go"
 	"net/http"
+
+	"github.com/hammerandchisel/loqui/go"
 )
 
 type serverHandler []byte
@@ -19,5 +20,4 @@ func main() {
 	)
 	http.Handle("/_rpc", defaultServer)
 	http.ListenAndServe(":8080", nil)
-
 }
