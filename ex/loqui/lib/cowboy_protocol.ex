@@ -34,7 +34,6 @@ defmodule Loqui.CowboyProtocol do
   def upgrade(req, env, handler, handler_opts) do
     {_, ref} = :lists.keyfind(:listener, 1, env)
     :ranch.remove_connection(ref)
-
     [socket_pid, transport] = :cowboy_req.get([:socket, :transport], req)
 
     state = %__MODULE__{
@@ -142,27 +141,18 @@ defmodule Loqui.CowboyProtocol do
   defp handle_request({:request, _flags, seq, request}, state) do
     request = decode(state, request)
     {response, handler_state} = handler_request(state, request)
-    case response do
-      :ok -> send_response(state, seq, "")
-      {:ok, response} -> send_response(state, seq, response)
-      {:error, reason} -> send_error(state, seq, :handler_error, reason)
-      other -> send_response(state, seq, other)
-    end
+    response = encode(state, response)
+    do_send(state, Messages.make_response(0, seq, response))
     {:ok, %{state | handler_state: handler_state}}
   end
   defp handle_request({:push, _flags, request}, state) do
     request = decode(state, request)
-    {_, handler_state} = handler_push(state, request)
+    handler_state = handler_push(state, request)
     {:ok, %{state | handler_state: handler_state}}
   end
   defp handle_request(request, state) do
     Logger.info "unknown request. request=#{inspect request}"
     {:ok, state}
-  end
-
-  defp send_response(state, seq, response) do
-    response = encode(state, response)
-    do_send(state, Messages.make_response(0, seq, response))
   end
 
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
