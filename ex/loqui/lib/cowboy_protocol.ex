@@ -82,9 +82,6 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  defp response_frame({:compressed, payload}, seq), do: Frames.response(1, seq, payload)
-  defp response_frame(payload, seq), do: Frames.response(0, seq, payload)
-
   defp flush_responses(state, responses) do
     receive do
       {:response, seq, response} ->
@@ -93,6 +90,9 @@ defmodule Loqui.CowboyProtocol do
       0 -> do_send(state, responses)
     end
   end
+
+  defp response_frame({:compressed, payload}, seq), do: Frames.response(1, seq, payload)
+  defp response_frame(payload, seq), do: Frames.response(0, seq, payload)
 
   defp socket_data(state, data) do
     case Protocol.handle_data(data) do
