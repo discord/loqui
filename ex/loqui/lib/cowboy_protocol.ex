@@ -12,7 +12,6 @@ defmodule Loqui.CowboyProtocol do
             req: nil,
             handler: nil,
             handler_opts: nil,
-            handler_state: nil,
             ping_interval: nil,
             supported_encodings: nil,
             supported_compressions: nil,
@@ -40,8 +39,8 @@ defmodule Loqui.CowboyProtocol do
 
   def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
-      {:ok, req, handler_state, opts} ->
-        %{state | req: req, handler_state: handler_state}
+      {:ok, req, opts} ->
+        %{state | req: req}
           |> set_opts(opts)
           |> loqui_handshake
       {:shutdown, req} ->
@@ -117,18 +116,12 @@ defmodule Loqui.CowboyProtocol do
   defp handle_request({:request, _flags, seq, request}, state) do
     request = decode(state, request)
     handler_request(state, seq, request)
-
-    #{response, handler_state} = handler_request(state, request)
-    #response = encode(state, response)
-    #do_send(state, Messages.response(0, seq, response))
-    #{:ok, %{state | handler_state: handler_state}}
-    ## TODO: handler_state
-    {:ok, %{state | handler_state: :ok}}
+    {:ok, state}
   end
   defp handle_request({:push, _flags, request}, state) do
     request = decode(state, request)
-    handler_state = handler_push(state, request)
-    {:ok, %{state | handler_state: handler_state}}
+    handler_push(state, request)
+    {:ok, state}
   end
   defp handle_request(request, state) do
     Logger.info "unknown request. request=#{inspect request}"
@@ -161,21 +154,22 @@ defmodule Loqui.CowboyProtocol do
     state
   end
 
-  defp handler_request(%{handler: handler, handler_state: handler_state}=state, seq, request) do
+  defp handler_request(%{handler: handler}=state, seq, request) do
     :poolboy.transaction(:loqui, fn pid ->
       on_complete = fn (response) ->
         response = encode(state, response)
         do_send(state, Messages.response(0, seq, response))
       end
-      Worker.run(pid, {handler, :loqui_request, [request, handler_state]}, on_complete)
+      Worker.run(pid, {handler, :loqui_request, [request]}, on_complete)
     end)
-    #handler.loqui_request(request, handler_state)
   end
-  defp handler_push(%{handler: handler, handler_state: handler_state}, request) do
-    handler.loqui_push(request, handler_state)
+  defp handler_push(%{handler: handler}, request) do
+    :poolboy.transaction(:loqui, fn pid ->
+      Worker.run(pid, {handler, :loqui_push, [request]})
+    end)
   end
-  defp handler_terminate(%{handler: handler, req: req, handler_state: handler_state}, reason) do
-    handler.loqui_terminate(reason, req, handler_state)
+  defp handler_terminate(%{handler: handler, req: req}, reason) do
+    handler.loqui_terminate(reason, req)
   end
 
   defp close(%{transport: transport, socket_pid: socket_pid, env: env, req: req}=state, reason) do
