@@ -64,7 +64,6 @@ defmodule Loqui.CowboyProtocol do
     transport.setopts(socket_pid, [active: :once])
     receive do
       {:response, seq, response} ->
-        response = encode(state, response)
         frame = Frames.response(0, seq, response)
         flush_responses(state, [frame])
         socket_data(state, so_far)
@@ -87,7 +86,6 @@ defmodule Loqui.CowboyProtocol do
   defp flush_responses(state, responses) do
     receive do
       {:response, seq, response} ->
-        response = encode(state, response)
         frame = Frames.response(0, seq, response)
         flush_responses(state, [frame | responses])
     after
@@ -131,12 +129,10 @@ defmodule Loqui.CowboyProtocol do
     {:ok, state}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
-    request = decode(state, request)
     handler_request(state, seq, request)
     {:ok, state}
   end
   defp handle_request({:push, _flags, request}, state) do
-    request = decode(state, request)
     handler_push(state, request)
     {:ok, state}
   end
@@ -171,11 +167,11 @@ defmodule Loqui.CowboyProtocol do
     state
   end
 
-  defp handler_request(%{handler: handler, worker_pool: worker_pool}=state, seq, request) do
-    :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request]}, seq, self))
+  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding}=state, seq, request) do
+    :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request, encoding]}, seq, self))
   end
-  defp handler_push(%{handler: handler, worker_pool: worker_pool}, request) do
-    :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request]}))
+  defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, request) do
+    :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request, encoding]}))
   end
   defp handler_terminate(%{handler: handler, req: req}, reason) do
     handler.loqui_terminate(reason, req)
