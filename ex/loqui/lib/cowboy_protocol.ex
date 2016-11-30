@@ -3,10 +3,8 @@ defmodule Loqui.CowboyProtocol do
   alias Loqui.{Parser, Messages}
   require Logger
 
-  @default_ping_interval 5_000
+  @default_ping_interval 30_000
   @supported_versions [1]
-  @default_supported_encodings MapSet.new(["erlpack"])
-  @default_supported_compressions MapSet.new()
 
   defstruct socket_pid: nil,
             transport: nil,
@@ -44,17 +42,21 @@ defmodule Loqui.CowboyProtocol do
   def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
       {:ok, req, handler_state, opts} ->
-        state = %{state | req: req, handler_state: handler_state} |> set_opts(opts)
-        loqui_handshake(state)
+        %{state | req: req, handler_state: handler_state}
+          |> set_opts(opts)
+          |> loqui_handshake
       {:ok, req, handler_state, opts, :hibernate} ->
-        state = %{state | req: req, handler_state: handler_state, hibnerate: true} |> set_opts(opts)
-        loqui_handshake(state)
+        %{state | req: req, handler_state: handler_state, hibernate: true}
+          |> set_opts(opts)
+          |> loqui_handshake
       {:ok, req, handler_state, opts, timeout} ->
-        state = %{state | req: req, handler_state: handler_state, timeout: timeout} |> set_opts(opts)
-        loqui_handshake(state)
+        %{state | req: req, handler_state: handler_state, timeout: timeout}
+          |> set_opts(opts)
+          |> loqui_handshake
       {:ok, req, handler_state, opts, timeout, :hibernate} ->
-        state = %{state | req: req, handler_state: handler_state, timeout: timeout, hibernate: true} |> set_opts(opts)
-        loqui_handshake(state)
+        %{state | req: req, handler_state: handler_state, timeout: timeout, hibernate: true}
+          |> set_opts(opts)
+          |> loqui_handshake
       {:shutdown, req} ->
         {:ok, req, Keyword.put(env, :result, :closed)}
     end
@@ -110,32 +112,36 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  defp handle_request({:hello, _flags, version, encodings, _compressions}, %{ping_interval: ping_interval, supported_encodings: supported_encodings}=state) do
-    common_encodings = MapSet.intersection(encodings, supported_encodings) |> MapSet.to_list()
+  defp handle_request({:hello, _flags, version, encodings, compressions}, %{ping_interval: ping_interval, supported_encodings: supported_encodings, supported_compressions: supported_compressions}=state) do
+    encoding = choose_encoding(supported_encodings, encodings)
+    compression = choose_compression(supported_compressions, compressions)
+
     cond do
       !Enum.member?(@supported_versions, version) ->
         goaway(state, :unsupported_version)
         {:shutdown, :unsupported_version}
-      common_encodings == [] ->
+      is_nil(encoding) ->
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
+      length(compressions) > 0 && is_nil(compression) ->
+        goaway(state, :no_common_compression)
+        {:shutdown, :no_common_compression}
       true ->
         flags = 0
-        encoding = List.first(common_encodings)
-        settings_payload = "#{encoding}|"
-        do_send(state, Messages.make_hello_ack(flags, ping_interval, settings_payload))
+        settings_payload = "#{encoding}|#{compression}"
+        do_send(state, Messages.hello_ack(flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
-    do_send(state, Messages.make_pong(0, seq))
+    do_send(state, Messages.pong(0, seq))
     {:ok, state}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
     request = decode(state, request)
     {response, handler_state} = handler_request(state, request)
     response = encode(state, response)
-    do_send(state, Messages.make_response(0, seq, response))
+    do_send(state, Messages.response(0, seq, response))
     {:ok, %{state | handler_state: handler_state}}
   end
   defp handle_request({:push, _flags, request}, state) do
@@ -151,15 +157,16 @@ defmodule Loqui.CowboyProtocol do
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
-    do_send(state, Messages.make_error(0, code, seq, reason))
+    do_send(state, Messages.error(0, code, seq, reason))
   end
 
   def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
   def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
-  def goaway(state, :timeout), do: goaway(state, 4, "Timeout")
+  def goaway(state, :no_common_compression), do: goaway(state, 4, "NoCommonCompression")
+  def goaway(state, :timeout), do: goaway(state, 5, "Timeout")
 
   def goaway(state, code, reason) do
-    do_send(state, Messages.make_goaway(0, code, reason))
+    do_send(state, Messages.goaway(0, code, reason))
     close(state, reason)
   end
 
@@ -169,10 +176,10 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp handler_request(%{handler: handler, handler_state: handler_state}, request) do
-    handler.handle_request(request, handler_state)
+    handler.loqui_request(request, handler_state)
   end
   defp handler_push(%{handler: handler, handler_state: handler_state}, request) do
-    handler.handle_push(request, handler_state)
+    handler.loqui_push(request, handler_state)
   end
   defp handler_terminate(%{handler: handler, req: req, handler_state: handler_state}, reason) do
     handler.loqui_terminate(reason, req, handler_state)
@@ -185,17 +192,27 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp set_opts(state, opts) do
-    ping_interval = Keyword.get(opts, :ping_interval, @default_ping_interval)
-    supported_encodings = Keyword.get(opts, :supported_encodings, @default_supported_encodings)
-    supported_compressions = Keyword.get(opts, :supported_compressions, @default_supported_compressions)
+    %{supported_encodings: supported_encodings, supported_compressions: supported_compressions} = opts
+    ping_interval = Map.get(opts, :ping_interval, @default_ping_interval)
     %{state |
       ping_interval: ping_interval,
-      supported_encodings:
-      supported_encodings, supported_compressions: supported_compressions}
+      supported_encodings: supported_encodings,
+      supported_compressions: supported_compressions}
   end
 
   def encode(%{encoding: "erlpack"}, msg), do: :erlang.term_to_binary(msg)
   def decode(%{encoding: "erlpack"}, msg), do: :erlang.binary_to_term(msg)
+
+  defp choose_encoding(_supported_encodings, []), do: nil
+  defp choose_encoding(supported_encodings, [encoding | encodings]) do
+    if Enum.member?(supported_encodings, encoding), do: encoding, else: choose_encoding(supported_encodings, encodings)
+  end
+
+  defp choose_compression(_supported_compressions, []), do: nil
+  defp choose_compression(supported_compressions, [compression | compressions]) do
+    if Enum.member?(supported_compressions, compression), do: compression, else: choose_compression(supported_compressions, compressions)
+  end
+
 
   defp handler_loop_timeout(%{timeout: :infinity}=state), do: %{state | timeout_ref: nil}
   defp handler_loop_timeout(%{timeout: timeout, timeout_ref: prev_ref}=state) do

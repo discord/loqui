@@ -31,17 +31,8 @@ defmodule Loqui.Parser do
     {:continue, data}
   end
 
-  defp parse_settings(settings) do
-    String.split(settings, "|") |> Enum.map(&parse_setting/1)
-  end
+  defp parse_settings(settings), do: String.split(settings, "|") |> Enum.map(&parse_setting/1)
 
-  defp parse_setting(setting) do
-    setting = String.trim(setting)
-    if setting == "" do
-      MapSet.new()
-    else
-      MapSet.new(String.split(setting, ","))
-    end
-  end
-
+  defp parse_setting(""), do: []
+  defp parse_setting(setting), do: String.split(setting, ",")
 end
