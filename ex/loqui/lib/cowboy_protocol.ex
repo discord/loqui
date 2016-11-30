@@ -15,6 +15,7 @@ defmodule Loqui.CowboyProtocol do
             ping_interval: nil,
             supported_encodings: nil,
             supported_compressions: nil,
+            worker_pool: nil,
             version: nil,
             encoding: nil,
             compression: nil,
@@ -154,8 +155,8 @@ defmodule Loqui.CowboyProtocol do
     state
   end
 
-  defp handler_request(%{handler: handler}=state, seq, request) do
-    :poolboy.transaction(:loqui, fn pid ->
+  defp handler_request(%{handler: handler, worker_pool: worker_pool}=state, seq, request) do
+    :poolboy.transaction(worker_pool, fn pid ->
       on_complete = fn (response) ->
         response = encode(state, response)
         do_send(state, Messages.response(0, seq, response))
@@ -163,8 +164,8 @@ defmodule Loqui.CowboyProtocol do
       Worker.run(pid, {handler, :loqui_request, [request]}, on_complete)
     end)
   end
-  defp handler_push(%{handler: handler}, request) do
-    :poolboy.transaction(:loqui, fn pid ->
+  defp handler_push(%{handler: handler, worker_pool: worker_pool}, request) do
+    :poolboy.transaction(worker_pool, fn pid ->
       Worker.run(pid, {handler, :loqui_push, [request]})
     end)
   end
@@ -179,12 +180,14 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp set_opts(state, opts) do
-    %{supported_encodings: supported_encodings, supported_compressions: supported_compressions} = opts
+    %{supported_encodings: supported_encodings, supported_compressions: supported_compressions, worker_pool: worker_pool} = opts
     ping_interval = Map.get(opts, :ping_interval, @default_ping_interval)
     %{state |
       ping_interval: ping_interval,
       supported_encodings: supported_encodings,
-      supported_compressions: supported_compressions}
+      supported_compressions: supported_compressions,
+      worker_pool: worker_pool
+    }
   end
 
   def encode(%{encoding: "erlpack"}, msg), do: :erlang.term_to_binary(msg)
