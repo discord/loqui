@@ -64,8 +64,7 @@ defmodule Loqui.CowboyProtocol do
     transport.setopts(socket_pid, [active: :once])
     receive do
       {:response, seq, response} ->
-        frame = Frames.response(0, seq, response)
-        flush_responses(state, [frame])
+        flush_responses(state, [response_frame(response, seq)])
         socket_data(state, so_far)
       {:tcp, ^socket_pid, data} ->
         socket_data(state, <<so_far :: binary, data :: binary>>)
@@ -83,11 +82,13 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
+  defp response_frame({:compressed, payload}, seq), do: Frames.response(1, seq, payload)
+  defp response_frame(payload, seq), do: Frames.response(0, seq, payload)
+
   defp flush_responses(state, responses) do
     receive do
       {:response, seq, response} ->
-        frame = Frames.response(0, seq, response)
-        flush_responses(state, [frame | responses])
+        flush_responses(state, [response_frame(response, seq) | responses])
     after
       0 -> do_send(state, responses)
     end
