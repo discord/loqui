@@ -5,6 +5,8 @@ defmodule Loqui.CowboyProtocol do
 
   @default_ping_interval 30_000
   @supported_versions [1]
+  @empty_flags 0
+  @flag_compressed 1
 
   defstruct socket_pid: nil,
             transport: nil,
@@ -22,8 +24,7 @@ defmodule Loqui.CowboyProtocol do
             ping_timeout_ref: nil
 
   def upgrade(req, env, handler, handler_opts) do
-    ref = env[:listener]
-    :ranch.remove_connection(ref)
+    :ranch.remove_connection(env[:listener])
     [socket_pid, transport] = :cowboy_req.get([:socket, :transport], req)
 
     state = %__MODULE__{
@@ -40,12 +41,8 @@ defmodule Loqui.CowboyProtocol do
 
   def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
-      {:ok, req, opts} ->
-        %{state | req: req}
-          |> set_opts(opts)
-          |> loqui_handshake
-      {:shutdown, req} ->
-        {:ok, req, Keyword.put(env, :result, :closed)}
+      {:ok, req, opts} -> %{state | req: req} |> set_opts(opts) |> loqui_handshake
+      {:shutdown, req} -> {:ok, req, Keyword.put(env, :result, :closed)}
     end
   end
 
@@ -84,15 +81,14 @@ defmodule Loqui.CowboyProtocol do
 
   defp flush_responses(state, responses) do
     receive do
-      {:response, seq, response} ->
-        flush_responses(state, [response_frame(response, seq) | responses])
+      {:response, seq, response} -> flush_responses(state, [response_frame(response, seq) | responses])
     after
       0 -> do_send(state, responses)
     end
   end
 
-  defp response_frame({:compressed, payload}, seq), do: Frames.response(1, seq, payload)
-  defp response_frame(payload, seq), do: Frames.response(0, seq, payload)
+  defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
+  defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
 
   defp socket_data(state, data) do
     case Protocol.handle_data(data) do
@@ -118,15 +114,14 @@ defmodule Loqui.CowboyProtocol do
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
       true ->
-        flags = 0
         settings_payload = "#{encoding}|#{compression}"
-        do_send(state, Frames.hello_ack(flags, ping_interval, settings_payload))
+        do_send(state, Frames.hello_ack(@empty_flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
     state = refresh_ping_timeout(state)
-    do_send(state, Frames.pong(0, seq))
+    do_send(state, Frames.pong(@empty_flags, seq))
     {:ok, state}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
@@ -145,7 +140,7 @@ defmodule Loqui.CowboyProtocol do
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
-    do_send(state, Frames.error(0, code, seq, reason))
+    do_send(state, Frames.error(@empty_flags, code, seq, reason))
   end
 
   def goaway(state, :normal), do: goaway(state, 0, "Normal")
@@ -159,7 +154,7 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
   def goaway(state, code, reason) do
-    do_send(state, Frames.goaway(0, code, reason))
+    do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
 
