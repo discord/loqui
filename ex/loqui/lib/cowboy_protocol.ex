@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   use Loqui.Opcodes
-  alias Loqui.{Protocol, Messages}
+  alias Loqui.{Protocol, Messages, Worker}
   require Logger
 
   @default_ping_interval 30_000
@@ -116,10 +116,14 @@ defmodule Loqui.CowboyProtocol do
   end
   defp handle_request({:request, _flags, seq, request}, state) do
     request = decode(state, request)
-    {response, handler_state} = handler_request(state, request)
-    response = encode(state, response)
-    do_send(state, Messages.response(0, seq, response))
-    {:ok, %{state | handler_state: handler_state}}
+    handler_request(state, seq, request)
+
+    #{response, handler_state} = handler_request(state, request)
+    #response = encode(state, response)
+    #do_send(state, Messages.response(0, seq, response))
+    #{:ok, %{state | handler_state: handler_state}}
+    ## TODO: handler_state
+    {:ok, %{state | handler_state: :ok}}
   end
   defp handle_request({:push, _flags, request}, state) do
     request = decode(state, request)
@@ -157,8 +161,15 @@ defmodule Loqui.CowboyProtocol do
     state
   end
 
-  defp handler_request(%{handler: handler, handler_state: handler_state}, request) do
-    handler.loqui_request(request, handler_state)
+  defp handler_request(%{handler: handler, handler_state: handler_state}=state, seq, request) do
+    :poolboy.transaction(:loqui, fn pid ->
+      on_complete = fn (response) ->
+        response = encode(state, response)
+        do_send(state, Messages.response(0, seq, response))
+      end
+      Worker.run(pid, {handler, :loqui_request, [request, handler_state]}, on_complete)
+    end)
+    #handler.loqui_request(request, handler_state)
   end
   defp handler_push(%{handler: handler, handler_state: handler_state}, request) do
     handler.loqui_push(request, handler_state)

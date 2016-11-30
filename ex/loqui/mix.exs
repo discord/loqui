@@ -12,13 +12,14 @@ defmodule Loqui.Mixfile do
 
   def application do
     [
-      applications: [:logger, :cowboy]
+      applications: [:logger, :cowboy, :poolboy]
     ]
   end
 
   defp deps do
     [
       {:cowboy, "~> 1.0.0"},
+      {:poolboy, "~> 1.5.1"},
     ]
   end
 end
