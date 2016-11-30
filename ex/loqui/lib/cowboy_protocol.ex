@@ -22,7 +22,7 @@ defmodule Loqui.CowboyProtocol do
             ping_timeout_ref: nil
 
   def upgrade(req, env, handler, handler_opts) do
-    {_, ref} = :lists.keyfind(:listener, 1, env)
+    ref = env[:listener]
     :ranch.remove_connection(ref)
     [socket_pid, transport] = :cowboy_req.get([:socket, :transport], req)
 
@@ -63,6 +63,11 @@ defmodule Loqui.CowboyProtocol do
   def handler_loop(%{socket_pid: socket_pid, transport: transport, ping_timeout_ref: ping_timeout_ref}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
     receive do
+      {:response, seq, response} ->
+        response = encode(state, response)
+        message = Messages.response(0, seq, response)
+        flush_responses(state, [message])
+        socket_data(state, so_far)
       {:tcp, ^socket_pid, data} ->
         socket_data(state, <<so_far :: binary, data :: binary>>)
       {:tcp_closed, ^socket_pid} -> close(state, :tcp_closed)
@@ -76,6 +81,17 @@ defmodule Loqui.CowboyProtocol do
       other ->
         Logger.info "[loqui] unknown message. message=#{inspect other}"
         handler_loop(state, so_far)
+    end
+  end
+
+  defp flush_responses(state, responses) do
+    receive do
+      {:response, seq, response} ->
+        response = encode(state, response)
+        message = Messages.response(0, seq, response)
+        flush_responses(state, [message|responses])
+    after
+      0 -> do_send(state, responses)
     end
   end
 
@@ -161,12 +177,12 @@ defmodule Loqui.CowboyProtocol do
         response = encode(state, response)
         do_send(state, Messages.response(0, seq, response))
       end
-      Worker.run(pid, {handler, :loqui_request, [request]}, on_complete)
+      Worker.request(pid, {handler, :loqui_request, [request]}, seq, self)
     end)
   end
   defp handler_push(%{handler: handler, worker_pool: worker_pool}, request) do
     :poolboy.transaction(worker_pool, fn pid ->
-      Worker.run(pid, {handler, :loqui_push, [request]})
+      Worker.push(pid, {handler, :loqui_push, [request]})
     end)
   end
   defp handler_terminate(%{handler: handler, req: req}, reason) do

@@ -10,13 +10,22 @@ defmodule Loqui.Worker do
     {:ok, :ok}
   end
 
-  def run(pid, {m, f, a}, on_complete \\ nil) do
-    GenServer.cast(pid, {:run, {m, f, a}, on_complete})
+  def request(pid, {m, f, a}, seq, from) do
+    GenServer.cast(pid, {:request, {m, f, a}, seq, from})
   end
 
-  def handle_cast({:run, {m, f, a}, on_complete}, state) do
+  def push(pid, {m, f, a}) do
+    GenServer.cast(pid, {:push, {m, f, a}})
+  end
+
+  def handle_cast({:request, {m, f, a}, seq, from}, state) do
     response = apply(m, f, a)
-    if on_complete, do: on_complete.(response)
+    send(from, {:response, seq, response})
+    {:noreply, state}
+  end
+
+  def handle_cast({:push, {m, f, a}}, state) do
+    apply(m, f, a)
     {:noreply, state}
   end
 end
