@@ -172,18 +172,10 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp handler_request(%{handler: handler, worker_pool: worker_pool}=state, seq, request) do
-    :poolboy.transaction(worker_pool, fn pid ->
-      on_complete = fn (response) ->
-        response = encode(state, response)
-        do_send(state, Messages.response(0, seq, response))
-      end
-      Worker.request(pid, {handler, :loqui_request, [request]}, seq, self)
-    end)
+    :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request]}, seq, self))
   end
   defp handler_push(%{handler: handler, worker_pool: worker_pool}, request) do
-    :poolboy.transaction(worker_pool, fn pid ->
-      Worker.push(pid, {handler, :loqui_push, [request]})
-    end)
+    :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request]}))
   end
   defp handler_terminate(%{handler: handler, req: req}, reason) do
     handler.loqui_terminate(reason, req)
