@@ -1,4 +1,4 @@
-defmodule Loqui.Messages do
+defmodule Loqui.Frames do
   use Loqui.{Opcodes, Types}
 
   def hello_ack(flags, ping_interval, settings_payload) do

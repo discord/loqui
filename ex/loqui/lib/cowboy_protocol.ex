@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   use Loqui.Opcodes
-  alias Loqui.{Protocol, Messages, Worker}
+  alias Loqui.{Protocol, Frames, Worker}
   require Logger
 
   @default_ping_interval 30_000
@@ -65,8 +65,8 @@ defmodule Loqui.CowboyProtocol do
     receive do
       {:response, seq, response} ->
         response = encode(state, response)
-        message = Messages.response(0, seq, response)
-        flush_responses(state, [message])
+        frame = Frames.response(0, seq, response)
+        flush_responses(state, [frame])
         socket_data(state, so_far)
       {:tcp, ^socket_pid, data} ->
         socket_data(state, <<so_far :: binary, data :: binary>>)
@@ -88,8 +88,8 @@ defmodule Loqui.CowboyProtocol do
     receive do
       {:response, seq, response} ->
         response = encode(state, response)
-        message = Messages.response(0, seq, response)
-        flush_responses(state, [message|responses])
+        frame = Frames.response(0, seq, response)
+        flush_responses(state, [frame | responses])
     after
       0 -> do_send(state, responses)
     end
@@ -121,13 +121,13 @@ defmodule Loqui.CowboyProtocol do
       true ->
         flags = 0
         settings_payload = "#{encoding}|#{compression}"
-        do_send(state, Messages.hello_ack(flags, ping_interval, settings_payload))
+        do_send(state, Frames.hello_ack(flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
     state = refresh_ping_timeout(state)
-    do_send(state, Messages.pong(0, seq))
+    do_send(state, Frames.pong(0, seq))
     {:ok, state}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
@@ -148,7 +148,7 @@ defmodule Loqui.CowboyProtocol do
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
-    do_send(state, Messages.error(0, code, seq, reason))
+    do_send(state, Frames.error(0, code, seq, reason))
   end
 
   def goaway(state, :normal), do: goaway(state, 0, "Normal")
@@ -162,7 +162,7 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
   def goaway(state, code, reason) do
-    do_send(state, Messages.goaway(0, code, reason))
+    do_send(state, Frames.goaway(0, code, reason))
     close(state, reason)
   end
 
