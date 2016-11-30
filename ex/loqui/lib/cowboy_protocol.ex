@@ -87,6 +87,7 @@ defmodule Loqui.CowboyProtocol do
           {:shutdown, reason} -> close(state, reason)
         end
       {:continue, extra} -> handler_loop(state, extra)
+      {:error, reason} -> goaway(state, reason)
     end
   end
 
@@ -144,6 +145,7 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :invalid_compression), do: goaway(state, 5, "InvalidCompression")
   def goaway(state, :ping_timeout), do: goaway(state, 6, "PingTimeout")
   def goaway(state, :internal_server_error), do: goaway(state, 7, "InternalServerError")
+  def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
   def goaway(state, code, reason) do
     do_send(state, Messages.goaway(0, code, reason))
@@ -192,7 +194,6 @@ defmodule Loqui.CowboyProtocol do
   defp choose_compression(supported_compressions, [compression | compressions]) do
     if Enum.member?(supported_compressions, compression), do: compression, else: choose_compression(supported_compressions, compressions)
   end
-
 
   defp refresh_ping_timeout(%{ping_interval: ping_interval, ping_timeout_ref: prev_ref}=state) do
     if prev_ref do

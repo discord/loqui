@@ -2,9 +2,10 @@ defmodule Loqui.Protocol do
   use Loqui.{Opcodes, Types}
 
   def handle_data(<<@opcode_hello :: uint8, flags :: uint8, version :: uint8, psize :: uint32, payload :: binary-size(psize), rest :: binary>>) do
-    settings = parse_settings(payload)
-    [encodings, compressions] = settings
-    {:ok, {:hello, flags, version, encodings, compressions}, rest}
+    case parse_settings(payload)do
+      [encodings, compressions] -> {:ok, {:hello, flags, version, encodings, compressions}, rest}
+      _ -> {:error, :not_enough_options}
+    end
   end
   def handle_data(<<@opcode_ping :: uint8, flags :: uint8, seq :: uint32, rest :: binary>>) do
     {:ok, {:ping, flags, seq}, rest}
