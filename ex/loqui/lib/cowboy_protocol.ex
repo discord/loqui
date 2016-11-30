@@ -18,9 +18,7 @@ defmodule Loqui.CowboyProtocol do
             supported_compressions: nil,
             version: nil,
             encoding: nil,
-            timeout: :infinity,
-            timeout_ref: nil,
-            hibernate: false
+            ping_timeout_ref: nil
 
   def upgrade(req, env, handler, handler_opts) do
     {_, ref} = :lists.keyfind(:listener, 1, env)
@@ -45,18 +43,6 @@ defmodule Loqui.CowboyProtocol do
         %{state | req: req, handler_state: handler_state}
           |> set_opts(opts)
           |> loqui_handshake
-      {:ok, req, handler_state, opts, :hibernate} ->
-        %{state | req: req, handler_state: handler_state, hibernate: true}
-          |> set_opts(opts)
-          |> loqui_handshake
-      {:ok, req, handler_state, opts, timeout} ->
-        %{state | req: req, handler_state: handler_state, timeout: timeout}
-          |> set_opts(opts)
-          |> loqui_handshake
-      {:ok, req, handler_state, opts, timeout, :hibernate} ->
-        %{state | req: req, handler_state: handler_state, timeout: timeout, hibernate: true}
-          |> set_opts(opts)
-          |> loqui_handshake
       {:shutdown, req} ->
         {:ok, req, Keyword.put(env, :result, :closed)}
     end
@@ -70,28 +56,19 @@ defmodule Loqui.CowboyProtocol do
       0 -> :ok
     end
 
-    handler_loop_timeout(state) |> handler_before_loop(<<>>)
+    refresh_ping_timeout(state) |> handler_loop(<<>>)
   end
 
-  def handler_before_loop(%{socket_pid: socket_pid, transport: transport, hibnerate: true}=state, so_far) do
+  def handler_loop(%{socket_pid: socket_pid, transport: transport, ping_timeout_ref: ping_timeout_ref}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
-    {:suspend, __MODULE__, :handler_loop, [%{state | hibernate: false}, so_far]}
-  end
-  def handler_before_loop(%{socket_pid: socket_pid, transport: transport}=state, so_far) do
-    transport.setopts(socket_pid, [active: :once])
-    handler_loop(state, so_far)
-  end
-
-  def handler_loop(%{socket_pid: socket_pid, timeout_ref: timeout_ref}=state, so_far) do
     receive do
       {:tcp, ^socket_pid, data} ->
-        state = handler_loop_timeout(state)
         socket_data(state, <<so_far :: binary, data :: binary>>)
       {:tcp_closed, ^socket_pid} -> close(state, :tcp_closed)
       {:tcp_error, ^socket_pid, reason} -> goaway(state, reason)
-      :timeout ->
-        if Process.read_timer(timeout_ref) == false do
-          goaway(state, :timeout)
+      :ping_timeout ->
+        if Process.read_timer(ping_timeout_ref) == false do
+          goaway(state, :ping_timeout)
         else
           handler_loop(state, so_far)
         end
@@ -108,7 +85,7 @@ defmodule Loqui.CowboyProtocol do
           {:ok, state} -> socket_data(state, extra)
           {:shutdown, reason} -> close(state, reason)
         end
-      {:continue, extra} -> handler_before_loop(state, extra)
+      {:continue, extra} -> handler_loop(state, extra)
     end
   end
 
@@ -134,6 +111,7 @@ defmodule Loqui.CowboyProtocol do
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
+    state = refresh_ping_timeout(state)
     do_send(state, Messages.pong(0, seq))
     {:ok, state}
   end
@@ -160,10 +138,16 @@ defmodule Loqui.CowboyProtocol do
     do_send(state, Messages.error(0, code, seq, reason))
   end
 
+  def goaway(state, :normal), do: goaway(state, 0, "Normal")
+  def goaway(state, :invalid_op), do: goaway(state, 1, "InvalidOp")
   def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
   def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
-  def goaway(state, :no_common_compression), do: goaway(state, 4, "NoCommonCompression")
-  def goaway(state, :timeout), do: goaway(state, 5, "Timeout")
+  def goaway(state, :invalid_encoding), do: goaway(state, 4, "InvalidEncoding")
+  # TODO: do we have this in go, etc.?
+  #def goaway(state, :no_common_compression), do: goaway(state, 5, "NoCommonCompression")
+  def goaway(state, :invalid_compression), do: goaway(state, 5, "InvalidCompression")
+  def goaway(state, :ping_timeout), do: goaway(state, 6, "PingTimeout")
+  def goaway(state, :internal_server_error), do: goaway(state, 7, "InternalServerError")
 
   def goaway(state, code, reason) do
     do_send(state, Messages.goaway(0, code, reason))
@@ -214,12 +198,11 @@ defmodule Loqui.CowboyProtocol do
   end
 
 
-  defp handler_loop_timeout(%{timeout: :infinity}=state), do: %{state | timeout_ref: nil}
-  defp handler_loop_timeout(%{timeout: timeout, timeout_ref: prev_ref}=state) do
+  defp refresh_ping_timeout(%{ping_interval: ping_interval, ping_timeout_ref: prev_ref}=state) do
     if prev_ref do
       Process.cancel_timer(prev_ref)
     end
-    ref = Process.send_after(self, :timeout, timeout)
-    %{state | timeout_ref: ref}
+    ref = Process.send_after(self, :ping_timeout, ping_interval)
+    %{state | ping_timeout_ref: ref}
   end
 end
