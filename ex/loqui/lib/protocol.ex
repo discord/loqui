@@ -1,4 +1,4 @@
-defmodule Loqui.Parser do
+defmodule Loqui.Protocol do
   use Loqui.{Opcodes, Types}
 
   def handle_data(<<@opcode_hello :: uint8, flags :: uint8, version :: uint8, psize :: uint32, payload :: binary-size(psize), rest :: binary>>) do

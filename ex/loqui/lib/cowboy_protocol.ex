@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   use Loqui.Opcodes
-  alias Loqui.{Parser, Messages}
+  alias Loqui.{Protocol, Messages}
   require Logger
 
   @default_ping_interval 30_000
@@ -102,7 +102,7 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp socket_data(state, data) do
-    case Parser.handle_data(data) do
+    case Protocol.handle_data(data) do
       {:ok, request, extra} ->
         case handle_request(request, state) do
           {:ok, state} -> socket_data(state, extra)
