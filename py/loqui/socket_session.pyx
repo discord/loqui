@@ -377,7 +377,7 @@ cdef class LoquiSocketSession:
         return None, None
 
     cpdef _ping_loop(self):
-        while True:
+        while self._sock:
             ping_result = self.send_ping()
             if self._shutdown_event.wait(self._ping_interval):
                 return
