@@ -18,6 +18,7 @@ defmodule Loqui.CowboyProtocol do
             supported_compressions: nil,
             version: nil,
             encoding: nil,
+            compression: nil,
             ping_timeout_ref: nil
 
   def upgrade(req, env, handler, handler_opts) do
@@ -100,14 +101,11 @@ defmodule Loqui.CowboyProtocol do
       is_nil(encoding) ->
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
-      length(compressions) > 0 && is_nil(compression) ->
-        goaway(state, :no_common_compression)
-        {:shutdown, :no_common_compression}
       true ->
         flags = 0
         settings_payload = "#{encoding}|#{compression}"
         do_send(state, Messages.hello_ack(flags, ping_interval, settings_payload))
-        {:ok, %{state | version: version, encoding: encoding}}
+        {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
@@ -143,8 +141,6 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
   def goaway(state, :no_common_encoding), do: goaway(state, 3, "NoCommonEncoding")
   def goaway(state, :invalid_encoding), do: goaway(state, 4, "InvalidEncoding")
-  # TODO: do we have this in go, etc.?
-  #def goaway(state, :no_common_compression), do: goaway(state, 5, "NoCommonCompression")
   def goaway(state, :invalid_compression), do: goaway(state, 5, "InvalidCompression")
   def goaway(state, :ping_timeout), do: goaway(state, 6, "PingTimeout")
   def goaway(state, :internal_server_error), do: goaway(state, 7, "InternalServerError")
