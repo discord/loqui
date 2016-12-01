@@ -3,6 +3,10 @@ defmodule Loqui.CowboyProtocol do
   alias Loqui.{Protocol, Frames, Worker}
   require Logger
 
+  @type req :: Map.t
+  @type env :: Keyword.t
+  @type state :: %__MODULE__{}
+
   @default_ping_interval 30_000
   @supported_versions [1]
   @empty_flags 0
@@ -40,13 +44,15 @@ defmodule Loqui.CowboyProtocol do
     handler_init(state)
   end
 
-  def handler_init(%{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
+  @spec handler_init(state) :: {:ok, req, env}
+  def handler_init(%__MODULE__{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
     case handler.loqui_init(transport, req, handler_opts) do
       {:ok, req, opts} -> %{state | req: req} |> set_opts(opts) |> loqui_handshake
       {:shutdown, req} -> {:ok, req, Keyword.put(env, :result, :closed)}
     end
   end
 
+  @spec loqui_handshake(state) :: :ok
   def loqui_handshake(%{req: req}=state) do
     :cowboy_req.upgrade_reply(101, [{"Upgrade", "loqui"}], req)
     receive do
@@ -58,6 +64,7 @@ defmodule Loqui.CowboyProtocol do
     refresh_ping_timeout(state) |> handler_loop(<<>>)
   end
 
+  @spec handler_loop(state, binary) :: {:ok, req, env}
   def handler_loop(%{socket_pid: socket_pid, transport: transport, ping_timeout_ref: ping_timeout_ref}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
     receive do
@@ -80,6 +87,7 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
+  @spec flush_responses(state, [binary]) :: state
   defp flush_responses(state, responses) do
     receive do
       {:response, seq, response} -> flush_responses(state, [response_frame(response, seq) | responses])
@@ -88,9 +96,11 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
+  @spec response_frame({atom, binary} | binary, integer) :: binary
   defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
   defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
 
+  @spec socket_data(state, binary) :: {:ok, req, env}
   defp socket_data(state, data) do
     case Protocol.handle_data(data) do
       {:ok, request, extra} ->
@@ -103,6 +113,7 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
+  @spec handle_request(tuple, state) :: {:ok, state} | {:shutdown, atom}
   defp handle_request({:hello, _flags, version, encodings, compressions}, %{ping_interval: ping_interval, supported_encodings: supported_encodings, supported_compressions: supported_compressions}=state) do
     encoding = choose_encoding(supported_encodings, encodings)
     compression = choose_compression(supported_compressions, compressions)
@@ -138,12 +149,14 @@ defmodule Loqui.CowboyProtocol do
     {:ok, state}
   end
 
+  @spec send_error(state, integer, integer, atom) ::  {:ok, req, env}
   defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
     do_send(state, Frames.error(@empty_flags, code, seq, reason))
   end
 
+  @spec goaway(state, atom) :: {:ok, req, env}
   def goaway(state, :normal), do: goaway(state, 0, "Normal")
   def goaway(state, :invalid_op), do: goaway(state, 1, "InvalidOp")
   def goaway(state, :unsupported_version), do: goaway(state, 2, "UnsupportedVersion")
@@ -154,32 +167,41 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :internal_server_error), do: goaway(state, 7, "InternalServerError")
   def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
+  @spec goaway(state, integer, atom) :: {:ok, req, env}
   def goaway(state, code, reason) do
     do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
 
+  @spec do_send(state, binary | [binary]) :: state
   defp do_send(%{transport: transport, socket_pid: socket_pid}=state, msg) do
     transport.send(socket_pid, msg)
     state
   end
 
+  @spec handler_request(state, integer, binary) :: :ok
   defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, seq, request) do
     :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request, encoding]}, seq, self))
   end
+
+  @spec handler_push(state, binary) :: :ok
   defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, request) do
     :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request, encoding]}))
   end
+
+  @spec handler_terminate(state, atom) :: :ok
   defp handler_terminate(%{handler: handler, req: req}, reason) do
     handler.loqui_terminate(reason, req)
   end
 
+  @spec close(state, atom) :: {:ok, req, env}
   defp close(%{transport: transport, socket_pid: socket_pid, env: env, req: req}=state, reason) do
     handler_terminate(state, reason)
     transport.close(socket_pid)
     {:ok, req, Keyword.put(env, :result, :closed)}
   end
 
+  @spec set_opts(state, Map.t) :: state
   defp set_opts(state, opts) do
     %{supported_encodings: supported_encodings, supported_compressions: supported_compressions} = opts
     ping_interval = Map.get(opts, :ping_interval, @default_ping_interval)
@@ -190,19 +212,24 @@ defmodule Loqui.CowboyProtocol do
     }
   end
 
+  @spec encode(state, any) :: binary
   def encode(%{encoding: "erlpack"}, msg), do: :erlang.term_to_binary(msg)
+  @spec decode(state, binary) :: any
   def decode(%{encoding: "erlpack"}, msg), do: :erlang.binary_to_term(msg)
 
+  @spec choose_encoding(list, list) :: nil | String.t
   defp choose_encoding(_supported_encodings, []), do: nil
   defp choose_encoding(supported_encodings, [encoding | encodings]) do
     if Enum.member?(supported_encodings, encoding), do: encoding, else: choose_encoding(supported_encodings, encodings)
   end
 
+  @spec choose_compression(list, list) :: nil | String.t
   defp choose_compression(_supported_compressions, []), do: nil
   defp choose_compression(supported_compressions, [compression | compressions]) do
     if Enum.member?(supported_compressions, compression), do: compression, else: choose_compression(supported_compressions, compressions)
   end
 
+  @spec refresh_ping_timeout(state) :: state
   defp refresh_ping_timeout(%{ping_interval: ping_interval, ping_timeout_ref: prev_ref}=state) do
     if prev_ref do
       Process.cancel_timer(prev_ref)
