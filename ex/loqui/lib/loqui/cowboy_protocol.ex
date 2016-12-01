@@ -34,6 +34,7 @@ defmodule Loqui.CowboyProtocol do
       env: env,
       handler: handler,
       handler_opts: handler_opts,
+      worker_pool: Loqui.pool_name
     }
 
     handler_init(state)
@@ -163,7 +164,7 @@ defmodule Loqui.CowboyProtocol do
     state
   end
 
-  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding}=state, seq, request) do
+  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, seq, request) do
     :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request, encoding]}, seq, self))
   end
   defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, request) do
@@ -180,13 +181,12 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp set_opts(state, opts) do
-    %{supported_encodings: supported_encodings, supported_compressions: supported_compressions, worker_pool: worker_pool} = opts
+    %{supported_encodings: supported_encodings, supported_compressions: supported_compressions} = opts
     ping_interval = Map.get(opts, :ping_interval, @default_ping_interval)
     %{state |
       ping_interval: ping_interval,
       supported_encodings: supported_encodings,
       supported_compressions: supported_compressions,
-      worker_pool: worker_pool
     }
   end
 
