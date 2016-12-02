@@ -9,7 +9,9 @@ defmodule Loqui.Mixfile do
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
       deps: deps,
-      elixirc_paths: ["ex/loqui/lib/"]
+      elixirc_paths: ["ex/loqui/lib/"],
+      description: "An RPC Transport Layer - with minimal bullshit.",
+      package: package
     ]
   end
 
@@ -24,6 +26,17 @@ defmodule Loqui.Mixfile do
     [
       {:cowboy, "~> 1.0.0"},
       {:poolboy, "~> 1.5.1"},
+      {:ex_doc, ">= 0.0.0", only: :dev},
+    ]
+  end
+
+  defp package do
+    [
+      name: :loqui,
+      files: ["mix.exs", "ex/loqui/lib/*"],
+      maintainers: [],
+      licenses: [],
+      links: [],
     ]
   end
 end
