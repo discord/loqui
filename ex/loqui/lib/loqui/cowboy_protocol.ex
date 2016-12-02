@@ -70,7 +70,7 @@ defmodule Loqui.CowboyProtocol do
     transport.setopts(socket_pid, [active: :once])
     receive do
       {:response, seq, response} ->
-        handle_response(state, seq, response) |> socket_data(so_far)
+        handle_response(state, seq, response, []) |> socket_data(so_far)
       {:tcp, ^socket_pid, data} ->
         socket_data(state, <<so_far :: binary, data :: binary>>)
       {:tcp_closed, ^socket_pid} -> close(state, :tcp_closed)
@@ -89,19 +89,20 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  @spec handle_response(state, integer, any) :: state
-  defp handle_response(%{monitor_refs: monitor_refs}=state, seq, response) do
+  @spec handle_response(state, integer, any, []) :: state
+  defp handle_response(%{monitor_refs: monitor_refs}=state, seq, response, responses) do
     %{state | monitor_refs: Map.delete(monitor_refs, seq)}
-      |> flush_responses([response_frame(response, seq)])
+      |> flush_responses([response_frame(response, seq) | responses])
   end
 
   @spec flush_responses(state, [binary]) :: state
   defp flush_responses(state, responses) do
     receive do
       {:response, seq, response} ->
-        handle_response(state, seq, response)
+        handle_response(state, seq, response, responses)
     after
-      0 -> do_send(state, responses)
+      0 ->
+        do_send(state, responses)
     end
   end
 
