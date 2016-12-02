@@ -81,8 +81,8 @@ defmodule Loqui.CowboyProtocol do
         else
           handler_loop(state, so_far)
         end
-      #{:DOWN, ref, :process, _pid, reason} ->
-      #  handle_down(state, ref, reason) |> handler_loop(so_far)
+      {:DOWN, ref, :process, _pid, reason} ->
+        handle_down(state, ref, reason) |> handler_loop(so_far)
       other ->
         Logger.info "[loqui] unknown message. message=#{inspect other}"
         handler_loop(state, so_far)
@@ -161,8 +161,7 @@ defmodule Loqui.CowboyProtocol do
     case Enum.find(monitor_refs, &match?({_, ^ref}, &1)) do
       {seq, ^ref} ->
         send_error(state, seq, :internal_server_error, reason)
-        monitor_refs = Map.delete(monitor_refs, seq)
-        %{state | monitor_refs: monitor_refs}
+        %{state | monitor_refs: Map.delete(monitor_refs, seq)}
       nil -> state
     end
   end
