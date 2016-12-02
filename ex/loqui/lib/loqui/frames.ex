@@ -14,7 +14,7 @@ defmodule Loqui.Frames do
   end
 
   def error(flags, code, seq, reason) do
-    <<@opcode_error, flags, code :: uint8, seq :: uint32, byte_size(reason) :: uint32, reason :: binary>>
+    <<@opcode_error, flags, seq :: uint32, code :: uint16, byte_size(reason) :: uint32, reason :: binary>>
   end
 
   def goaway(flags, code, reason) do

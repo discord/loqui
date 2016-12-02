@@ -25,6 +25,7 @@ defmodule Loqui.CowboyProtocol do
             version: nil,
             encoding: nil,
             compression: nil,
+            monitor_refs: %{},
             ping_timeout_ref: nil
 
   def upgrade(req, env, handler, handler_opts) do
@@ -38,7 +39,7 @@ defmodule Loqui.CowboyProtocol do
       env: env,
       handler: handler,
       handler_opts: handler_opts,
-      worker_pool: Loqui.pool_name
+      worker_pool: Loqui.pool_name,
     }
 
     handler_init(state)
@@ -69,8 +70,7 @@ defmodule Loqui.CowboyProtocol do
     transport.setopts(socket_pid, [active: :once])
     receive do
       {:response, seq, response} ->
-        flush_responses(state, [response_frame(response, seq)])
-        socket_data(state, so_far)
+        handle_response(state, seq, response) |> socket_data(so_far)
       {:tcp, ^socket_pid, data} ->
         socket_data(state, <<so_far :: binary, data :: binary>>)
       {:tcp_closed, ^socket_pid} -> close(state, :tcp_closed)
@@ -81,16 +81,25 @@ defmodule Loqui.CowboyProtocol do
         else
           handler_loop(state, so_far)
         end
+      #{:DOWN, ref, :process, _pid, reason} ->
+      #  handle_down(state, ref, reason) |> handler_loop(so_far)
       other ->
         Logger.info "[loqui] unknown message. message=#{inspect other}"
         handler_loop(state, so_far)
     end
   end
 
+  @spec handle_response(state, integer, any) :: state
+  defp handle_response(%{monitor_refs: monitor_refs}=state, seq, response) do
+    %{state | monitor_refs: Map.delete(monitor_refs, seq)}
+      |> flush_responses([response_frame(response, seq)])
+  end
+
   @spec flush_responses(state, [binary]) :: state
   defp flush_responses(state, responses) do
     receive do
-      {:response, seq, response} -> flush_responses(state, [response_frame(response, seq) | responses])
+      {:response, seq, response} ->
+        handle_response(state, seq, response)
     after
       0 -> do_send(state, responses)
     end
@@ -137,20 +146,29 @@ defmodule Loqui.CowboyProtocol do
     {:ok, state}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
-    handler_request(state, seq, request)
-    {:ok, state}
+    {:ok, handler_request(state, seq, request)}
   end
   defp handle_request({:push, _flags, request}, state) do
-    handler_push(state, request)
-    {:ok, state}
+    {:ok, handler_push(state, request)}
   end
   defp handle_request(request, state) do
     Logger.info "unknown request. request=#{inspect request}"
     {:ok, state}
   end
 
+  defp handle_down(state, ref, {reason, trace}), do: handle_down(state, ref, reason)
+  defp handle_down(%{monitor_refs: monitor_refs}=state, ref, reason) do
+    case Enum.find(monitor_refs, &match?({_, ^ref}, &1)) do
+      {seq, ^ref} ->
+        send_error(state, seq, :internal_server_error, reason)
+        monitor_refs = Map.delete(monitor_refs, seq)
+        %{state | monitor_refs: monitor_refs}
+      nil -> state
+    end
+  end
+
   @spec send_error(state, integer, integer, atom) ::  {:ok, req, env}
-  defp send_error(state, seq, :handler_error, reason), do: send_error(state, seq, 1, reason)
+  defp send_error(state, seq, :internal_server_error, reason), do: send_error(state, seq, 7, reason)
   defp send_error(state, seq, code, reason) do
     reason = encode(state, reason)
     do_send(state, Frames.error(@empty_flags, code, seq, reason))
@@ -180,8 +198,14 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handler_request(state, integer, binary) :: :ok
-  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, seq, request) do
-    :poolboy.transaction(worker_pool, &Worker.request(&1, {handler, :loqui_request, [request, encoding]}, seq, self))
+  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
+    ref = :poolboy.transaction(worker_pool, fn pid ->
+      ref = Process.monitor(pid)
+      Worker.request(pid, {handler, :loqui_request, [request, encoding]}, seq, self)
+      ref
+    end)
+    monitor_refs = Map.put(monitor_refs, seq, ref)
+    %{state | monitor_refs: monitor_refs}
   end
 
   @spec handler_push(state, binary) :: :ok
