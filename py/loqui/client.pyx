@@ -100,15 +100,24 @@ cdef class LoquiHTTPUpgradeClient(LoquiClient):
         ])
 
         sock.sendall(upgrade_payload)
-        expected_handshake_response = '\r\n'.join([
-            b'HTTP/1.1 101 Switching Protocols',
-            b'Upgrade: loqui',
-            b'Connection: Upgrade',
-            b'',
-            b''
-        ])
+        expected_handshake_responses = [
+            '\r\n'.join([
+                b'HTTP/1.1 101 Switching Protocols',
+                b'Upgrade: loqui',
+                b'Connection: Upgrade',
+                b'',
+                b''
+            ]).lower(),
+            '\r\n'.join([
+                b'HTTP/1.1 101 Switching Protocols',
+                b'Connection: Upgrade',
+                b'Upgrade: loqui',
+                b'',
+                b''
+            ]).lower(),
+        ]
 
-        bytes_remaining = len(expected_handshake_response)
+        bytes_remaining = len(expected_handshake_responses[0])
         handshake_response = b''
         while bytes_remaining:
             buf = sock.recv(bytes_remaining)
@@ -118,5 +127,5 @@ cdef class LoquiHTTPUpgradeClient(LoquiClient):
             handshake_response += buf
             bytes_remaining -= len(buf)
 
-        if handshake_response != expected_handshake_response:
+        if handshake_response.lower() not in expected_handshake_responses:
             raise ConnectionError('Invalid handshake response: %s' % handshake_response)
