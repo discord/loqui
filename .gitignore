@@ -5,3 +5,9 @@
 .cache
 build
 __pycache__
+
+# ex
+/_build
+/deps
+erl_crash.dump
+*.ez
