@@ -158,7 +158,7 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handle_down(state, reference, {atom, any} | atom) :: state
-  defp handle_down(state, ref, {reason, trace}), do: handle_down(state, ref, reason)
+  defp handle_down(state, ref, {reason, _trace}), do: handle_down(state, ref, reason)
   defp handle_down(%{monitor_refs: monitor_refs}=state, ref, reason) do
     case Enum.find(monitor_refs, &match?({_, ^ref}, &1)) do
       {seq, ^ref} ->
