@@ -210,13 +210,15 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handler_push(state, binary) :: :ok
-  defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}, request) do
+  defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}=state, request) do
     :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request, encoding]}))
+    state
   end
 
   @spec handler_terminate(state, atom) :: :ok
-  defp handler_terminate(%{handler: handler, req: req}, reason) do
+  defp handler_terminate(%{handler: handler, req: req}=state, reason) do
     handler.loqui_terminate(reason, req)
+    state
   end
 
   @spec close(state, atom) :: {:ok, req, env}
