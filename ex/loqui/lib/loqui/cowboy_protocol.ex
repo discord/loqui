@@ -72,13 +72,14 @@ defmodule Loqui.CowboyProtocol do
   def handler_loop(%{socket_pid: socket_pid, transport: transport}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
     receive do
-      :ping ->
+      :send_ping ->
         ping(state) |> handler_loop(so_far)
       {:response, seq, response} ->
-        handle_response(state, seq, response, []) |> socket_data(so_far)
+        handle_response(state, seq, response, []) |> handle_socket_data(so_far)
       {:tcp, ^socket_pid, data} ->
-        socket_data(state, <<so_far :: binary, data :: binary>>)
+        handle_socket_data(state, <<so_far :: binary, data :: binary>>)
       {:tcp_closed, ^socket_pid} ->
+        Logger.info "[loqui] tcp_closed. socket_pid=#{inspect socket_pid}"
         close(state, :tcp_closed)
       {:tcp_error, ^socket_pid, reason} ->
         goaway(state, reason)
@@ -95,7 +96,7 @@ defmodule Loqui.CowboyProtocol do
   defp ping(%{ping_interval: ping_interval}=state) do
     {seq, state} = next_seq(state)
     do_send(state, Frames.ping(0, seq))
-    Process.send_after(self, :ping, ping_interval)
+    Process.send_after(self, :send_ping, ping_interval)
     %{state | pong_received: false}
   end
 
@@ -125,12 +126,12 @@ defmodule Loqui.CowboyProtocol do
   defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
   defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
 
-  @spec socket_data(state, binary) :: {:ok, req, env}
-  defp socket_data(state, data) do
+  @spec handle_socket_data(state, binary) :: {:ok, req, env}
+  defp handle_socket_data(state, data) do
     case Protocol.handle_data(data) do
       {:ok, request, extra} ->
         case handle_request(request, state) do
-          {:ok, state} -> socket_data(state, extra)
+          {:ok, state} -> handle_socket_data(state, extra)
           {:shutdown, reason} -> close(state, reason)
         end
       {:continue, extra} -> handler_loop(state, extra)
