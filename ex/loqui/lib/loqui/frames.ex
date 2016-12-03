@@ -5,6 +5,10 @@ defmodule Loqui.Frames do
     <<@opcode_hello_ack, flags, ping_interval :: uint32, byte_size(settings_payload) :: uint32, settings_payload :: binary>>
   end
 
+  def ping(flags, seq) do
+    <<@opcode_ping, flags, seq :: uint32>>
+  end
+
   def pong(flags, seq) do
     <<@opcode_pong, flags, seq :: uint32>>
   end
