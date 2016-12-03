@@ -162,7 +162,7 @@ defmodule Loqui.CowboyProtocol do
     do_send(state, Frames.pong(@empty_flags, seq))
     {:ok, state}
   end
-  defp handle_request({:pong, _flags, seq}, state) do
+  defp handle_request({:pong, _flags, _seq}, state) do
     {:ok, %{state | pong_received: true}}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
