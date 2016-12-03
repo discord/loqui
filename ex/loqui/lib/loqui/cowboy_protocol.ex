@@ -43,7 +43,8 @@ defmodule Loqui.CowboyProtocol do
       worker_pool: Loqui.pool_name,
     }
 
-    Logger.info "[loqui] upgrade. socket_pid=#{inspect socket_pid}"
+    {host, _} = :cowboy_req.host(req)
+    Logger.info "[loqui] upgrade. host=#{inspect host} socket_pid=#{inspect socket_pid}"
 
     handler_init(state)
   end
