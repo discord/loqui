@@ -206,8 +206,9 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
   @spec goaway(state, integer, atom) :: {:ok, req, env}
-  def goaway(%{socket_pid: socket_pid}=state, code, reason) do
-    Logger.info "[loqui] goaway. socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
+  def goaway(%{socket_pid: socket_pid, req: req}=state, code, reason) do
+    {host, _} = :cowboy_req.host(req)
+    Logger.info "[loqui] goaway. host=#{inspect host} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
     do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
