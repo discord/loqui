@@ -26,7 +26,8 @@ defmodule Loqui.CowboyProtocol do
             encoding: nil,
             compression: nil,
             monitor_refs: %{},
-            ping_timeout_ref: nil
+            pong_received: true,
+            next_seq: 1
 
   def upgrade(req, env, handler, handler_opts) do
     :ranch.remove_connection(env[:listener])
@@ -41,6 +42,9 @@ defmodule Loqui.CowboyProtocol do
       handler_opts: handler_opts,
       worker_pool: Loqui.pool_name,
     }
+
+    {host, _} = :cowboy_req.host(req)
+    Logger.info "[loqui] upgrade. host=#{inspect host} socket_pid=#{inspect socket_pid}"
 
     handler_init(state)
   end
@@ -62,31 +66,44 @@ defmodule Loqui.CowboyProtocol do
       0 -> :ok
     end
 
-    refresh_ping_timeout(state) |> handler_loop(<<>>)
+    ping(state) |> handler_loop(<<>>)
   end
 
   @spec handler_loop(state, binary) :: {:ok, req, env}
-  def handler_loop(%{socket_pid: socket_pid, transport: transport, ping_timeout_ref: ping_timeout_ref}=state, so_far) do
+  def handler_loop(%{socket_pid: socket_pid, transport: transport}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
     receive do
+      :send_ping ->
+        ping(state) |> handler_loop(so_far)
       {:response, seq, response} ->
-        handle_response(state, seq, response, []) |> socket_data(so_far)
+        handle_response(state, seq, response, []) |> handle_socket_data(so_far)
       {:tcp, ^socket_pid, data} ->
-        socket_data(state, <<so_far :: binary, data :: binary>>)
-      {:tcp_closed, ^socket_pid} -> close(state, :tcp_closed)
-      {:tcp_error, ^socket_pid, reason} -> goaway(state, reason)
-      :ping_timeout ->
-        if Process.read_timer(ping_timeout_ref) == false do
-          goaway(state, :ping_timeout)
-        else
-          handler_loop(state, so_far)
-        end
+        handle_socket_data(state, <<so_far :: binary, data :: binary>>)
+      {:tcp_closed, ^socket_pid} ->
+        Logger.info "[loqui] tcp_closed. socket_pid=#{inspect socket_pid}"
+        close(state, :tcp_closed)
+      {:tcp_error, ^socket_pid, reason} ->
+        goaway(state, reason)
       {:DOWN, ref, :process, _pid, reason} ->
         handle_down(state, ref, reason) |> handler_loop(so_far)
       other ->
         Logger.info "[loqui] unknown message. message=#{inspect other}"
         handler_loop(state, so_far)
     end
+  end
+
+  @spec ping(state) :: state | {:ok, req, env}
+  defp ping(%{pong_recieved: false}=state), do: goaway(state, :ping_timeout)
+  defp ping(%{ping_interval: ping_interval}=state) do
+    {seq, state} = next_seq(state)
+    do_send(state, Frames.ping(0, seq))
+    Process.send_after(self, :send_ping, ping_interval)
+    %{state | pong_received: false}
+  end
+
+  @spec next_seq(state) :: {integer, state}
+  defp next_seq(%{next_seq: next_seq}=state) do
+    {next_seq, %{state | next_seq: next_seq + 1}}
   end
 
   @spec handle_response(state, integer, any, []) :: state
@@ -110,12 +127,12 @@ defmodule Loqui.CowboyProtocol do
   defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
   defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
 
-  @spec socket_data(state, binary) :: {:ok, req, env}
-  defp socket_data(state, data) do
+  @spec handle_socket_data(state, binary) :: {:ok, req, env}
+  defp handle_socket_data(state, data) do
     case Protocol.handle_data(data) do
       {:ok, request, extra} ->
         case handle_request(request, state) do
-          {:ok, state} -> socket_data(state, extra)
+          {:ok, state} -> handle_socket_data(state, extra)
           {:shutdown, reason} -> close(state, reason)
         end
       {:continue, extra} -> handler_loop(state, extra)
@@ -142,9 +159,11 @@ defmodule Loqui.CowboyProtocol do
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
-    state = refresh_ping_timeout(state)
     do_send(state, Frames.pong(@empty_flags, seq))
     {:ok, state}
+  end
+  defp handle_request({:pong, _flags, _seq}, state) do
+    {:ok, %{state | pong_received: true}}
   end
   defp handle_request({:request, _flags, seq, request}, state) do
     {:ok, handler_request(state, seq, request)}
@@ -187,7 +206,9 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :not_enough_options), do: goaway(state, 8, "NotEnoughOptions")
 
   @spec goaway(state, integer, atom) :: {:ok, req, env}
-  def goaway(state, code, reason) do
+  def goaway(%{socket_pid: socket_pid, req: req}=state, code, reason) do
+    {host, _} = :cowboy_req.host(req)
+    Logger.info "[loqui] goaway. host=#{inspect host} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
     do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
@@ -254,14 +275,5 @@ defmodule Loqui.CowboyProtocol do
   defp choose_compression(_supported_compressions, []), do: nil
   defp choose_compression(supported_compressions, [compression | compressions]) do
     if Enum.member?(supported_compressions, compression), do: compression, else: choose_compression(supported_compressions, compressions)
-  end
-
-  @spec refresh_ping_timeout(state) :: state
-  defp refresh_ping_timeout(%{ping_interval: ping_interval, ping_timeout_ref: prev_ref}=state) do
-    if prev_ref do
-      Process.cancel_timer(prev_ref)
-    end
-    ref = Process.send_after(self, :ping_timeout, ping_interval)
-    %{state | ping_timeout_ref: ref}
   end
 end
