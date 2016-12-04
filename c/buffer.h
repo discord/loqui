@@ -52,6 +52,7 @@ static inline int loqui_buffer_ensure_size(loqui_buffer_t *pk, size_t at_least_a
       return -1;
 
     pk->allocated_size = at_least_allocated_size;
+    pk->buf = buf;
   }
 
   return 0;
