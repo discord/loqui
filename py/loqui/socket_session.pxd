@@ -36,6 +36,8 @@ cdef class LoquiSocketSession:
                 bint via_remote_goaway=?)
 
     cdef bint defunct(self)
+    cdef bint await_ready(self) except 1
+    cdef bint is_ready(self)
 
     cdef _resume_sending(self)
     cpdef _close_timeout(self)

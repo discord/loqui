@@ -139,6 +139,13 @@ cdef class LoquiSocketSession:
             if isinstance(request, AsyncResult):
                 request.set_exception(close_exception)
 
+    cdef bint await_ready(self) except 1:
+        if not self._is_ready:
+            self._ready_event.wait()
+
+    cdef bint is_ready(self):
+        return self._is_ready
+
     cdef _encode_data(self, object data):
         if not self._is_ready:
             self._ready_event.wait()

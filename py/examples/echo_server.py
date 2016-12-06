@@ -31,10 +31,10 @@ class Server(LoquiServer):
         if i and i % 50000 == 0:
             session.close()
 
-        return request.data
+        return 'm' * 1024
 
     def handle_push(self, push, session):
-        # print 'psuh'
+        print 'pushed', push.data
         return
 
 

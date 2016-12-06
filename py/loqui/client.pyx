@@ -1,3 +1,4 @@
+import Queue
 import socket
 
 import gevent
@@ -14,16 +15,20 @@ cdef class LoquiClient:
     cdef LoquiSocketSession _session
     cdef object _session_lock
     cdef object _push_handler
+    cdef object _connect_greenlet
+    cdef object _push_queue
     cdef tuple _address
     cdef int _connect_timeout
     cdef Backoff _backoff
 
-    def __init__(self, address, push_handler=None, connect_timeout=5):
+    def __init__(self, address, push_handler=None, connect_timeout=5, max_push_queue_len=5000):
         self._session = None
         self._session_lock = RLock()
         self._address = address
         self._connect_timeout = connect_timeout
         self._push_handler = push_handler
+        self._connect_greenlet = None
+        self._push_queue = Queue.deque(maxlen=max_push_queue_len)
         self._backoff = Backoff(min_delay=0.25, max_delay=2)
 
     cpdef set_push_handler(self, object push_handler):
@@ -37,6 +42,24 @@ cdef class LoquiClient:
             if session is self._session:
                 self._backoff.fail()
                 self._session = None
+
+    cdef inline is_connected(self):
+        return self._session is not None and not self._session.defunct() and self._session.is_ready()
+
+    cdef inline _connect_async(self):
+        if not self.is_connected():
+            if self._connect_greenlet is None:
+                self._connect_greenlet = gevent.spawn(self._connect_in_greenlet)
+
+            return False
+
+        return True
+
+    def _connect_in_greenlet(self):
+        try:
+            self.connect()
+        finally:
+            self._connect_greenlet = None
 
     cdef connect(self):
         if self._session is not None:
@@ -63,6 +86,11 @@ cdef class LoquiClient:
                 self._session = LoquiSocketSession(sock, ENCODERS, on_push=self._push_handler)
                 self._backoff.succeed()
                 logging.info('[Loqui] Connected to %s:%s', self._address[0], self._address[1])
+                self._session.await_ready()
+
+                if self.is_connected():
+                    while self._push_queue:
+                        self._session.send_push(self._push_queue.popleft())
 
             except socket.error:
                 logging.exception('[Loqui] Connection to %s:%s failed.', self._address[0], self._address[1])
@@ -81,8 +109,11 @@ cdef class LoquiClient:
             raise
 
     cpdef send_push(self, push_data):
-        self.connect()
-        self._session.send_push(push_data)
+        if not self._connect_async():
+            self._push_queue.append(push_data)
+
+        else:
+            self._session.send_push(push_data)
 
     def handle_new_socket(self, socket):
         pass

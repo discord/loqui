@@ -23,11 +23,21 @@ class LoquiServer:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(False)
         session = LoquiSocketSession(sock, ENCODERS, False, self.handle_request, self.handle_push)
-        session.join()
-        print 'connection from', addr, 'done'
+
+        self.handle_new_session(session)
+        try:
+            session.join()
+        finally:
+            self.handle_session_gone(session)
 
     def handle_request(self, request, session):
         pass
 
     def handle_push(self, push, session):
+        pass
+
+    def handle_new_session(self, session):
+        pass
+
+    def handle_session_gone(self, session):
         pass
