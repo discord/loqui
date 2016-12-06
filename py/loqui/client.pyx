@@ -2,6 +2,7 @@ import Queue
 import socket
 
 import gevent
+import time
 from gevent.lock import RLock
 
 from exceptions import ConnectionError
@@ -43,17 +44,22 @@ cdef class LoquiClient:
                 self._backoff.fail()
                 self._session = None
 
-    cdef inline is_connected(self):
-        return self._session is not None and not self._session.defunct() and self._session.is_ready()
-
     cdef inline _connect_async(self):
-        if not self.is_connected():
-            if self._connect_greenlet is None:
-                self._connect_greenlet = gevent.spawn(self._connect_in_greenlet)
+        # If we are connected and ready, return true so that we send to the session right away.
+        if self._session is not None and not self._session.defunct() and self._session.is_ready():
+            return True
 
+        # Otherwise, if the session is established, but not yet ready, return false so that we append
+        # to the queue, which will be consumed when we're ready.
+        if self._session is not None and not self._session.defunct() and not self._session.is_ready():
             return False
 
-        return True
+        # Otherwise, we need to connect. Spawn a greenlet to do the connection.
+        if self._connect_greenlet is None:
+            self._connect_greenlet = gevent.spawn(self._connect_in_greenlet)
+
+        # Return false to signify we should append to the queue.
+        return False
 
     def _connect_in_greenlet(self):
         try:
@@ -62,6 +68,8 @@ cdef class LoquiClient:
             self._connect_greenlet = None
 
     cdef connect(self):
+        cdef LoquiSocketSession session
+
         if self._session is not None:
             if self._session.defunct():
                 self._clear_current_session()
@@ -75,25 +83,33 @@ cdef class LoquiClient:
             if self._backoff.fails():
                 gevent.sleep(self._backoff.current())
 
+            start = time.time()
+
             try:
-                logging.info('[Loqui] Connecting to %s:%s', self._address[0], self._address[1])
+                logging.info('[loqui %s:%s] connecting', self._address[0], self._address[1])
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 sock.settimeout(self._connect_timeout)
                 sock.connect(self._address)
                 self.handle_new_socket(sock)
                 sock.setblocking(False)
-                self._session = LoquiSocketSession(sock, ENCODERS, on_push=self._push_handler)
-                self._backoff.succeed()
-                logging.info('[Loqui] Connected to %s:%s', self._address[0], self._address[1])
-                self._session.await_ready()
+                session = LoquiSocketSession(sock, ENCODERS, on_push=self._push_handler)
+                elapsed = (time.time() - start) * 1000
+                logging.info('[loqui %s:%s] connected in %.2f ms.', self._address[0], self._address[1], elapsed)
+                session.await_ready()
 
-                if self.is_connected():
+                if not session.defunct() and self._push_queue:
+                    logging.info('[loqui %s:%s] flushing %i push events.', self._address[0], self._address[1],
+                                 len(self._push_queue))
+
                     while self._push_queue:
-                        self._session.send_push(self._push_queue.popleft())
+                        session.send_push(self._push_queue.popleft())
 
+                self._backoff.succeed()
+                self._session = session
             except socket.error:
-                logging.exception('[Loqui] Connection to %s:%s failed.', self._address[0], self._address[1])
+                logging.exception('[loqui %s:%s] connection failed after %.2f ms.',
+                                  self._address[0], self._address[1], (time.time() - start) * 1000)
                 self._backoff.fail()
                 raise ConnectionError('No connection available')
 
