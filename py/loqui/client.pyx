@@ -19,7 +19,7 @@ cdef class LoquiClient:
     cdef object _connect_greenlet
     cdef object _push_queue
     cdef tuple _address
-    cdef dict _encoders
+    cdef object _encoders
     cdef int _connect_timeout
     cdef Backoff _backoff
 
