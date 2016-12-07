@@ -19,11 +19,13 @@ cdef class LoquiClient:
     cdef object _connect_greenlet
     cdef object _push_queue
     cdef tuple _address
+    cdef dict _encoders
     cdef int _connect_timeout
     cdef Backoff _backoff
 
-    def __init__(self, address, push_handler=None, connect_timeout=5, max_push_queue_len=5000):
+    def __init__(self, address, push_handler=None, connect_timeout=5, max_push_queue_len=5000, encoders=ENCODERS):
         self._session = None
+        self._encoders = encoders
         self._session_lock = RLock()
         self._address = address
         self._connect_timeout = connect_timeout
@@ -93,7 +95,7 @@ cdef class LoquiClient:
                 sock.connect(self._address)
                 self.handle_new_socket(sock)
                 sock.setblocking(False)
-                session = LoquiSocketSession(sock, ENCODERS, on_push=self._push_handler)
+                session = LoquiSocketSession(sock, encoders=self._encoders, on_push=self._push_handler)
                 elapsed = (time.time() - start) * 1000
                 logging.info('[loqui %s:%s] connected in %.2f ms.', self._address[0], self._address[1], elapsed)
                 session.await_ready()

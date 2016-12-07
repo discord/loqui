@@ -6,7 +6,8 @@ from loqui.socket_session import LoquiSocketSession
 
 
 class LoquiServer:
-    def __init__(self, server_address):
+    def __init__(self, server_address, encoders=ENCODERS):
+        self._encoders = encoders
         self.server = StreamServer(server_address, self._handle_connection)
 
     def serve_forever(self):
@@ -22,7 +23,7 @@ class LoquiServer:
         print 'handling connection from', sock
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(False)
-        session = LoquiSocketSession(sock, ENCODERS, False, self.handle_request, self.handle_push)
+        session = LoquiSocketSession(sock, self._encoders, False, self.handle_request, self.handle_push)
 
         self.handle_new_session(session)
         try:
