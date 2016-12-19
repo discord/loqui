@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   use Loqui.Opcodes
-  alias Loqui.{Protocol, Frames, Worker}
+  alias Loqui.{Protocol, Frames}
   require Logger
 
   @type req :: Map.t
@@ -21,7 +21,6 @@ defmodule Loqui.CowboyProtocol do
             ping_interval: nil,
             supported_encodings: nil,
             supported_compressions: nil,
-            worker_pool: nil,
             version: nil,
             encoding: nil,
             compression: nil,
@@ -40,7 +39,6 @@ defmodule Loqui.CowboyProtocol do
       env: env,
       handler: handler,
       handler_opts: handler_opts,
-      worker_pool: Loqui.pool_name,
     }
 
     {host, _} = :cowboy_req.host(req)
@@ -107,9 +105,8 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handle_response(state, integer, any, []) :: state
-  defp handle_response(%{monitor_refs: monitor_refs}=state, seq, response, responses) do
-    %{state | monitor_refs: Map.delete(monitor_refs, seq)}
-      |> flush_responses([response_frame(response, seq) | responses])
+  defp handle_response(state, seq, response, responses) do
+    flush_responses(state, [response_frame(response, seq) | responses])
   end
 
   @spec flush_responses(state, [binary]) :: state
@@ -178,12 +175,15 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handle_down(state, reference, {atom, any} | atom) :: state
   defp handle_down(state, ref, {reason, _trace}), do: handle_down(state, ref, reason)
+  defp handle_down(%{monitor_refs: monitor_refs}=state, ref, :normal) do
+    %{state | monitor_refs: Map.delete(monitor_refs, ref)}
+  end
   defp handle_down(%{monitor_refs: monitor_refs}=state, ref, reason) do
-    case Enum.find(monitor_refs, &match?({_, ^ref}, &1)) do
-      {seq, ^ref} ->
-        send_error(state, seq, :internal_server_error, reason)
-        %{state | monitor_refs: Map.delete(monitor_refs, seq)}
-      nil -> state
+    case Map.pop(monitor_refs, ref) do
+      {nil, monitor_refs} -> %{state | monitor_refs: monitor_refs}
+      {seq, monitor_refs} ->
+        state = send_error(state, seq, :internal_server_error, reason)
+        %{state | monitor_refs: monitor_refs}
     end
   end
 
@@ -220,19 +220,18 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handler_request(state, integer, binary) :: :ok
-  defp handler_request(%{handler: handler, worker_pool: worker_pool, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
-    ref = :poolboy.transaction(worker_pool, fn pid ->
-      ref = Process.monitor(pid)
-      Worker.request(pid, {handler, :loqui_request, [request, encoding]}, seq, self)
-      ref
+  defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
+    from = self
+    {_, ref} = spawn_monitor(fn ->
+      response = handler.loqui_request(request, encoding)
+      send(from, {:response, seq, response})
     end)
-    monitor_refs = Map.put(monitor_refs, seq, ref)
-    %{state | monitor_refs: monitor_refs}
+    %{state | monitor_refs: Map.put(monitor_refs, ref, seq)}
   end
 
   @spec handler_push(state, binary) :: :ok
-  defp handler_push(%{handler: handler, worker_pool: worker_pool, encoding: encoding}=state, request) do
-    :poolboy.transaction(worker_pool, &Worker.push(&1, {handler, :loqui_request, [request, encoding]}))
+  defp handler_push(%{handler: handler, encoding: encoding}=state, request) do
+    spawn(handler, :loqui_request, [request, encoding])
     state
   end
 

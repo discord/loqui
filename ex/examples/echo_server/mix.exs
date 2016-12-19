@@ -14,7 +14,7 @@ defmodule EchoServer.Mixfile do
 
   def application do
     [
-      applications: [:logger, :loqui, :cowboy],
+      applications: [:logger, :cowboy],
       mod: {EchoServer, []}
     ]
   end
