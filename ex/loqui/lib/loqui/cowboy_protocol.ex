@@ -175,13 +175,14 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handle_down(state, reference, {atom, any} | atom) :: state
   defp handle_down(state, ref, {reason, _trace}), do: handle_down(state, ref, reason)
+  defp handle_down(%{monitor_refs: monitor_refs}=state, ref, :normal) do
+    %{state | monitor_refs: Map.delete(monitor_refs, ref)}
+  end
   defp handle_down(%{monitor_refs: monitor_refs}=state, ref, reason) do
-    case reason do
-      :normal -> %{state | monitor_refs: Map.delete(monitor_refs, ref)}
-      :noproc -> %{state | monitor_refs: Map.delete(monitor_refs, ref)}
-      _ ->
-        {seq, monitor_refs} = Map.pop(monitor_refs, ref)
-        state = if seq, do: send_error(state, seq, :internal_server_error, reason), else: state
+    case Map.pop(monitor_refs, ref) do
+      {nil, monitor_refs} -> %{state | monitor_refs: monitor_refs}
+      {seq, monitor_refs} ->
+        state = send_error(state, seq, :internal_server_error, reason)
         %{state | monitor_refs: monitor_refs}
     end
   end
@@ -220,8 +221,7 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handler_request(state, integer, binary) :: :ok
   defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
-    worker_pid = spawn(Worker, :request, [{handler, :loqui_request, [request, encoding]}, seq, self])
-    ref = Process.monitor(worker_pid)
+    {_, ref} = spawn_monitor(Worker, :request, [{handler, :loqui_request, [request, encoding]}, seq, self])
     %{state | monitor_refs: Map.put(monitor_refs, ref, seq)}
   end
 
