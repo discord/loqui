@@ -1,6 +1,6 @@
 defmodule Loqui.CowboyProtocol do
   use Loqui.Opcodes
-  alias Loqui.{Protocol, Frames, Worker}
+  alias Loqui.{Protocol, Frames}
   require Logger
 
   @type req :: Map.t
@@ -221,13 +221,17 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handler_request(state, integer, binary) :: :ok
   defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
-    {_, ref} = spawn_monitor(Worker, :request, [{handler, :loqui_request, [request, encoding]}, seq, self])
+    from = self
+    {_, ref} = spawn_monitor(fn ->
+      response = handler.loqui_request(request, encoding)
+      send(from, {:response, seq, response})
+    end)
     %{state | monitor_refs: Map.put(monitor_refs, ref, seq)}
   end
 
   @spec handler_push(state, binary) :: :ok
   defp handler_push(%{handler: handler, encoding: encoding}=state, request) do
-    spawn(Worker, :push, [{handler, :loqui_request, [request, encoding]}])
+    spawn(handler, :loqui_request, [request, encoding])
     state
   end
 
