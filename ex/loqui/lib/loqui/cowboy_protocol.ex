@@ -175,18 +175,15 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handle_down(state, reference, {atom, any} | atom) :: state
   defp handle_down(state, ref, {reason, _trace}), do: handle_down(state, ref, reason)
-  defp handle_down(state, ref, :normal), do: handle_down_ok(state, ref)
-  defp handle_down(state, ref, :noproc), do: handle_down_ok(state, ref)
-  defp handle_down(state, ref, reason), do: handle_down_error(state, ref, reason)
-
-  defp handle_down_ok(%{monitor_refs: monitor_refs}=state, ref) do
-    %{state | monitor_refs: Map.delete(monitor_refs, ref)}
-  end
-
-  defp handle_down_error(%{monitor_refs: monitor_refs}=state, ref, reason) do
-    {seq, monitor_refs} = Map.pop(monitor_refs, ref)
-    state = if seq, do: send_error(state, seq, :internal_server_error, reason), else: state
-    %{state | monitor_refs: monitor_refs}
+  defp handle_down(%{monitor_refs: monitor_refs}=state, ref, reason) do
+    case reason do
+      :normal -> %{state | monitor_refs: Map.delete(monitor_refs, ref)}
+      :noproc -> %{state | monitor_refs: Map.delete(monitor_refs, ref)}
+      _ ->
+        {seq, monitor_refs} = Map.pop(monitor_refs, ref)
+        state = if seq, do: send_error(state, seq, :internal_server_error, reason), else: state
+        %{state | monitor_refs: monitor_refs}
+    end
   end
 
   @spec send_error(state, integer, integer, atom) ::  {:ok, req, env}
