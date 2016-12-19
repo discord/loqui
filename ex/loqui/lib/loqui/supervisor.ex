@@ -8,13 +8,6 @@ defmodule Loqui.Supervisor do
 
   def init(:ok) do
     children = [
-      :poolboy.child_spec(:loqui, [
-        name: {:local, Loqui.pool_name},
-        size: Application.get_env(:loqui, :pool_size, 50),
-        max_overflow: 10,
-        worker_module: Loqui.Worker,
-        strategy: :fifo,
-      ]),
     ]
     supervise(children, strategy: :one_for_one)
   end

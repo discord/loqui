@@ -17,7 +17,7 @@ defmodule Loqui.Mixfile do
 
   def application do
     [
-      applications: [:logger, :cowboy, :poolboy],
+      applications: [:logger, :cowboy],
       mod: {Loqui, []}
     ]
   end
@@ -25,7 +25,6 @@ defmodule Loqui.Mixfile do
   defp deps do
     [
       {:cowboy, "~> 1.0.0"},
-      {:poolboy, "~> 1.5.1"},
       {:ex_doc, ">= 0.0.0", only: :dev},
     ]
   end
