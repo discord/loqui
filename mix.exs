@@ -17,8 +17,7 @@ defmodule Loqui.Mixfile do
 
   def application do
     [
-      applications: [:logger, :cowboy],
-      mod: {Loqui, []}
+      applications: [:logger, :cowboy]
     ]
   end
 
