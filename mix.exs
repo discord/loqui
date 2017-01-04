@@ -4,7 +4,7 @@ defmodule Loqui.Mixfile do
   def project do
     [
       app: :loqui,
-      version: "0.2.9",
+      version: "0.2.10",
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
