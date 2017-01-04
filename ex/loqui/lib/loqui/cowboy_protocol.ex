@@ -41,8 +41,7 @@ defmodule Loqui.CowboyProtocol do
       handler_opts: handler_opts,
     }
 
-    {host, _} = :cowboy_req.host(req)
-    Logger.info "[loqui] upgrade. host=#{inspect host} socket_pid=#{inspect socket_pid}"
+    Logger.info "[loqui] upgrade. address=#{inspect address(req)} socket_pid=#{inspect socket_pid}"
 
     handler_init(state)
   end
@@ -207,8 +206,7 @@ defmodule Loqui.CowboyProtocol do
 
   @spec goaway(state, integer, atom) :: {:ok, req, env}
   def goaway(%{socket_pid: socket_pid, req: req}=state, code, reason) do
-    {host, _} = :cowboy_req.host(req)
-    Logger.info "[loqui] goaway. host=#{inspect host} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
+    Logger.info "[loqui] goaway. address=#{inspect address(req)} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
     do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
@@ -274,5 +272,11 @@ defmodule Loqui.CowboyProtocol do
   defp choose_compression(_supported_compressions, []), do: nil
   defp choose_compression(supported_compressions, [compression | compressions]) do
     if Enum.member?(supported_compressions, compression), do: compression, else: choose_compression(supported_compressions, compressions)
+  end
+
+  @spec address(req) :: String.t
+  defp address(req) do
+    {{address, _}, _} = :cowboy_req.peer(req)
+    :inet_parse.ntoa(address)
   end
 end
