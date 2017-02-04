@@ -4,6 +4,7 @@ import socket
 import gevent
 import time
 from gevent.lock import RLock
+from gevent.event import AsyncResult
 
 from exceptions import ConnectionError
 from socket_session cimport LoquiSocketSession
@@ -63,6 +64,14 @@ cdef class LoquiClient:
         # Return false to signify we should append to the queue.
         return False
 
+    cpdef _connect_and_send_request_async(self, request_data):
+        self.connect()
+        response = self._session.send_request(request_data)
+        return response.get()
+
+    cdef inline _is_socket_connected(self):
+        return self._session is not None and not self._session.defunct()
+
     def _connect_in_greenlet(self):
         try:
             self.connect()
@@ -114,6 +123,14 @@ cdef class LoquiClient:
                                   self._address[0], self._address[1], (time.time() - start) * 1000)
                 self._backoff.fail()
                 raise ConnectionError('No connection available')
+
+    cpdef send_request_async(self, request_data):
+        if not self._is_socket_connected():
+            async_result = AsyncResult()
+            gevent.spawn(self._connect_and_send_request_async, request_data, async_result).rawlink(async_result)
+            return async_result
+
+        return self._session.send_request(request_data)
 
     cpdef send_request(self, request_data, timeout=None, retries=3):
         try:
