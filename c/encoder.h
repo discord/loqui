@@ -13,7 +13,7 @@
 
 static inline int loqui_append_hello(loqui_buffer_t *b, uint8_t flags, uint32_t size, const char* data) {
   #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t)
-  unsigned char buf[size];
+  unsigned char buf[SIZE];
   buf[0] = LOQUI_OP_HELLO;
   buf[1] = flags;
   buf[2] = LOQUI_VERSION;
@@ -29,7 +29,7 @@ static inline int loqui_append_hello(loqui_buffer_t *b, uint8_t flags, uint32_t 
 
 static inline int loqui_append_hello_ack(loqui_buffer_t *b, uint8_t flags, uint32_t ping_interval, uint32_t size, const char* data) {
   #define SIZE sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t)
-  unsigned char buf[size];
+  unsigned char buf[SIZE];
   buf[0] = LOQUI_OP_HELLO_ACK;
   buf[1] = flags;
   _loqui_store32(buf + 2, ping_interval);
