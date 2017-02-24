@@ -8,10 +8,10 @@ defmodule Loqui.Mixfile do
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
-      deps: deps,
+      deps: deps(),
       elixirc_paths: ["ex/loqui/lib/"],
       description: "An RPC Transport Layer - with minimal bullshit.",
-      package: package
+      package: package()
     ]
   end
 

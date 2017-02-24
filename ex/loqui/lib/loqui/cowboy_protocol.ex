@@ -94,7 +94,7 @@ defmodule Loqui.CowboyProtocol do
   defp ping(%{ping_interval: ping_interval}=state) do
     {seq, state} = next_seq(state)
     do_send(state, Frames.ping(0, seq))
-    Process.send_after(self, :send_ping, ping_interval)
+    Process.send_after(self(), :send_ping, ping_interval)
     %{state | pong_received: false}
   end
 
@@ -219,7 +219,7 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handler_request(state, integer, binary) :: :ok
   defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
-    from = self
+    from = self()
     {_, ref} = spawn_monitor(fn ->
       response = handler.loqui_request(request, encoding)
       send(from, {:response, seq, response})
