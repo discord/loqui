@@ -149,7 +149,7 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 		MaxPayloadSize:        d.MaxPayloadSize,
 	})
 
-	if err := conn.Handshake(time.Now().Sub(deadline)); err != nil {
+	if err := conn.Handshake(deadline.Sub(time.Now())); err != nil {
 		return nil, err
 	}
 
