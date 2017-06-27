@@ -92,7 +92,7 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 	if d.HandshakeTimeout != 0 {
 		timeout = d.HandshakeTimeout
 	}
-	deadline = time.Now().Add(d.HandshakeTimeout)
+	deadline = time.Now().Add(timeout)
 
 	netDialer := &net.Dialer{Deadline: deadline}
 	netDial := netDialer.Dial
