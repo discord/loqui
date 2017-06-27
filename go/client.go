@@ -15,12 +15,10 @@ import (
 	"time"
 )
 
-var (
-	defaultHandshakeTimeout = 10 * time.Second
+const defaultHandshakeTimeout = 10 * time.Second
 
-	// ErrBadHandshake is returned when the server response to opening handshake is invalid.
-	ErrBadHandshake = errors.New("loqui: bad handshake")
-)
+// ErrBadHandshake is returned when the server response to opening handshake is invalid.
+var ErrBadHandshake = errors.New("loqui: bad handshake")
 
 func hostPortNoPort(u *url.URL) (hostPort, hostNoPort string) {
 	hostPort = u.Host
