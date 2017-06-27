@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const defaultHandshakeTimeout = 10 * time.Second
+
 // ErrBadHandshake is returned when the server response to opening handshake is invalid.
 var ErrBadHandshake = errors.New("loqui: bad handshake")
 
@@ -51,6 +53,7 @@ type Dialer struct {
 	MaxPayloadSize int
 
 	// HandshakeTimeout specifies the duration for the handshake to complete.
+	// defaults to 10 seconds
 	HandshakeTimeout time.Duration
 
 	// Retries is the number of tries the user of the dialer should attempt.
@@ -82,10 +85,11 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 
 	targetHostPort := hostPort
 
-	var deadline time.Time
+	timeout := defaultHandshakeTimeout
 	if d.HandshakeTimeout != 0 {
-		deadline = time.Now().Add(d.HandshakeTimeout)
+		timeout = d.HandshakeTimeout
 	}
+	deadline := time.Now().Add(timeout)
 
 	netDialer := &net.Dialer{Deadline: deadline}
 	netDial := netDialer.Dial
@@ -149,7 +153,7 @@ func (d *Dialer) Dial(urlString string) (*Conn, error) {
 		MaxPayloadSize:        d.MaxPayloadSize,
 	})
 
-	if err := conn.Handshake(time.Now().Sub(deadline)); err != nil {
+	if err := conn.Handshake(deadline.Sub(time.Now())); err != nil {
 		return nil, err
 	}
 
