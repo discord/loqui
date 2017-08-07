@@ -182,17 +182,14 @@ defmodule Loqui.Client do
   def handle_info({:tcp, _socket, data}, %State{}=state) do
     with {:ok, parsed_packets, leftover_data} <- Parser.parse(state.buffer, data) do
 
-      state = parsed_packets
-        |> Enum.reduce(state, &handle_packet/2)
+      state = handle_packets(parsed_packets, state)
 
       {:noreply, %State{state | buffer: leftover_data}}
     else
 
       {:error, {:need_more_data, data}} ->
-        {:noreply, %State{buffer: state.buffer <> data}}
+        {:noreply, %State{buffer: data }}
     end
-
-    {:noreply, make_active_once(state)}
   end
 
   def handle_info({:tcp_closed, _socket}, _state) do
@@ -208,6 +205,13 @@ defmodule Loqui.Client do
 
 
   # Private
+
+  defp handle_packets([], state),
+    do: state
+  defp handle_packets([packet | rest], state) do
+    state = handle_packet(packet, state)
+    handle_packets(rest, state)
+  end
 
   defp handle_packet({:ping, _flags, seq}, %State{sock: sock}=state) do
     :gen_tcp.send(sock, Frames.pong(0, seq))
@@ -275,7 +279,7 @@ defmodule Loqui.Client do
     else
       {:error, reason} ->
         Logger.error("Upgrade failed #{inspect reason}")
-      {:error, {:upgrade_failed, reason}}
+        {:error, {:upgrade_failed, reason}}
     end
   end
 
