@@ -7,6 +7,8 @@ defmodule Loqui.Client do
       Compressors
     }
 
+    @type timestamp :: pos_integer
+    @type outstanding_ping :: {Loqui.Client.sequence, timestamp}
     @type t :: %__MODULE__{
       port: pos_integer,
       host: char_list,
@@ -20,7 +22,8 @@ defmodule Loqui.Client do
       registered_codecs: %{String.t => Codec.t},
       compressor: Compressor.t,
       codec: Codec.t,
-      waiters: %{Loqui.Client.sequence => pid}
+      waiters: %{Loqui.Client.sequence => pid},
+      outstanding_ping: outstanding_ping
     }
 
     defstruct host: nil,
@@ -37,7 +40,8 @@ defmodule Loqui.Client do
       registered_codecs: %{},
       compressor: Compressors.NoOp,
       codec: Codecs.Erlpack,
-      waiters: %{}
+      waiters: %{},
+      outstanding_ping: nil
   end
 
   alias Loqui.Protocol.{Codec, Codecs, Compressor, Compressors, Frames, Parser}
@@ -45,7 +49,14 @@ defmodule Loqui.Client do
   use Loqui.{Opcodes, Types}
   require Logger
 
-  @type sequence :: pos_integer
+  @default_timeout 5000
+  @buffer_size 4096
+  @max_sequence round(:math.pow(2, 32) - 1)
+  @default_compressors %{Compressors.NoOp.name() => Compressors.NoOp}
+  @default_codecs %{Codecs.Erlpack.name() => Codecs.Erlpack}
+  @go_away_timeout 1000
+
+  @type sequence :: 1..unquote(@max_sequence)
 
   @type tcp_opt :: {:recv_timeout, pos_integer} | {:send_timeout, pos_integer}
   @type tcp_opts :: [tcp_opt]
@@ -58,11 +69,6 @@ defmodule Loqui.Client do
     tcp_opts: tcp_opts
   ]
 
-  @default_timeout 5000
-  @max_sequence round(:math.pow(2, 32) - 1)
-  @default_compressors %{Compressors.NoOp.name() => Compressors.NoOp}
-  @default_codecs %{Codecs.Erlpack.name() => Codecs.Erlpack}
-
 
   def start_link(host, port, loqui_path, options) do
     Connection.start_link(__MODULE__, {host, port, loqui_path, options})
@@ -73,6 +79,8 @@ defmodule Loqui.Client do
       |> Keyword.get(:tcp_opts, [])
       |> Keyword.put(:active, :false)
       |> Keyword.put(:mode, :binary)
+      |> Keyword.put(:send_timeout_close, true)
+      |> Keyword.put_new(:buffer, @buffer_size)
 
     {loqui_opts, _opts} = Keyword.pop(opts, :loqui_opts, [])
 
@@ -101,15 +109,15 @@ defmodule Loqui.Client do
     {:connect, :init, state}
   end
 
-  def close(conn),
-    do: Connection.call(conn, :close)
+  def close(conn, timeout \\ 5000),
+    do: Connection.call(conn, :close, timeout)
 
-  def ping(conn) do
-    Connection.call(conn, :ping)
+  def ping(conn, timeout \\ 5000) do
+    Connection.call(conn, :ping, timeout)
   end
 
-  def request(conn, payload) do
-    Connection.call(conn, {:request, payload})
+  def request(conn, payload, timeout \\ 5000) do
+    Connection.call(conn, {:request, payload}, timeout)
   end
 
   def push(conn, payload) do
@@ -133,19 +141,12 @@ defmodule Loqui.Client do
   def disconnect(info, %State{sock: sock}=state) do
     :ok = :gen_tcp.close(sock)
     case info do
-
       {:close, from} ->
         Connection.reply(from, :ok)
-        {:stop, :normal, nil}
+        {:stop, :normal, %{state | sock: nil}}
 
-      {:error, :closed} ->
-        Logger.error("Connection closed by server")
-        {:connect, info, %{state | sock: nil}}
-
-      {:error, reason} ->
-        reason = :inet.format_error(reason)
-        Logger.error("Connection error: #{inspect reason}")
-        {:connect, info, %{state | sock: nil}}
+      {:error, reason}  ->
+        {:stop, reason, %{state | sock: nil}}
     end
   end
 
@@ -155,6 +156,10 @@ defmodule Loqui.Client do
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
 
     {:noreply, %State{state | waiters: Map.put(state.waiters, next_seq, caller)}}
+  end
+
+  def handle_call(_, _from, %State{sequence: :go_away}=state) do
+    {:reply, {:error, :remote_went_away}, state}
   end
 
   def handle_call(:close, from, %State{sock: sock}=s) do
@@ -172,6 +177,9 @@ defmodule Loqui.Client do
     {:noreply, %State{state | waiters: Map.put(state.waiters, next_seq, caller)}}
   end
 
+  def handle_cast(_, %State{sequence: :go_away}=state),
+    do: {:noreply, state}
+
   def handle_cast({:push, payload}, %State{sock: sock, codec: codec}=state) do
     encoded_payload = codec.encode(payload)
     :gen_tcp.send(sock, Frames.push(0, encoded_payload))
@@ -179,9 +187,9 @@ defmodule Loqui.Client do
     {:noreply, state}
   end
 
-  def handle_info({:tcp, _socket, data}, %State{}=state) do
+  def handle_info({:tcp, socket, data}, %State{sock: socket}=state) do
+    make_active_once(state)
     with {:ok, parsed_packets, leftover_data} <- Parser.parse(state.buffer, data) do
-
       state = handle_packets(parsed_packets, state)
 
       {:noreply, %State{state | buffer: leftover_data}}
@@ -192,17 +200,37 @@ defmodule Loqui.Client do
     end
   end
 
+  def handle_info({:close_go_away, go_away_code, go_away_data}, %State{sequence: :go_away, waiters: waiters}=state) do
+    # tell the waiters that the remote end went away, then close.
+    err = {:error, {:remote_went_away, go_away_code, go_away_data}}
+    Enum.each(waiters, fn {_, waiter} ->
+      Connection.reply(waiter, err)
+    end)
+
+    {:disconnect, err, state}
+  end
+
   def handle_info({:tcp_closed, _socket}, _state) do
     {:stop, :tcp_closed, nil}
   end
 
-  def handle_info(:send_ping, %State{sock: sock}=state) do
-    {next_seq, state} = next_sequence(state)
-    :gen_tcp.send(sock, Frames.ping(0, next_seq))
-
-    {:noreply, %{state | waiters:  Map.put(state.waiters, next_seq, self())}}
+  def handle_info({:tcp_error, _, _}, _state) do
+    {:stop, :tcp_closed, nil}
   end
 
+  def handle_info(:send_ping, %State{sock: sock, outstanding_ping: nil}=state) do
+    {next_seq, state} = next_sequence(state)
+
+    :gen_tcp.send(sock, Frames.ping(0, next_seq))
+    state
+      |> schedule_ping
+      |> Map.put(:outstanding_ping, {next_seq, :erlang.system_time(:milli_seconds)})
+
+    {:noreply, state}
+  end
+  def handle_info(:send_ping, %State{outstanding_ping: {sequence, _ts}}=state) do
+    {:stop, {:error, {:pong_not_received, sequence}}, state}
+  end
 
   # Private
 
@@ -218,18 +246,14 @@ defmodule Loqui.Client do
     state
   end
 
+  defp handle_packet({:pong, _flasgs, seq}, %State{outstanding_ping: {seq, _ts}}=state) do
+    %State{state | outstanding_ping: nil}
+  end
   defp handle_packet({:pong, _flags, seq}, %State{waiters: waiters}=state) do
-    me = self()
     new_waiters =
       case Map.pop(waiters, seq) do
-        {nil, waiters} ->
-          waiters
-
-        {^me, waiters} ->
-          waiters
-
-        {other_pid, waiters} ->
-          Connection.reply(other_pid, :pong)
+        {reply_to, waiters} ->
+          Connection.reply(reply_to, :pong)
           waiters
       end
 
@@ -253,6 +277,11 @@ defmodule Loqui.Client do
     %State{state | waiters: new_waiters}
   end
 
+  defp handle_packet({:go_away, _flags, close_code, payload_data}, %State{}=state) do
+    Process.send_after(self(), {:close_go_away, close_code, payload_data}, @go_away_timeout)
+    %State{state | sequence: :go_away}
+  end
+
   defp handle_packet(packet, state) do
     Logger.error("Received unknown packet, opcode #{inspect elem(packet, 0)} #{inspect packet}")
     state
@@ -264,7 +293,7 @@ defmodule Loqui.Client do
   end
 
   defp make_active_once(%State{sock: sock}=state) do
-    :inet.setopts(sock, [active: :once])
+    :ok = :inet.setopts(sock, [active: :once])
 
     state
   end
@@ -289,7 +318,7 @@ defmodule Loqui.Client do
   defp to_host(host) when is_list(host),
     do: host
 
-  defp next_sequence(%State{sequence: seq}=state) when seq >= @max_sequence do
+  defp next_sequence(%State{sequence: seq}=state) when seq > @max_sequence do
     {1, %State{state | sequence: 2}}
   end
 

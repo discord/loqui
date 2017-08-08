@@ -120,8 +120,15 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec response_frame({atom, binary} | binary, integer) :: binary
-  defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
-  defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
+  defp response_frame({:go_away, code, reason}, _seq) do
+    Frames.goaway(@empty_flags, code, reason)
+  end
+
+  defp response_frame({:compressed, payload}, seq),
+    do: Frames.response(@flag_compressed, seq, payload)
+
+  defp response_frame(payload, seq),
+    do: Frames.response(@empty_flags, seq, payload)
 
   @spec handle_socket_data(state, binary) :: {:ok, req, env}
   defp handle_socket_data(state, data) do

@@ -2,7 +2,7 @@ defmodule ClientTest do
   use ExUnit.Case
 
   defmodule Server do
-    def init(transport, req, opts) do
+    def init(_transport, req, _opts) do
       case :cowboy_req.header("upgrade", req) do
         {"loqui", _req} ->
           {:upgrade, :protocol, Loqui.CowboyProtocol}
@@ -18,7 +18,7 @@ defmodule ClientTest do
     def terminate(_, _, _),
       do: :ok
 
-    def loqui_init(_transport, req, opts) do
+    def loqui_init(_transport, req, _opts) do
       opts = %{
         supported_encodings: ["erlpack"],
         supported_compressions: [" "],
@@ -36,10 +36,17 @@ defmodule ClientTest do
             request
         end
       Process.send(Test, {:request, decoded}, [])
-      request
+
+      case decoded do
+        "go away" ->
+          {:go_away, 32, "Leave me alone!"}
+
+        _ ->
+          request
+      end
     end
 
-    def loqui_push(push, _encoding),
+    def loqui_push(_push, _encoding),
       do: :ok
 
     def loqui_terminate(_reason, _req),
@@ -81,6 +88,10 @@ defmodule ClientTest do
 
   test "it should be able to close", ctx do
     assert :ok = Loqui.Client.close(ctx.client)
+  end
+
+  test "it should respond to go away packets", ctx do
+    assert {:error, {:remote_went_away, 32, "Leave me alone!"}} = Loqui.Client.request(ctx.client, "go away")
   end
 
 end
