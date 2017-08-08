@@ -8,7 +8,7 @@ defmodule Loqui.Client do
     }
 
     @type timestamp :: pos_integer
-    @type outstanding_ping :: {Loqui.Client.sequence, timestamp}
+    @type last_ping :: {Loqui.Client.sequence, timestamp}
     @type t :: %__MODULE__{
       port: pos_integer,
       host: char_list,
@@ -23,7 +23,7 @@ defmodule Loqui.Client do
       compressor: Compressor.t,
       codec: Codec.t,
       waiters: %{Loqui.Client.sequence => pid},
-      outstanding_ping: outstanding_ping
+      last_ping: last_ping
     }
 
     defstruct host: nil,
@@ -41,7 +41,7 @@ defmodule Loqui.Client do
       compressor: Compressors.NoOp,
       codec: Codecs.Erlpack,
       waiters: %{},
-      outstanding_ping: nil
+      last_ping: nil
   end
 
   alias Loqui.Protocol.{Codec, Codecs, Compressor, Compressors, Frames, Parser}
@@ -218,17 +218,17 @@ defmodule Loqui.Client do
     {:stop, :tcp_closed, nil}
   end
 
-  def handle_info(:send_ping, %State{sock: sock, outstanding_ping: nil}=state) do
+  def handle_info(:send_ping, %State{sock: sock, last_ping: nil}=state) do
     {next_seq, state} = next_sequence(state)
 
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
-    state
+    new_state = state
       |> schedule_ping
-      |> Map.put(:outstanding_ping, {next_seq, :erlang.system_time(:milli_seconds)})
+      |> Map.put(:last_ping, {next_seq, :erlang.system_time(:milli_seconds)})
 
-    {:noreply, state}
+    {:noreply, new_state}
   end
-  def handle_info(:send_ping, %State{outstanding_ping: {sequence, _ts}}=state) do
+  def handle_info(:send_ping, %State{last_ping: {sequence, _ts}}=state) do
     {:stop, {:error, {:pong_not_received, sequence}}, state}
   end
 
@@ -246,12 +246,16 @@ defmodule Loqui.Client do
     state
   end
 
-  defp handle_packet({:pong, _flasgs, seq}, %State{outstanding_ping: {seq, _ts}}=state) do
-    %State{state | outstanding_ping: nil}
+  defp handle_packet({:pong, _flags, seq}, %State{last_ping: {seq, _ts}}=state) do
+    %State{state | last_ping: nil}
   end
-  defp handle_packet({:pong, _flags, seq}, %State{waiters: waiters}=state) do
+
+  defp handle_packet({:pong, _flags, seq}, %State{last_ping: nil, waiters: waiters}=state) do
     new_waiters =
       case Map.pop(waiters, seq) do
+        {nil, waiters} ->
+          Logger.error("Got an unknown pong for sequence #{inspect seq}")
+          waiters
         {reply_to, waiters} ->
           Connection.reply(reply_to, :pong)
           waiters
