@@ -51,7 +51,7 @@ defmodule Loqui.Protocol.Parser do
   end
 
   defp do_parse_packet(<<@opcode_error, flags::uint8, sequence::uint32, error_code::uint16, payload_size::uint32, payload_data::binary-size(payload_size), rest::binary>>, accum) do
-    do_parse_packet(rest, [{:go_away, flags, sequence, error_code, payload_data} | accum])
+    do_parse_packet(rest, [{:error, flags, sequence, error_code, payload_data} | accum])
   end
 
   defp do_parse_packet(leftover_data, []) do
