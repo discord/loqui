@@ -176,7 +176,7 @@ defmodule Loqui.CowboyProtocol do
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
       true ->
-        settings_payload = [encoding, "|", compression]
+        settings_payload = "#{encoding}|#{compression}"
         do_send(state, Frames.hello_ack(@empty_flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end

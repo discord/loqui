@@ -27,6 +27,8 @@ defmodule Loqui.Mixfile do
       {:cowboy, "~> 1.0.0"},
       {:ex_doc, ">= 0.0.0", only: :dev},
       {:connection, "~> 1.0"},
+      {:jiffy, "~> 0.14.11", optional: true},
+      {:msgpax, "~> 2.0", optional: true},
     ]
   end
 
