@@ -200,6 +200,14 @@ defmodule Loqui.Client do
     end
   end
 
+  def handle_info({:tcp_closed, _socket}, _state) do
+    {:stop, :tcp_closed, nil}
+  end
+
+  def handle_info({:tcp_error, _, _}, _state) do
+    {:stop, :tcp_closed, nil}
+  end
+
   def handle_info({:close_go_away, go_away_code, go_away_data}, %State{sequence: :go_away, waiters: waiters}=state) do
     # tell the waiters that the remote end went away, then close.
     err = {:error, {:remote_went_away, go_away_code, go_away_data}}
@@ -208,14 +216,6 @@ defmodule Loqui.Client do
     end)
 
     {:disconnect, err, state}
-  end
-
-  def handle_info({:tcp_closed, _socket}, _state) do
-    {:stop, :tcp_closed, nil}
-  end
-
-  def handle_info({:tcp_error, _, _}, _state) do
-    {:stop, :tcp_closed, nil}
   end
 
   def handle_info(:send_ping, %State{sock: sock, last_ping: nil}=state) do
