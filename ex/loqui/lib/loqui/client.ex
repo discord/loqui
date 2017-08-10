@@ -51,11 +51,11 @@ defmodule Loqui.Client do
       %State{state | packet_buffer: [packet | buffer]}
     end
 
-    def push_waiter(%State{waiters: waiters}=state, sequence, waiter) do
+    def add_waiter(%State{waiters: waiters}=state, sequence, waiter) do
       %State{state | waiters: Map.put(waiters, sequence, waiter)}
     end
 
-    def pop_waiter(%State{waiters: waiters}=state, sequence) do
+    def remove_waiter(%State{waiters: waiters}=state, sequence) do
       {waiter, new_waiters} = Map.pop(waiters, sequence)
       {%State{state | waiters: new_waiters}, waiter}
     end
@@ -201,7 +201,7 @@ defmodule Loqui.Client do
     {next_seq, state} = State.next_sequence(state)
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
 
-    {:noreply, State.push_waiter(state, next_seq, caller)}
+    {:noreply, State.add_waiter(state, next_seq, caller)}
   end
 
   def handle_call(_, _from, %State{sequence: :go_away}=state) do
@@ -221,7 +221,7 @@ defmodule Loqui.Client do
 
     state = state
       |> buffer_packet(Frames.request(0, next_seq, encoded_payload))
-      |> State.push_waiter(next_seq, caller)
+      |> State.add_waiter(next_seq, caller)
 
     {:noreply, state}
   end
@@ -320,7 +320,7 @@ defmodule Loqui.Client do
   end
 
   defp handle_packet({:pong, _flags, seq}, %State{last_ping: nil}=state) do
-    {state, waiter} = State.pop_waiter(state, seq)
+    {state, waiter} = State.remove_waiter(state, seq)
 
     case waiter do
       nil ->
@@ -343,7 +343,7 @@ defmodule Loqui.Client do
   end
 
   defp handle_packet({:response, _flags, sequence, payload}, %State{codec: codec}=state) do
-    {state, waiter} = State.pop_waiter(state, sequence)
+    {state, waiter} = State.remove_waiter(state, sequence)
     decoded_data = codec.decode(payload)
     Connection.reply(waiter, decoded_data)
 
