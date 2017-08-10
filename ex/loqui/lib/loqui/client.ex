@@ -1,5 +1,7 @@
 defmodule Loqui.Client do
   defmodule State do
+    @max_sequence round(:math.pow(2, 32) - 1)
+
     alias Loqui.Protocol.{
       Codec,
       Codecs,
@@ -42,6 +44,15 @@ defmodule Loqui.Client do
       codec: Codecs.Erlpack,
       waiters: %{},
       last_ping: nil
+
+    def push_waiter(%State{waiters: waiters}=state, sequence, waiter) do
+      %State{state | waiters: Map.put(waiters, sequence, waiter)}
+    end
+
+    def pop_waiter(%State{waiters: waiters}=state, sequence) do
+      {waiter, new_waiters} = Map.pop(waiters, sequence)
+      {%State{state | waiters: new_waiters}, waiter}
+    end
 
     def next_sequence(%State{sequence: seq}=state) when seq > @max_sequence do
       {1, %State{state | sequence: 2}}
@@ -174,7 +185,7 @@ defmodule Loqui.Client do
     {next_seq, state} = State.next_sequence(state)
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
 
-    {:noreply, %State{state | waiters: Map.put(state.waiters, next_seq, caller)}}
+    {:noreply, State.push_waiter(state, next_seq, caller)}
   end
 
   def handle_call(_, _from, %State{sequence: :go_away}=state) do
@@ -193,7 +204,7 @@ defmodule Loqui.Client do
     encoded_payload = codec.encode(payload)
     :gen_tcp.send(sock, Frames.request(0, next_seq, encoded_payload))
 
-    {:noreply, %State{state | waiters: Map.put(state.waiters, next_seq, caller)}}
+    {:noreply, State.push_waiter(state, next_seq, caller)}
   end
 
   def handle_cast(_, %State{sequence: :go_away}=state),
@@ -269,18 +280,18 @@ defmodule Loqui.Client do
     %State{state | last_ping: nil}
   end
 
-  defp handle_packet({:pong, _flags, seq}, %State{last_ping: nil, waiters: waiters}=state) do
-    new_waiters =
-      case Map.pop(waiters, seq) do
-        {nil, waiters} ->
-          Logger.error("Got an unknown pong for sequence #{inspect seq}")
-          waiters
-        {reply_to, waiters} ->
-          Connection.reply(reply_to, :pong)
-          waiters
-      end
+  defp handle_packet({:pong, _flags, seq}, %State{last_ping: nil}=state) do
+    {state, waiter} = State.pop_waiter(state, seq)
 
-    %State{state | waiters: new_waiters}
+    case waiter do
+      nil ->
+        Logger.error("Got an unknown pong for sequence #{inspect seq}")
+
+      reply_to ->
+        Connection.reply(reply_to, :pong)
+    end
+
+    state
   end
 
   defp handle_packet({:hello_ack, _flags, ping_interval, data}, %State{}=state) do
@@ -292,12 +303,12 @@ defmodule Loqui.Client do
       |> schedule_ping()
   end
 
-  defp handle_packet({:response, _flags, sequence, payload}, %State{waiters: waiters, codec: codec}=state) do
-    {waiter, new_waiters} = Map.pop(waiters, sequence)
+  defp handle_packet({:response, _flags, sequence, payload}, %State{codec: codec}=state) do
+    {state, waiter} = State.pop_waiter(state, sequence)
     decoded_data = codec.decode(payload)
     Connection.reply(waiter, decoded_data)
 
-    %State{state | waiters: new_waiters}
+    state
   end
 
   defp handle_packet({:go_away, _flags, close_code, payload_data}, %State{}=state) do
