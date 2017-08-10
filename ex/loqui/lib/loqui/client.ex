@@ -60,7 +60,7 @@ defmodule Loqui.Client do
       {%State{state | waiters: new_waiters}, waiter}
     end
 
-    def next_sequence(%State{sequence: seq}=state) when seq > @max_sequence do
+    def next_sequence(%State{sequence: seq}=state) when seq >= @max_sequence do
       {1, %State{state | sequence: 2}}
     end
 
