@@ -18,7 +18,8 @@ defmodule Loqui.Client do
       recv_timeout: pos_integer,
       loqui_path: String.t,
       buffer: binary,
-      sequence: Loqui.Client.sequence,
+      packet_buffer: iodata,
+      sequence: :go_away | Loqui.Client.sequence,
       ping_interval: pos_integer,
       registered_compressors: %{String.t => Compressor.t},
       registered_codecs: %{String.t => Codec.t},
@@ -36,6 +37,7 @@ defmodule Loqui.Client do
       recv_timeout: nil,
       loqui_path: nil,
       buffer: <<>>,
+      packet_buffer: [],
       sequence: 1,
       ping_interval: nil,
       registered_compressors: %{},
@@ -44,6 +46,10 @@ defmodule Loqui.Client do
       codec: Codecs.Erlpack,
       waiters: %{},
       last_ping: nil
+
+    def add_packet(%State{packet_buffer: buffer}=state, packet) do
+      %State{state | packet_buffer: [packet | buffer]}
+    end
 
     def push_waiter(%State{waiters: waiters}=state, sequence, waiter) do
       %State{state | waiters: Map.put(waiters, sequence, waiter)}
@@ -142,15 +148,25 @@ defmodule Loqui.Client do
   end
 
   def connect(_info, %{sock: nil, host: host, port: port, tcp_opts: tcp_opts, connect_timeout: connect_timeout}=state) do
+    case :gen_tcp.connect(host, port, tcp_opts, connect_timeout) do
+      {:ok, sock} ->
+        # this is out of the with statement because we need to bind
+        # the socket to the state, and if the with statement doesn't
+        # complete, the state won't have the socket in it.
+        state = %{state | sock: sock}
 
-    with {:ok, sock}  <- :gen_tcp.connect(host, port, tcp_opts, connect_timeout),
-         {:ok, sock}  <- update_socket_opts(sock),
-         {:ok, state} <- do_upgrade(%{state | sock: sock}),
-         state        <- make_active_once(state),
-         {:ok, state} <- do_loqui_connect(state) do
+        with {:ok, _sock}  <- update_socket_opts(sock),
+             {:ok, state} <- do_upgrade(state),
+             state        <- make_active_once(state),
+             {:ok, state} <- do_loqui_connect(state) do
 
-      {:ok, state}
-    else
+          {:ok, state}
+        else
+          {:error, _} = error ->
+            Logger.error("Loqui upgrade failed because of #{inspect error}")
+            {:stop, error, state}
+        end
+
       {:error, _} = error ->
         Logger.error("Couldn't connect to #{host}:#{port} because #{inspect error}")
         {:stop, error, state}
@@ -199,22 +215,26 @@ defmodule Loqui.Client do
     {:disconnect, {:close, from}, s}
   end
 
-  def handle_call({:request, payload}, caller, %State{sock: sock, codec: codec}=state) do
+  def handle_call({:request, payload}, caller, %State{codec: codec}=state) do
     {next_seq, state} = State.next_sequence(state)
     encoded_payload = codec.encode(payload)
-    :gen_tcp.send(sock, Frames.request(0, next_seq, encoded_payload))
 
-    {:noreply, State.push_waiter(state, next_seq, caller)}
+    state = state
+      |> buffer_packet(Frames.request(0, next_seq, encoded_payload))
+      |> State.push_waiter(next_seq, caller)
+
+    {:noreply, state}
   end
 
   def handle_cast(_, %State{sequence: :go_away}=state),
     do: {:noreply, state}
 
-  def handle_cast({:push, payload}, %State{sock: sock, codec: codec}=state) do
+  def handle_cast({:push, payload}, %State{codec: codec}=state) do
     encoded_payload = codec.encode(payload)
-    :gen_tcp.send(sock, Frames.push(0, encoded_payload))
 
-    {:noreply, state}
+    push_frame = Frames.push(0, encoded_payload)
+
+    {:noreply, buffer_packet(state, push_frame)}
   end
 
   def handle_info({:tcp, socket, data}, %State{sock: socket}=state) do
@@ -228,6 +248,16 @@ defmodule Loqui.Client do
       {:error, {:need_more_data, data}} ->
         {:noreply, %State{buffer: data}}
     end
+  end
+
+  def handle_info(:flush_packets, %State{packet_buffer: []}=state) do
+    {:noreply, state}
+  end
+
+  def handle_info(:flush_packets, %State{packet_buffer: packets, sock: socket}=state) do
+    :gen_tcp.send(socket, packets)
+
+    {:noreply, %State{state | packet_buffer: []}}
   end
 
   def handle_info({:tcp_closed, _socket}, _state) do
@@ -263,6 +293,15 @@ defmodule Loqui.Client do
   end
 
   # Private
+
+  defp buffer_packet(%State{}=state, packet) do
+    # for a client with messages in its mailbox, this will buffer
+    # all subsequent requests and pushes until the :flush_packets message
+    # is recieved. Then all the packets will be sent in one call to
+    # gen_tcp.
+    send(self(), :flush_packets)
+    State.add_packet(state, packet)
+  end
 
   defp handle_packets([], state),
     do: state
@@ -322,7 +361,9 @@ defmodule Loqui.Client do
   end
 
   defp schedule_ping(%State{ping_interval: ping_interval}=state) do
-    Process.send_after(self(), :send_ping, ping_interval)
+    jitter = round(1000 * :rand.uniform())
+
+    Process.send_after(self(), :send_ping, ping_interval - jitter)
     state
   end
 
