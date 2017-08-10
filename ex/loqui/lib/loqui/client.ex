@@ -42,6 +42,14 @@ defmodule Loqui.Client do
       codec: Codecs.Erlpack,
       waiters: %{},
       last_ping: nil
+
+    def next_sequence(%State{sequence: seq}=state) when seq > @max_sequence do
+      {1, %State{state | sequence: 2}}
+    end
+
+    def next_sequence(%State{sequence: seq}=state) do
+      {seq, %State{state | sequence: seq + 1}}
+    end
   end
 
   alias Loqui.Protocol.{Codec, Codecs, Compressor, Compressors, Frames, Parser}
@@ -163,7 +171,7 @@ defmodule Loqui.Client do
 
   # Connection callbacks
   def handle_call(:ping, caller, %{sock: sock}=state) do
-    {next_seq, state} = next_sequence(state)
+    {next_seq, state} = State.next_sequence(state)
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
 
     {:noreply, %State{state | waiters: Map.put(state.waiters, next_seq, caller)}}
@@ -181,7 +189,7 @@ defmodule Loqui.Client do
   end
 
   def handle_call({:request, payload}, caller, %State{sock: sock, codec: codec}=state) do
-    {next_seq, state} = next_sequence(state)
+    {next_seq, state} = State.next_sequence(state)
     encoded_payload = codec.encode(payload)
     :gen_tcp.send(sock, Frames.request(0, next_seq, encoded_payload))
 
@@ -230,7 +238,7 @@ defmodule Loqui.Client do
   end
 
   def handle_info(:send_ping, %State{sock: sock, last_ping: nil}=state) do
-    {next_seq, state} = next_sequence(state)
+    {next_seq, state} = State.next_sequence(state)
 
     :gen_tcp.send(sock, Frames.ping(0, next_seq))
     new_state = state
@@ -331,14 +339,6 @@ defmodule Loqui.Client do
 
   defp to_host(host) when is_list(host),
     do: host
-
-  defp next_sequence(%State{sequence: seq}=state) when seq > @max_sequence do
-    {1, %State{state | sequence: 2}}
-  end
-
-  defp next_sequence(%State{sequence: seq}=state) do
-    {seq, %State{state | sequence: seq + 1}}
-  end
 
   defp upgrade_request(%State{loqui_path: loqui_path, host: host}) do
     "GET #{loqui_path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n"
