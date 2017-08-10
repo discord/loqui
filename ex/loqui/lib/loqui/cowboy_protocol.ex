@@ -1,4 +1,6 @@
 defmodule Loqui.CowboyProtocol do
+  @moduledoc false
+
   use Loqui.Opcodes
   alias Loqui.{Protocol, Protocol.Frames}
   require Logger
@@ -132,8 +134,8 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handle_socket_data(state, binary) :: {:ok, req, env}
   defp handle_socket_data(state, data) do
-    with {:ok, decoded_packets, extra_data} <- Protocol.Parser.parse(data),
-         {:ok, state} <- handle_requests(decoded_packets, state) do
+    with {:ok, decoded_requests, extra_data} <- Protocol.Parser.parse(data),
+         {:ok, state} <- handle_requests(decoded_requests, state) do
 
       handler_loop(state, extra_data)
     else
@@ -174,7 +176,7 @@ defmodule Loqui.CowboyProtocol do
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
       true ->
-        settings_payload = "#{encoding}|#{compression}"
+        settings_payload = [encoding, "|", compression]
         do_send(state, Frames.hello_ack(@empty_flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end

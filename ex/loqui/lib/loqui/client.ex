@@ -50,7 +50,6 @@ defmodule Loqui.Client do
   require Logger
 
   @default_timeout 5000
-  @buffer_size 4096
   @max_sequence round(:math.pow(2, 32) - 1)
   @default_compressors %{Compressors.NoOp.name() => Compressors.NoOp}
   @default_codecs %{Codecs.Erlpack.name() => Codecs.Erlpack}
@@ -80,7 +79,6 @@ defmodule Loqui.Client do
       |> Keyword.put(:active, :false)
       |> Keyword.put(:mode, :binary)
       |> Keyword.put(:send_timeout_close, true)
-      |> Keyword.put_new(:buffer, @buffer_size)
 
     {loqui_opts, _opts} = Keyword.pop(opts, :loqui_opts, [])
 
@@ -125,7 +123,9 @@ defmodule Loqui.Client do
   end
 
   def connect(_info, %{sock: nil, host: host, port: port, tcp_opts: tcp_opts, connect_timeout: connect_timeout}=state) do
+
     with {:ok, sock}  <- :gen_tcp.connect(host, port, tcp_opts, connect_timeout),
+         {:ok, sock}  <- update_socket_opts(sock),
          {:ok, state} <- do_upgrade(%{state | sock: sock}),
          state        <- make_active_once(state),
          {:ok, state} <- do_loqui_connect(state) do
@@ -136,6 +136,17 @@ defmodule Loqui.Client do
         Logger.error("Couldn't connect to #{host}:#{port} because #{inspect error}")
         {:stop, error, state}
     end
+  end
+
+  defp update_socket_opts(socket) do
+    {:ok, opts} = :inet.getopts(socket, [:sndbuf, :recbuf])
+    send_buffer_size = opts[:sndbuf]
+    recieve_buffer_size = opts[:recbuf]
+    buffer_size = max(send_buffer_size, recieve_buffer_size)
+    :inet.setopts(socket, [sndbuf: send_buffer_size,
+                           recbuf: recieve_buffer_size,
+                           buffer: buffer_size])
+    {:ok, socket}
   end
 
   def disconnect(info, %State{sock: sock}=state) do
@@ -196,7 +207,7 @@ defmodule Loqui.Client do
     else
 
       {:error, {:need_more_data, data}} ->
-        {:noreply, %State{buffer: data }}
+        {:noreply, %State{buffer: data}}
     end
   end
 
@@ -298,7 +309,6 @@ defmodule Loqui.Client do
 
   defp make_active_once(%State{sock: sock}=state) do
     :ok = :inet.setopts(sock, [active: :once])
-
     state
   end
 
