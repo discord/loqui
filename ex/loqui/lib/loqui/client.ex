@@ -275,7 +275,7 @@ defmodule Loqui.Client do
       Connection.reply(waiter, err)
     end)
 
-    {:disconnect, err, state}
+    {:disconnect, err, %State{state | waiters: %{}}}
   end
 
   def handle_info(:send_ping, %State{sock: sock, last_ping: nil}=state) do
