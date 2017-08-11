@@ -1,6 +1,8 @@
 defmodule Loqui.CowboyProtocol do
+  @moduledoc false
+
   use Loqui.Opcodes
-  alias Loqui.{Protocol, Frames}
+  alias Loqui.{Protocol, Protocol.Frames}
   require Logger
 
   @type req :: Map.t
@@ -94,7 +96,7 @@ defmodule Loqui.CowboyProtocol do
   defp ping(%{ping_interval: ping_interval}=state) do
     {seq, state} = next_seq(state)
     do_send(state, Frames.ping(0, seq))
-    Process.send_after(self, :send_ping, ping_interval)
+    Process.send_after(self(), :send_ping, ping_interval)
     %{state | pong_received: false}
   end
 
@@ -120,20 +122,45 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec response_frame({atom, binary} | binary, integer) :: binary
-  defp response_frame({:compressed, payload}, seq), do: Frames.response(@flag_compressed, seq, payload)
-  defp response_frame(payload, seq), do: Frames.response(@empty_flags, seq, payload)
+  defp response_frame({:go_away, code, reason}, _seq) do
+    Frames.goaway(@empty_flags, code, reason)
+  end
+
+  defp response_frame({:compressed, payload}, seq),
+    do: Frames.response(@flag_compressed, seq, payload)
+
+  defp response_frame(payload, seq),
+    do: Frames.response(@empty_flags, seq, payload)
 
   @spec handle_socket_data(state, binary) :: {:ok, req, env}
   defp handle_socket_data(state, data) do
-    case Protocol.handle_data(data) do
-      {:ok, request, extra} ->
-        case handle_request(request, state) do
-          {:ok, state} -> handle_socket_data(state, extra)
-          {:shutdown, reason} -> close(state, reason)
-        end
-      {:continue, extra} -> handler_loop(state, extra)
-      {:error, reason} -> goaway(state, reason)
+    with {:ok, decoded_requests, extra_data} <- Protocol.Parser.parse(data),
+         {:ok, state} <- handle_requests(decoded_requests, state) do
+
+      handler_loop(state, extra_data)
+    else
+      {:error, {:need_more_data, unparsed_data}} ->
+        handler_loop(state, unparsed_data)
+
+      {:shutdown, reason} ->
+        close(state, reason)
+
+      {:error, reason} ->
+        goaway(state, reason)
     end
+  end
+
+  defp handle_requests([request | rest], state)do
+    case handle_request(request, state) do
+      {:ok, state} ->
+        handle_requests(rest, state)
+
+      {:shutdown, _reason} = err ->
+        err
+    end
+  end
+  defp handle_requests([], state) do
+    {:ok, state}
   end
 
   @spec handle_request(tuple, state) :: {:ok, state} | {:shutdown, atom}
@@ -149,7 +176,7 @@ defmodule Loqui.CowboyProtocol do
         goaway(state, :no_common_encoding)
         {:shutdown, :no_common_encoding}
       true ->
-        settings_payload = "#{encoding}|#{compression}"
+        settings_payload = [encoding, "|", compression]
         do_send(state, Frames.hello_ack(@empty_flags, ping_interval, settings_payload))
         {:ok, %{state | version: version, encoding: encoding, compression: compression}}
     end
@@ -219,7 +246,7 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handler_request(state, integer, binary) :: :ok
   defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
-    from = self
+    from = self()
     {_, ref} = spawn_monitor(fn ->
       response = handler.loqui_request(request, encoding)
       send(from, {:response, seq, response})
