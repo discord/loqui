@@ -9,7 +9,7 @@ defmodule Loqui.Client do
   ## Codecs and Compressors
 
   A `codec` changes data structures into `iodata` and a `compressor` applies a compression algorithm
-  to iodata. They're applided thusly:
+  to iodata. They're applied thusly:
 
   ```
   term
@@ -161,7 +161,7 @@ defmodule Loqui.Client do
   @default_timeout 5000
   @max_sequence round(:math.pow(2, 32) - 1)
   @default_compressors Enum.into(Compressors.all(), %{}, &{&1.name, &1})
-  @default_codecs Enum.into(Codecs.all(), %{}, &{&1.name, &1})
+  @default_codecs Enum.into(Codecs.all(), %{}, &{&1.name(), &1})
   @go_away_timeout 1000
 
   @type sequence :: 1..unquote(@max_sequence)
