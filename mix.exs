@@ -24,7 +24,7 @@ defmodule Loqui.Mixfile do
 
   defp deps do
     [
-      {:cowboy, "~> 1.0.0"},
+      {:cowboy, github: "hammerandchisel/cowboy", ref: "ad4ec7cfa76abe054c24e64b61d8e9632a782810"},
       {:ex_doc, ">= 0.0.0", only: :dev},
       {:connection, "~> 1.0"},
       {:jiffy, "~> 0.14.11", optional: true},
