@@ -1,4 +1,7 @@
 defmodule Loqui.Opcodes do
+  @moduledoc false
+
+  @doc false
   defmacro __using__(_) do
     quote do
       @opcode_hello 1

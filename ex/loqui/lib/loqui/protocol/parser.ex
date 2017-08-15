@@ -1,4 +1,6 @@
 defmodule Loqui.Protocol.Parser do
+  @moduledoc false
+
   use Loqui.{Opcodes, Types}
 
   def parse(<<>>, extra_data),

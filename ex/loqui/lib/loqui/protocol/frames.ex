@@ -1,4 +1,5 @@
 defmodule Loqui.Protocol.Frames do
+  @moduledoc false
   use Loqui.{Opcodes, Types}
 
   def hello(flags, payload_data) do
