@@ -93,7 +93,7 @@ defmodule Loqui.CowboyProtocol do
       {:response, seq, response} ->
         state
           |> handle_response(seq, response, [])
-          |> handle_socket_data(so_far)
+          |> handler_loop(so_far)
 
       {:tcp, ^socket_pid, data} ->
         handle_socket_data(state, <<so_far::binary, data::binary>>)
@@ -117,15 +117,15 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec ping(state) :: state | {:ok, req, env}
-  defp ping(%{pong_recieved: false}=state),
+  defp ping(%{pong_received: false}=state),
     do: goaway(state, :ping_timeout)
   defp ping(state) do
     {seq, state} = next_seq(state)
-    do_send(state, Frames.ping(0, seq))
 
     state
       |> schedule_ping()
-      |> Map.put(:pong_recieved, false)
+      |> do_send(Frames.ping(0, seq))
+      |> Map.put(:pong_received, false)
   end
 
   defp schedule_ping(%{ping_interval: ping_interval}=state) do
@@ -177,16 +177,17 @@ defmodule Loqui.CowboyProtocol do
   end
 
   defp handle_socket_data(state, data) do
-    with {:ok, decoded_requests, extra_data} <- Protocol.Parser.parse(data),
-         {:ok, state} <- handle_requests(decoded_requests, state) do
+    case Protocol.Parser.parse(data) do
+      {:ok, requests, extra} ->
+        case handle_requests(requests, state) do
+          {:ok, state} ->
+            handler_loop(state, extra)
 
-      handler_loop(state, extra_data)
-    else
-      {:error, {:need_more_data, unparsed_data}} ->
-        handler_loop(state, unparsed_data)
-
-      {:shutdown, reason} ->
-        close(state, reason)
+          {:shutdown, reason} ->
+            close(state, reason)
+        end
+      {:error, {:need_more_data, extra}} ->
+        handler_loop(state, extra)
 
       {:error, reason} ->
         goaway(state, reason)
