@@ -29,8 +29,8 @@ defmodule Loqui.CowboyProtocol do
             supported_encodings: nil,
             supported_compressions: nil,
             version: nil,
-            encoding: nil,
-            compression: nil,
+            codec: nil,
+            compressor: nil,
             monitor_refs: %{},
             pong_received: true,
             next_seq: 1
@@ -142,9 +142,9 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handle_response(state, integer, any, []) :: state
-  defp handle_response(%{compression: compression}=state, seq, response, responses) do
+  defp handle_response(%{compressor: compressor}=state, seq, response, responses) do
     compression_flag =
-      case compression do
+      case compressor do
         Protocol.Compressors.NoOp ->
           @empty_flags
 
@@ -209,8 +209,8 @@ defmodule Loqui.CowboyProtocol do
 
   @spec handle_request(tuple, state) :: {:ok, state} | {:shutdown, atom}
   defp handle_request({:hello, _flags, version, encodings, compressions}, %{ping_interval: ping_interval, supported_encodings: supported_encodings, supported_compressions: supported_compressions}=state) do
-    codec = choose_encoding(supported_encodings, encodings)
-    compressor = choose_compression(supported_compressions, compressions)
+    codec = choose_codec(supported_encodings, encodings)
+    compressor = choose_compressor(supported_compressions, compressions)
     cond do
       !Enum.member?(@supported_versions, version) ->
         goaway(state, :unsupported_version)
@@ -223,7 +223,7 @@ defmodule Loqui.CowboyProtocol do
       true ->
         settings_payload = "#{codec.name()}|#{compressor.name()}"
         do_send(state, Frames.hello_ack(@empty_flags, ping_interval, settings_payload))
-        {:ok, %{state | version: version, encoding: codec, compression: compressor}}
+        {:ok, %{state | version: version, codec: codec, compressor: compressor}}
     end
   end
   defp handle_request({:ping, _flags, seq}, state) do
@@ -303,18 +303,18 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handler_request(state, integer, binary) :: :ok
-  defp handler_request(%{handler: handler, encoding: encoding, monitor_refs: monitor_refs}=state, seq, request) do
+  defp handler_request(%{handler: handler, codec: codec, monitor_refs: monitor_refs}=state, seq, request) do
     from = self()
     {_, ref} = spawn_monitor(fn ->
-      response = handler.loqui_request(request, encoding)
+      response = handler.loqui_request(request, codec)
       send(from, {:response, seq, response})
     end)
     %{state | monitor_refs: Map.put(monitor_refs, ref, seq)}
   end
 
   @spec handler_push(state, binary) :: :ok
-  defp handler_push(%{handler: handler, encoding: encoding}=state, request) do
-    spawn(handler, :loqui_request, [request, encoding])
+  defp handler_push(%{handler: handler, codec: codec}=state, request) do
+    spawn(handler, :loqui_request, [request, codec])
     state
   end
 
@@ -360,36 +360,36 @@ defmodule Loqui.CowboyProtocol do
 
   end
 
-  defp to_wire_format(%{encoding: encoder, compression: compression}, data) do
+  defp to_wire_format(%{codec: encoder, compressor: compressor}, data) do
     data
       |> encoder.encode()
-      |> compression.compress()
+      |> compressor.compress()
   end
 
-  defp from_wire_format(%{encoding: encoder, compression: compression}, data) do
+  defp from_wire_format(%{codec: encoder, compressor: compressor}, data) do
     data
-      |> compression.decompress()
+      |> compressor.decompress()
       |> encoder.decode()
   end
 
-  @spec choose_encoding(list, list) :: nil | String.t
-  defp choose_encoding(_supported_encodings, []), do: nil
-  defp choose_encoding(supported_encodings, [encoding | encodings]) do
+  @spec choose_codec(list, list) :: nil | String.t
+  defp choose_codec(_supported_encodings, []), do: nil
+  defp choose_codec(supported_encodings, [encoding | encodings]) do
     case Map.get(supported_encodings, encoding) do
       nil ->
-        choose_encoding(supported_encodings, encodings)
+        choose_codec(supported_encodings, encodings)
 
       codec ->
         codec
     end
   end
 
-  @spec choose_compression(list, list) :: nil | String.t
-  defp choose_compression(_supported_compressions, []), do: nil
-  defp choose_compression(supported_compressions, [compression | compressions]) do
+  @spec choose_compressor(list, list) :: nil | String.t
+  defp choose_compressor(_supported_compressions, []), do: nil
+  defp choose_compressor(supported_compressions, [compression | compressions]) do
     case Map.get(supported_compressions, compression) do
       nil ->
-        choose_compression(supported_compressions, compressions)
+        choose_compressor(supported_compressions, compressions)
 
       compressor ->
         compressor
