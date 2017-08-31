@@ -21,23 +21,15 @@ defmodule ClientTest do
     def loqui_init(_transport, req, _opts) do
       opts = %{
         supported_encodings: ["erlpack"],
-        supported_compressions: [" "],
+        supported_compressions: [],
       }
       {:ok, req, opts}
     end
 
     def loqui_request(request, encoding) do
-      decoded =
-        case encoding do
-          "erlpack" ->
-            :erlang.binary_to_term(request)
+      Process.send(Test, {:request, request}, [])
 
-          _ ->
-            request
-        end
-      Process.send(Test, {:request, decoded}, [])
-
-      case decoded do
+      case request do
         "go away" ->
           {:go_away, 32, "Leave me alone!"}
 

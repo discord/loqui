@@ -23,6 +23,7 @@ defmodule EchoServer.Mixfile do
     [
       {:cowboy, "~> 1.0"},
       {:loqui, path: "../../.."},
+      {:msgpax, "~>2.0"},
     ]
   end
 end
