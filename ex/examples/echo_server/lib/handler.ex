@@ -1,7 +1,9 @@
 defmodule EchoServer.Handler do
-   # HTTP Behavior
+
+  alias Loqui.Protocol.Codecs.Msgpack
 
   def init(_transport, req, _opts) do
+    # HTTP Behavior
     case :cowboy_req.header("upgrade", req) do
       {"loqui", _req} -> {:upgrade, :protocol, Loqui.CowboyProtocol}
       {:undefined, req} -> {:ok, req, nil}
@@ -17,7 +19,7 @@ defmodule EchoServer.Handler do
   ## Loqui Callbacks
 
   def loqui_init(_transport, req, _opts) do
-    opts = %{supported_encodings: ["msgpack"], supported_compressions: []}
+    opts = %{supported_encodings: [Msgpack], supported_compressions: []}
     {:ok, req, opts}
   end
 

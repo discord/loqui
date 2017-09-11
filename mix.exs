@@ -1,10 +1,13 @@
 defmodule Loqui.Mixfile do
   use Mix.Project
 
+  @project_url "https://github.com/hammerandchisel/loqui/"
+  @version "0.3.0"
+
   def project do
     [
       app: :loqui,
-      version: "0.2.10",
+      version: @version,
       elixir: "~> 1.3",
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
@@ -12,7 +15,9 @@ defmodule Loqui.Mixfile do
       elixirc_paths: ["ex/loqui/lib/"],
       test_paths: ["ex/loqui/test"],
       description: "An RPC Transport Layer - with minimal bullshit.",
-      package: package()
+      package: package(),
+      source_url: @project_url,
+      homepage_url: @project_url
     ]
   end
 
@@ -35,10 +40,10 @@ defmodule Loqui.Mixfile do
   defp package do
     [
       name: :loqui,
-      files: ["mix.exs", "ex/loqui/lib/*"],
-      maintainers: [],
+      files: ~w(README.md mix.exs ex/loqui/lib/*),
+      maintainers: ["Jesse Howarth", "Stanislav Vishnevskiy", "Steve Cohen"],
       licenses: [],
-      links: [],
+      links: %{"GitHub" => @project_url},
     ]
   end
 end
