@@ -66,7 +66,7 @@ defmodule Loqui.Client do
   Then you need to tell the client to use your codec.
 
   ```elixir
-  {:ok, client} = Loqui.Client.start_link("localhost", 1234, loqui_opts: [codecs: [Useless]])
+  {:ok, client} = Loqui.Client.start_link("localhost", 1234, "/_rpc", loqui_opts: [codecs: [Useless]])
   ```
 
   During negotiation, codecs and compressors defined by the user take precedence over the defaults,
@@ -77,7 +77,7 @@ defmodule Loqui.Client do
   ```
   alias Loqui.Protocol.Codecs.{Erlpack, Json, Msgpack}
   # Starts a Loqui client on port 4450 favoring the Json codec, then the Msgpack codec, then the Erlpack codec.
-  {:ok, json_client} = Loqui.Client.start_link("localhost", 4450, loqui_opts: [codecs: [Json, Msgpack, Erlpack]])
+  {:ok, json_client} = Loqui.Client.start_link("localhost", 4450, "/_rpc", loqui_opts: [codecs: [Json, Msgpack, Erlpack]])
   ```
 
   """
@@ -366,7 +366,7 @@ defmodule Loqui.Client do
     else
 
       {:error, {:need_more_data, data}} ->
-        {:noreply, %State{buffer: data}}
+        {:noreply, %State{state | buffer: data}}
     end
   end
 

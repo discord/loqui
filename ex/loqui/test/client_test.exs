@@ -86,4 +86,9 @@ defmodule ClientTest do
     assert {:error, {:remote_went_away, 32, "Leave me alone!"}} = Loqui.Client.request(ctx.client, "go away")
   end
 
+  test "it should handle really big requests and responses", ctx do
+    req = String.duplicate("hello", 100_000)
+    assert {:request, ^req} = Loqui.Client.request(ctx.client, {:request, req})
+  end
+
 end
