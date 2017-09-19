@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/hammerandchisel/loqui/go"
+	"github.com/discordapp/loqui/go"
 )
 
 var pool = sync.Pool{

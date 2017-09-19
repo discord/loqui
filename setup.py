@@ -29,7 +29,7 @@ setup(
     version='0.2.11',
     author='Jake Heinz',
     author_email='jh@discordapp.com',
-    url="http://github.com/hammerandchisel/loqui",
+    url="http://github.com/discordapp/loqui",
     description='A really simple stream based RPC - with a gevent client/server implementation',
     license='MIT',
     package_dir={

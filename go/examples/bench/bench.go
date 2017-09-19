@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hammerandchisel/loqui/go"
+	loqui "github.com/discordapp/loqui/go"
 )
 
 var state struct {
