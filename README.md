@@ -19,7 +19,7 @@ Each frame starts with the opcode as an unsigned 8 bit integer (`uint8`). The op
 | `PONG`            | `4`   | Both             | No            |
 | `REQUEST`         | `5`   | Client           | Yes           |
 | `RESPONSE`        | `6`   | Server           | Yes           |
-| `PUSH`            | `7`   | BOTH             | Yes           |
+| `PUSH`            | `7`   | Both             | Yes           |
 | `GOAWAY`          | `8`   | Both             | Yes           |
 | `ERROR`           | `9`   | Server           | Yes           |
 
