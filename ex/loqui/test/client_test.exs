@@ -2,28 +2,14 @@ defmodule ClientTest do
   use ExUnit.Case
 
   defmodule Server do
-    def init(_transport, req, _opts) do
-      case :cowboy_req.header("upgrade", req) do
-        {"loqui", _req} ->
-          {:upgrade, :protocol, Loqui.CowboyProtocol}
+    @behaviour Loqui.Handler
 
-        {:undefined, req} ->
-          {:ok, req, nil}
-      end
-    end
-
-    def handle(req, _state),
-      do: :cowboy_req.reply(401, [], "", req)
-
-    def terminate(_, _, _),
-      do: :ok
-
-    def loqui_init(_transport, req, _opts) do
+    def loqui_init(_transport, _opts) do
       opts = %{
         supported_encodings: ["erlpack"],
         supported_compressions: [],
       }
-      {:ok, req, opts}
+      {:ok, opts}
     end
 
     def loqui_request(request, encoding) do
@@ -38,20 +24,12 @@ defmodule ClientTest do
       end
     end
 
-    def loqui_push(_push, _encoding),
-      do: :ok
-
-    def loqui_terminate(_reason, _req),
+    def loqui_terminate(_reason),
       do: :ok
   end
 
   setup_all do
-    routes = :cowboy_router.compile([
-      {:_, [
-          {"/_rpc", Server, []}
-        ]}
-    ])
-    :cowboy.start_http(Server, 1, [port: 8080], [env: [dispatch: routes]])
+    {:ok, _server} = Loqui.Server.start_link(8080, "/_rpc", handler: Server)
     :ok
   end
 

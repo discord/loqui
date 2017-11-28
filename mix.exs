@@ -23,13 +23,14 @@ defmodule Loqui.Mixfile do
 
   def application do
     [
-      applications: [:logger, :cowboy]
+      applications: [:logger, :ranch]
     ]
   end
 
   defp deps do
     [
-      {:cowboy, "~> 1.0.0"},
+      {:ranch, "~> 1.4.0"},
+      {:cowlib, ">= 1.3.0"},
       {:ex_doc, ">= 0.0.0", only: :dev},
       {:connection, "~> 1.0"},
       {:jiffy, "~> 0.14.11", optional: true},
