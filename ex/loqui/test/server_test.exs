@@ -17,8 +17,7 @@ defmodule Loqui.ServerTest do
 
   @port 38419
   setup do
-    {:ok, handler} = Loqui.Server.start_link(@port, "/_rpc",
-      handler: Handler,
+    {:ok, handler} = Loqui.Server.start_link(@port, "/_rpc", Handler,
       server_name: :server_test)
 
     :inets.start()

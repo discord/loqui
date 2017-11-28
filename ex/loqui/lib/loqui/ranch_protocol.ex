@@ -387,8 +387,8 @@ defmodule Loqui.RanchProtocol do
   end
 
   @spec address(map) :: String.t
-  defp address(state) do
-    {:ok, {address, _port}} = state.transport.peername(state.socket_pid)
+  defp address(%{socket_pid: socket_pid, transport: transport}) do
+    {:ok, {address, _port}} = transport.peername(socket_pid)
     :inet_parse.ntoa(address)
   end
 end

@@ -43,9 +43,8 @@ defmodule ClientTest do
 
 
   setup_all do
-    {:ok, _server} = Loqui.Server.start_link(8080, "/_rpc", handler: Server)
-    {:ok, _push_server} = Loqui.Server.start_link(8081, "/_rpc", [
-          handler: ServerWithPush,
+    {:ok, _server} = Loqui.Server.start_link(8080, "/_rpc", Server)
+    {:ok, _push_server} = Loqui.Server.start_link(8081, "/_rpc", ServerWithPush, [
           server_name: :push_server])
 
     :ok

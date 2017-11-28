@@ -73,7 +73,6 @@ defmodule Loqui.Server do
         response = :cow_http.response(101, :"HTTP/1.1", [{"upgrade", "loqui"}])
         transport.send(sock, response)
         RanchProtocol.upgrade(sock, transport, state.handler, state.handler_opts)
-        :ok
       else
         {:error, :payload_too_large} ->
           response = :cow_http.response(413, :"HTTP/1.1", [{"connection", "close"}])
@@ -122,13 +121,15 @@ defmodule Loqui.Server do
   @type tcp_port :: (0..65535)
   @type path :: String.t
 
-  @spec start_link(tcp_port, path, options) :: {:ok, pid} | {:error, any}
-  def start_link(port, path, opts) do
+  @spec start_link(tcp_port, path, module, options) :: {:ok, pid} | {:error, any}
+  def start_link(port, path, handler, opts \\ []) do
     server_name = Keyword.get(opts, :server_name, :loqui)
     transport = Keyword.get(opts, :transport, :ranch_tcp)
-    _handler = Keyword.fetch!(opts, :handler)
+    opts = opts
+      |> Keyword.put(:handler, handler)
+      |> Keyword.put(:loqui_path, path)
 
-    :ranch.start_listener(server_name, transport, [port: port], Http, Keyword.put(opts, :loqui_path, path))
+    :ranch.start_listener(server_name, transport, [port: port], Http, opts)
   end
 
   defdelegate stop(listener_name), to: :ranch, as: :stop_listener
