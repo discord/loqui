@@ -20,6 +20,7 @@ defmodule Loqui.RanchProtocol do
   defstruct socket_pid: nil,
             transport: nil,
             handler: nil,
+            handler_supports_push: false,
             handler_opts: nil,
             ping_interval: nil,
             supported_encodings: nil,
@@ -36,6 +37,7 @@ defmodule Loqui.RanchProtocol do
       socket_pid: socket_pid,
       transport: transport,
       handler: handler,
+      handler_supports_push: :erlang.function_exported(handler, :loqui_push, 2),
       handler_opts: handler_opts,
     }
 
@@ -297,6 +299,10 @@ defmodule Loqui.RanchProtocol do
   end
 
   @spec handler_push(state, binary) :: :ok
+  defp handler_push(%{handler: handler, codec: codec, handler_supports_push: true}=state, request) do
+    spawn(handler, :loqui_push, [request, codec])
+    state
+  end
   defp handler_push(%{handler: handler, codec: codec}=state, request) do
     spawn(handler, :loqui_request, [request, codec])
     state
