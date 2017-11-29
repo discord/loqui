@@ -17,7 +17,7 @@ defmodule TestServer.Supervisor do
   def start_link() do
 
     children = [
-      worker(Loqui.Server, [8080, "/_rpc", [handler: TestServer.Handler]])
+      worker(Loqui.Server, [8080, "/_rpc", TestServer.Handler])
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: __MODULE__)

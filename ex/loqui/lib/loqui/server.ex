@@ -68,7 +68,8 @@ defmodule Loqui.Server do
 
     defp handle_tcp_data(extra_data, %{socket: sock, path: loqui_path, transport: transport, buffer: buffer} = state) do
       with {:ok, ^loqui_path, {headers, _}} <- try_parse_request(buffer <> extra_data),
-           "loqui" <- :proplists.get_value("upgrade", headers) do
+           header_val when is_bitstring(header_val) <- :proplists.get_value("upgrade", headers),
+           "loqui" <- String.downcase(header_val) do
 
         response = :cow_http.response(101, :"HTTP/1.1", [{"upgrade", "loqui"}])
         transport.send(sock, response)
