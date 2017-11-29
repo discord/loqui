@@ -97,7 +97,7 @@ defmodule Loqui.Client do
     @type last_ping :: {Loqui.Client.sequence, timestamp}
     @type t :: %__MODULE__{
       port: pos_integer,
-      host: char_list,
+      host: charlist,
       tcp_opts: Loqui.Client.tcp_opts,
       recv_timeout: pos_integer,
       loqui_path: String.t,
@@ -456,7 +456,7 @@ defmodule Loqui.Client do
   defp handle_packet({:hello_ack, _flags, ping_interval, data}, %State{}=state) do
     [encoding, compression] = data
       |> String.split("|")
-      |> Enum.map(&String.strip/1)
+      |> Enum.map(&String.trim/1)
 
     codec = Map.get(state.registered_codecs, encoding)
     compressor = Map.get(state.registered_compressors, compression)

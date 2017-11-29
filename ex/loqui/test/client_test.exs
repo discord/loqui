@@ -2,28 +2,14 @@ defmodule ClientTest do
   use ExUnit.Case
 
   defmodule Server do
-    def init(_transport, req, _opts) do
-      case :cowboy_req.header("upgrade", req) do
-        {"loqui", _req} ->
-          {:upgrade, :protocol, Loqui.CowboyProtocol}
+    @behaviour Loqui.Handler
 
-        {:undefined, req} ->
-          {:ok, req, nil}
-      end
-    end
-
-    def handle(req, _state),
-      do: :cowboy_req.reply(401, [], "", req)
-
-    def terminate(_, _, _),
-      do: :ok
-
-    def loqui_init(_transport, req, _opts) do
+    def loqui_init(_transport, _opts) do
       opts = %{
         supported_encodings: ["erlpack"],
         supported_compressions: [],
       }
-      {:ok, req, opts}
+      {:ok, opts}
     end
 
     def loqui_request(request, encoding) do
@@ -38,20 +24,29 @@ defmodule ClientTest do
       end
     end
 
-    def loqui_push(_push, _encoding),
-      do: :ok
-
-    def loqui_terminate(_reason, _req),
+    def loqui_terminate(_reason),
       do: :ok
   end
 
+  defmodule ServerWithPush do
+    @behaviour Loqui.Handler
+
+    defdelegate loqui_init(transport, opts), to: Server
+    defdelegate loqui_request(request, encoding), to: Server
+    defdelegate loqui_terminate(reason), to: Server
+
+    def loqui_push(request, codec) do
+      Process.send(Test, {:push, request}, [])
+      :ok
+    end
+  end
+
+
   setup_all do
-    routes = :cowboy_router.compile([
-      {:_, [
-          {"/_rpc", Server, []}
-        ]}
-    ])
-    :cowboy.start_http(Server, 1, [port: 8080], [env: [dispatch: routes]])
+    {:ok, _server} = Loqui.Server.start_link(8080, "/_rpc", Server)
+    {:ok, _push_server} = Loqui.Server.start_link(8081, "/_rpc", ServerWithPush, [
+          server_name: :push_server])
+
     :ok
   end
 
@@ -89,6 +84,26 @@ defmodule ClientTest do
   test "it should handle really big requests and responses", ctx do
     req = String.duplicate("hello", 100_000)
     assert {:request, ^req} = Loqui.Client.request(ctx.client, {:request, req})
+  end
+
+  describe "push" do
+    setup [:start_push_client]
+
+    def start_push_client(_) do
+      {:ok, client_pid} = Loqui.Client.start_link("localhost", 8081, "/_rpc", loqui_opts: [])
+
+      {:ok, push_client: client_pid}
+    end
+
+    test "if the handler has a push method, it should be called", ctx do
+      Loqui.Client.push(ctx.push_client, "hey, we have push")
+      assert_receive {:push, "hey, we have push"}
+    end
+
+    test "requests go through the loqui_request function", ctx do
+      assert "there are still requests" = Loqui.Client.request(ctx.push_client, "there are still requests")
+      assert_receive {:request, "there are still requests"}
+    end
   end
 
 end

@@ -1,4 +1,4 @@
-defmodule Loqui.CowboyProtocol do
+defmodule Loqui.RanchProtocol do
   @moduledoc false
 
   use Loqui.Opcodes
@@ -6,8 +6,6 @@ defmodule Loqui.CowboyProtocol do
   alias Loqui.Protocol.{Codecs, Compressors}
   require Logger
 
-  @type req :: Map.t
-  @type env :: Keyword.t
   @type state :: %__MODULE__{}
 
   @default_ping_interval 30_000
@@ -21,9 +19,8 @@ defmodule Loqui.CowboyProtocol do
 
   defstruct socket_pid: nil,
             transport: nil,
-            env: nil,
-            req: nil,
             handler: nil,
+            handler_supports_push: false,
             handler_opts: nil,
             ping_interval: nil,
             supported_encodings: nil,
@@ -35,55 +32,44 @@ defmodule Loqui.CowboyProtocol do
             pong_received: true,
             next_seq: 1
 
-  def upgrade(req, env, handler, handler_opts) do
-    :ranch.remove_connection(env[:listener])
-    [socket_pid, transport] = :cowboy_req.get([:socket, :transport], req)
-
+  def upgrade(socket_pid, transport, handler, handler_opts) do
     state = %__MODULE__{
       socket_pid: socket_pid,
       transport: transport,
-      req: req,
-      env: env,
       handler: handler,
+      handler_supports_push: :erlang.function_exported(handler, :loqui_push, 2),
       handler_opts: handler_opts,
     }
 
-    Logger.info "[loqui] upgrade. address=#{inspect address(req)} socket_pid=#{inspect socket_pid}"
+    Logger.info "[loqui] upgrade. address=#{inspect address(state)} socket_pid=#{inspect socket_pid}"
 
     handler_init(state)
   end
 
-  @spec handler_init(state) :: {:ok, req, env}
-  def handler_init(%__MODULE__{transport: transport, req: req, handler: handler, handler_opts: handler_opts, env: env}=state) do
-    case handler.loqui_init(transport, req, handler_opts) do
-      {:ok, req, opts} ->
+  @spec handler_init(state) :: :ok
+  def handler_init(%__MODULE__{transport: transport, handler: handler, handler_opts: handler_opts}=state) do
+    case handler.loqui_init(transport, handler_opts) do
+      {:ok, opts} ->
         state
-          |> Map.put(:req, req)
           |> set_opts(opts)
           |> loqui_handshake
 
-      {:shutdown, req} ->
-        {:ok, req, Keyword.put(env, :result, :closed)}
+      :shutdown ->
+        :ok
     end
   end
 
   @spec loqui_handshake(state) :: :ok
-  def loqui_handshake(%{req: req}=state) do
-    :cowboy_req.upgrade_reply(101, [{"Upgrade", "loqui"}], req)
-    receive do
-      {:cowboy_req, :resp_sent} -> :ok
-    after
-      0 -> :ok
-    end
-
+  def loqui_handshake(%__MODULE__{}=state) do
     state
       |> schedule_ping()
       |> handler_loop(<<>>)
   end
 
-  @spec handler_loop(state, binary) :: {:ok, req, env}
+  @spec handler_loop(state, binary) :: :ok
   def handler_loop(%{socket_pid: socket_pid, transport: transport}=state, so_far) do
     transport.setopts(socket_pid, [active: :once])
+
     receive do
       :send_ping ->
         state
@@ -116,7 +102,7 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  @spec ping(state) :: state | {:ok, req, env}
+  @spec ping(state) :: state | :ok
   defp ping(%{pong_received: false}=state),
     do: goaway(state, :ping_timeout)
   defp ping(state) do
@@ -262,14 +248,14 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  @spec send_error(state, integer, integer, atom) ::  {:ok, req, env}
+  @spec send_error(state, integer, integer, atom) :: %__MODULE__{}
   defp send_error(state, seq, :internal_server_error, reason), do: send_error(state, seq, 7, reason)
   defp send_error(state, seq, code, reason) do
     reason = to_wire_format(state, reason)
     do_send(state, Frames.error(@empty_flags, code, seq, reason))
   end
 
-  @spec goaway(state, atom) :: {:ok, req, env}
+  @spec goaway(state, atom) :: :ok
   def goaway(state, :normal),
     do: goaway(state, 0, "Normal")
   def goaway(state, :invalid_op),
@@ -289,9 +275,9 @@ defmodule Loqui.CowboyProtocol do
   def goaway(state, :not_enough_options),
     do: goaway(state, 8, "NotEnoughOptions")
 
-  @spec goaway(state, integer, atom) :: {:ok, req, env}
-  def goaway(%{socket_pid: socket_pid, req: req}=state, code, reason) do
-    Logger.info "[loqui] goaway. address=#{inspect address(req)} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
+  @spec goaway(state, integer, atom) :: :ok
+  def goaway(%{socket_pid: socket_pid}=state, code, reason) do
+    Logger.info "[loqui] goaway. address=#{inspect address(state)} socket_pid=#{inspect socket_pid} code=#{inspect code} reason=#{inspect reason}"
     do_send(state, Frames.goaway(@empty_flags, code, reason))
     close(state, reason)
   end
@@ -313,22 +299,26 @@ defmodule Loqui.CowboyProtocol do
   end
 
   @spec handler_push(state, binary) :: :ok
+  defp handler_push(%{handler: handler, codec: codec, handler_supports_push: true}=state, request) do
+    spawn(handler, :loqui_push, [request, codec])
+    state
+  end
   defp handler_push(%{handler: handler, codec: codec}=state, request) do
     spawn(handler, :loqui_request, [request, codec])
     state
   end
 
   @spec handler_terminate(state, atom) :: :ok
-  defp handler_terminate(%{handler: handler, req: req}=state, reason) do
-    handler.loqui_terminate(reason, req)
+  defp handler_terminate(%{handler: handler}=state, reason) do
+    handler.loqui_terminate(reason)
     state
   end
 
-  @spec close(state, atom) :: {:ok, req, env}
-  defp close(%{transport: transport, socket_pid: socket_pid, env: env, req: req}=state, reason) do
+  @spec close(state, atom) :: :ok
+  defp close(%{transport: transport, socket_pid: socket_pid}=state, reason) do
     handler_terminate(state, reason)
     transport.close(socket_pid)
-    {:ok, req, Keyword.put(env, :result, :closed)}
+    :ok
   end
 
   @spec set_opts(state, Map.t) :: state
@@ -396,9 +386,9 @@ defmodule Loqui.CowboyProtocol do
     end
   end
 
-  @spec address(req) :: String.t
-  defp address(req) do
-    {{address, _}, _} = :cowboy_req.peer(req)
+  @spec address(map) :: String.t
+  defp address(%{socket_pid: socket_pid, transport: transport}) do
+    {:ok, {address, _port}} = transport.peername(socket_pid)
     :inet_parse.ntoa(address)
   end
 end
