@@ -2,7 +2,7 @@ defmodule Loqui.Mixfile do
   use Mix.Project
 
   @project_url "https://github.com/hammerandchisel/loqui/"
-  @version "0.3.1"
+  @version "0.4.0"
 
   def project do
     [
