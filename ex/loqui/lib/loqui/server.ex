@@ -71,7 +71,8 @@ defmodule Loqui.Server do
            header_val when is_bitstring(header_val) <- :proplists.get_value("upgrade", headers),
            "loqui" <- String.downcase(header_val) do
 
-        response = :cow_http.response(101, :"HTTP/1.1", [{"upgrade", "loqui"}])
+        upgrade_headers = [{"connection", "Upgrade"},{"upgrade", "loqui"}]
+        response = :cow_http.response(101, :"HTTP/1.1", upgrade_headers)
         transport.send(sock, response)
         RanchProtocol.upgrade(sock, transport, state.handler, state.handler_opts)
       else

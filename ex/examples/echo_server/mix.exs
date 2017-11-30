@@ -14,14 +14,13 @@ defmodule EchoServer.Mixfile do
 
   def application do
     [
-      applications: [:logger, :cowboy],
+      applications: [:logger, :ranch],
       mod: {EchoServer, []}
     ]
   end
 
   defp deps do
     [
-      {:cowboy, "~> 1.0"},
       {:loqui, path: "../../.."},
       {:msgpax, "~>2.0"},
     ]
