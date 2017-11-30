@@ -113,7 +113,7 @@ defmodule Loqui.Server do
   end
 
   @type transport :: :ranch_tcp | :ranch_ssl
-  @type transport_option :: :gen_tcp.option
+  @type transport_option :: :gen_tcp.option | :ranch.opt
   @type option :: {:loqui_path, String.t}
   | {:transport_opts, [transport_option]}
   | {:handler_opts, Keyword.t}
@@ -131,7 +131,10 @@ defmodule Loqui.Server do
       |> Keyword.put(:handler, handler)
       |> Keyword.put(:loqui_path, path)
 
-    :ranch.start_listener(server_name, transport, [port: port], Http, opts)
+    {transport_opts, opts} = Keyword.pop(opts, :transport_opts, [])
+    transport_opts = Keyword.put(transport_opts, :port, port)
+
+    :ranch.start_listener(server_name, transport, transport_opts, Http, opts)
   end
 
   defdelegate stop(listener_name), to: :ranch, as: :stop_listener
