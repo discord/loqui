@@ -1,7 +1,7 @@
 defmodule Loqui.Mixfile do
   use Mix.Project
 
-  @project_url "https://github.com/hammerandchisel/loqui/"
+  @project_url "https://github.com/discordapp/loqui/"
   @version "0.4.2"
 
   def project do
@@ -43,7 +43,7 @@ defmodule Loqui.Mixfile do
       name: :loqui,
       files: ~w(README.md mix.exs ex/loqui/lib/*),
       maintainers: ["Jesse Howarth", "Stanislav Vishnevskiy", "Steve Cohen"],
-      licenses: [],
+      licenses: ["MIT"],
       links: %{"GitHub" => @project_url},
     ]
   end
