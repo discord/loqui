@@ -12,7 +12,7 @@ defmodule ClientTest do
       {:ok, opts}
     end
 
-    def loqui_request(request, encoding) do
+    def loqui_request(request, _codec) do
       Process.send(Test, {:request, request}, [])
 
       case request do
@@ -35,7 +35,7 @@ defmodule ClientTest do
     defdelegate loqui_request(request, encoding), to: Server
     defdelegate loqui_terminate(reason), to: Server
 
-    def loqui_push(request, codec) do
+    def loqui_push(request, _codec) do
       Process.send(Test, {:push, request}, [])
       :ok
     end
