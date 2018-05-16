@@ -107,8 +107,9 @@ defmodule Loqui.Server do
     end
 
     defp ip_address(socket) do
-      {:ok, {ip, _port}} = :inet.peername(socket)
-      :inet_parse.ntoa(ip)
+      with {:ok, {ip, _port}} <- :inet.peername(socket) do
+        :inet_parse.ntoa(ip)
+      end
     end
   end
 
