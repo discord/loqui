@@ -52,16 +52,16 @@ defmodule Loqui.Server do
               loop(%State{state | buffer: request})
 
             {:error, reason} ->
-              Logger.error("Client #{ip_address(sock)} caused #{inspect reason}. Exiting.")
+              Logger.error("Client #{inspect ip_address(sock)} caused #{inspect reason}. Exiting.")
               exit(reason)
           end
 
         {:tcp_error, ^sock, reason} ->
-          Logger.warn("TCP error #{inspect reason} from client #{ip_address(sock)}. Closing")
+          Logger.warn("TCP error #{inspect reason} from client #{inspect ip_address(sock)}. Closing")
           exit(reason)
 
         {:tcp_closed, ^sock} ->
-          Logger.info("Client #{ip_address(sock)} closed.")
+          Logger.info("Client #{inspect ip_address(sock)} closed.")
           exit(:normal)
       end
     end
