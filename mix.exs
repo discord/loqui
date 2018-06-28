@@ -9,8 +9,8 @@ defmodule Loqui.Mixfile do
       app: :loqui,
       version: @version,
       elixir: "~> 1.3",
-      build_embedded: Mix.env == :prod,
-      start_permanent: Mix.env == :prod,
+      build_embedded: Mix.env() == :prod,
+      start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: ["ex/loqui/lib/"],
       test_paths: ["ex/loqui/test"],
@@ -31,10 +31,10 @@ defmodule Loqui.Mixfile do
     [
       {:ranch, "~> 1.4.0"},
       {:cowlib, ">= 1.3.0"},
-      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:ex_doc, ">= 0.18.0", only: :dev},
       {:connection, "~> 1.0"},
       {:jiffy, "~> 0.14.11", optional: true},
-      {:msgpax, "~> 2.0", optional: true},
+      {:msgpax, "~> 2.0", optional: true}
     ]
   end
 
@@ -44,7 +44,7 @@ defmodule Loqui.Mixfile do
       files: ~w(README.md mix.exs ex/loqui/lib/*),
       maintainers: ["Jesse Howarth", "Stanislav Vishnevskiy", "Steve Cohen"],
       licenses: ["MIT"],
-      links: %{"GitHub" => @project_url},
+      links: %{"GitHub" => @project_url}
     ]
   end
 end
