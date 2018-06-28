@@ -72,9 +72,13 @@ defmodule Loqui.RanchProtocol do
 
     receive do
       :send_ping ->
-        state
-          |> ping
-          |> handler_loop(so_far)
+        case ping(state) do
+          {:error, reason} ->
+            Logger.error("[loqui] Sending ping failed because #{inspect reason}")
+
+          state ->
+            handler_loop(state, so_far)
+        end
 
       {:response, seq, response} ->
         state
@@ -102,9 +106,11 @@ defmodule Loqui.RanchProtocol do
     end
   end
 
-  @spec ping(state) :: state | :ok
-  defp ping(%{pong_received: false}=state),
-    do: goaway(state, :ping_timeout)
+  @spec ping(state) :: state | :ok | {:error, any}
+  defp ping(%{pong_received: false}=state) do
+    goaway(state, :ping_timeout)
+    {:error, :pong_not_received}
+  end
   defp ping(state) do
     {seq, state} = next_seq(state)
 
