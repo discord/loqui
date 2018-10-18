@@ -292,6 +292,8 @@ defmodule Loqui.Client do
     end
   end
 
+  defp update_socket_opts(socket, :gen_tcp), do: update_socket_opts(socket, :inet)
+
   defp update_socket_opts(socket, transport) do
     {:ok, opts} = transport.getopts(socket, [:sndbuf, :recbuf])
     send_buffer_size = opts[:sndbuf]
@@ -496,6 +498,11 @@ defmodule Loqui.Client do
     jitter = round(1000 * :rand.uniform())
 
     Process.send_after(self(), :send_ping, ping_interval - jitter)
+    state
+  end
+
+  defp make_active_once(%State{sock: sock, transport: :gen_tcp}=state) do
+    :ok = :inet.setopts(sock, [active: :once])
     state
   end
 
