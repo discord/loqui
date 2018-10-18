@@ -43,7 +43,7 @@ defmodule Loqui.Server do
 
     def loop(%{socket: sock} = state) do
       receive do
-        {:tcp, ^sock, data} ->
+        {type, ^sock, data} when type in [:tcp, :ssl] ->
           case handle_tcp_data(data, state) do
             :ok ->
               exit(:normal)
@@ -56,11 +56,11 @@ defmodule Loqui.Server do
               exit(reason)
           end
 
-        {:tcp_error, ^sock, reason} ->
+        {type, ^sock, reason} when type in [:tcp_error, :ssl_error] ->
           Logger.warn("TCP error #{inspect reason} from client #{inspect ip_address(sock)}. Closing")
           exit(reason)
 
-        {:tcp_closed, ^sock} ->
+        {type, ^sock} when type in [:tcp_closed, :ssl_closed]  ->
           Logger.info("Client #{inspect ip_address(sock)} closed.")
           exit(:normal)
       end

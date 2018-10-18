@@ -85,14 +85,14 @@ defmodule Loqui.RanchProtocol do
           |> handle_response(seq, response, [])
           |> handler_loop(so_far)
 
-      {:tcp, ^socket_pid, data} ->
+      {type, ^socket_pid, data} when type in [:tcp, :ssl] ->
         handle_socket_data(state, <<so_far::binary, data::binary>>)
 
-      {:tcp_closed, ^socket_pid} ->
+      {type, ^socket_pid} when type in [:tcp_closed, :ssl_closed] ->
         Logger.info "[loqui] tcp_closed. socket_pid=#{inspect socket_pid}"
-        close(state, :tcp_closed)
+        close(state, type)
 
-      {:tcp_error, ^socket_pid, reason} ->
+      {type, ^socket_pid, reason} when type in [:tcp_error, :ssl_error] ->
         goaway(state, reason)
 
       {:DOWN, ref, :process, _pid, reason} ->
