@@ -169,7 +169,7 @@ defmodule Loqui.Client do
   @type sequence :: 1..unquote(@max_sequence)
 
   @type transport :: :gen_tcp | :ssl
-  @type transport_opt :: {:recv_timeout, pos_integer} | {:send_timeout, pos_integer}
+  @type transport_opt :: {:recv_timeout, pos_integer} | {:send_timeout, pos_integer} | :ssl.ssl_option()
   @type transport_opts :: [transport_opt]
 
   @type loqui_opt :: {:codecs, [Codec.t]} | {:compressors, [Compressor.t]}
