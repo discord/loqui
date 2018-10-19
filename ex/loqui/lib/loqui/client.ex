@@ -292,14 +292,12 @@ defmodule Loqui.Client do
     end
   end
 
-  defp update_socket_opts(socket, :gen_tcp), do: update_socket_opts(socket, :inet)
-
   defp update_socket_opts(socket, transport) do
-    {:ok, opts} = transport.getopts(socket, [:sndbuf, :recbuf])
+    {:ok, opts} = getopts(transport, socket, [:sndbuf, :recbuf])
     send_buffer_size = opts[:sndbuf]
     recieve_buffer_size = opts[:recbuf]
     buffer_size = max(send_buffer_size, recieve_buffer_size)
-    transport.setopts(socket, [sndbuf: send_buffer_size,
+    setopts(transport, socket, [sndbuf: send_buffer_size,
                            recbuf: recieve_buffer_size,
                            buffer: buffer_size])
     {:ok, socket}
@@ -501,13 +499,16 @@ defmodule Loqui.Client do
     state
   end
 
-  defp make_active_once(%State{sock: sock, transport: :gen_tcp}=state) do
-    :ok = :inet.setopts(sock, [active: :once])
-    state
-  end
+  defp getopts(:ssl, socket, opts), do: :ssl.getopts(socket, opts)
+
+  defp getopts(:gen_tcp, socket, opts), do: :inet.getopts(socket, opts)
+
+  defp setopts(:ssl, socket, opts), do: :ssl.setopts(socket, opts)
+
+  defp setopts(:gen_tcp, socket, opts), do: :inet.setopts(socket, opts)
 
   defp make_active_once(%State{sock: sock, transport: transport}=state) do
-    :ok = transport.setopts(sock, [active: :once])
+    :ok = setopts(transport, sock, [active: :once])
     state
   end
 
