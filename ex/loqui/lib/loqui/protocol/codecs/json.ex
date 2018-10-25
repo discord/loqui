@@ -1,5 +1,4 @@
 if Code.ensure_compiled?(:jiffy) do
-
   defmodule Loqui.Protocol.Codecs.Json do
     @moduledoc """
     The Json codec.

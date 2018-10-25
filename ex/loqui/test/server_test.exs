@@ -17,19 +17,19 @@ defmodule Loqui.ServerTest do
 
   @port 38419
   setup do
-    {:ok, handler} = Loqui.Server.start_link(@port, "/_rpc", Handler,
-      server_name: :server_test)
+    {:ok, handler} = Loqui.Server.start_link(@port, "/_rpc", Handler, server_name: :server_test)
 
     :inets.start()
 
-    on_exit fn ->
+    on_exit(fn ->
       ref = Process.monitor(handler)
       Loqui.Server.stop(:server_test)
+
       receive do
         {:DOWN, ^ref, _, _, _} ->
           :ok
       end
-    end
+    end)
 
     :ok
   end
@@ -51,13 +51,15 @@ defmodule Loqui.ServerTest do
   end
 
   test "it should throw out HTTP requests that are too big" do
-    big_header_value = "Haxor"
-    |> String.duplicate(100)
-    |> String.to_charlist
+    big_header_value =
+      "Haxor"
+      |> String.duplicate(100)
+      |> String.to_charlist()
 
-    headers = for n <- 1..10_000 do
-      {'bogus-header-#{n}', big_header_value}
-    end
+    headers =
+      for n <- 1..10_000 do
+        {'bogus-header-#{n}', big_header_value}
+      end
 
     # httpc can die for two reasons here, both are fine; as long as we stop processing
     # the request
@@ -68,6 +70,5 @@ defmodule Loqui.ServerTest do
       {:error, reason} ->
         assert reason == :socket_closed_remotely
     end
-
   end
 end

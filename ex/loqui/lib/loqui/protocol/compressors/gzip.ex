@@ -18,5 +18,4 @@ defmodule Loqui.Protocol.Compressors.Gzip do
   @doc false
   def decompress(iodata),
     do: :zlib.gunzip(iodata)
-
 end

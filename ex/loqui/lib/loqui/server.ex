@@ -1,5 +1,4 @@
 defmodule Loqui.Server do
-
   defmodule Http do
     defmodule State do
       defstruct [:handler, :path, :transport, :socket, :buffer, :handler_opts]
@@ -29,7 +28,9 @@ defmodule Loqui.Server do
 
     def init({ref, socket, transport, opts}) do
       state = State.new(socket, transport, opts)
-      transport_opts = opts
+
+      transport_opts =
+        opts
         |> Keyword.get(:transport_opts, [])
         |> Keyword.put(:active, true)
 
@@ -52,26 +53,34 @@ defmodule Loqui.Server do
               loop(%State{state | buffer: request})
 
             {:error, reason} ->
-              Logger.error("Client #{inspect ip_address(sock)} caused #{inspect reason}. Exiting.")
+              Logger.error(
+                "Client #{inspect(ip_address(sock))} caused #{inspect(reason)}. Exiting."
+              )
+
               exit(reason)
           end
 
         {:tcp_error, ^sock, reason} ->
-          Logger.warn("TCP error #{inspect reason} from client #{inspect ip_address(sock)}. Closing")
+          Logger.warn(
+            "TCP error #{inspect(reason)} from client #{inspect(ip_address(sock))}. Closing"
+          )
+
           exit(reason)
 
         {:tcp_closed, ^sock} ->
-          Logger.info("Client #{inspect ip_address(sock)} closed.")
+          Logger.info("Client #{inspect(ip_address(sock))} closed.")
           exit(:normal)
       end
     end
 
-    defp handle_tcp_data(extra_data, %{socket: sock, path: loqui_path, transport: transport, buffer: buffer} = state) do
+    defp handle_tcp_data(
+           extra_data,
+           %{socket: sock, path: loqui_path, transport: transport, buffer: buffer} = state
+         ) do
       with {:ok, ^loqui_path, {headers, _}} <- try_parse_request(buffer <> extra_data),
            header_val when is_bitstring(header_val) <- :proplists.get_value("upgrade", headers),
            "loqui" <- String.downcase(header_val) do
-
-        upgrade_headers = [{"connection", "Upgrade"},{"upgrade", "loqui"}]
+        upgrade_headers = [{"connection", "Upgrade"}, {"upgrade", "loqui"}]
         response = :cow_http.response(101, :"HTTP/1.1", upgrade_headers)
         transport.send(sock, response)
         RanchProtocol.upgrade(sock, transport, state.handler, state.handler_opts)
@@ -98,7 +107,6 @@ defmodule Loqui.Server do
       with true <- String.ends_with?(data, "\r\n\r\n"),
            ["GET " <> rest_of_line, rest] <- String.split(data, "\r\n", parts: 2),
            [path, _version] <- String.split(rest_of_line, " ", parts: 2) do
-
         {:ok, path, :cow_http.parse_headers(rest)}
       else
         _ ->
@@ -114,21 +122,24 @@ defmodule Loqui.Server do
   end
 
   @type transport :: :ranch_tcp | :ranch_ssl
-  @type transport_option :: :gen_tcp.option | :ranch.opt
-  @type option :: {:loqui_path, String.t}
-  | {:transport_opts, [transport_option]}
-  | {:handler_opts, Keyword.t}
-  | {:transport, transport}
+  @type transport_option :: :gen_tcp.option() | :ranch.opt()
+  @type option ::
+          {:loqui_path, String.t()}
+          | {:transport_opts, [transport_option]}
+          | {:handler_opts, Keyword.t()}
+          | {:transport, transport}
   @type options :: [{:handler, module} | [option]]
 
-  @type tcp_port :: (0..65535)
-  @type path :: String.t
+  @type tcp_port :: 0..65535
+  @type path :: String.t()
 
   @spec start_link(tcp_port, path, module, options) :: {:ok, pid} | {:error, any}
   def start_link(port, path, handler, opts \\ []) do
     server_name = Keyword.get(opts, :server_name, :loqui)
     transport = Keyword.get(opts, :transport, :ranch_tcp)
-    opts = opts
+
+    opts =
+      opts
       |> Keyword.put(:handler, handler)
       |> Keyword.put(:loqui_path, path)
 
@@ -139,5 +150,4 @@ defmodule Loqui.Server do
   end
 
   defdelegate stop(listener_name), to: :ranch, as: :stop_listener
-
 end
