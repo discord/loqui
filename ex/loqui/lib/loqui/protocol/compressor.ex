@@ -25,5 +25,5 @@ defmodule Loqui.Protocol.Compressor do
   This name is sent during protocol negotiation between
   the client and the server.
   """
-  @callback name() :: String.t
+  @callback name() :: String.t()
 end

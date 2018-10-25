@@ -22,5 +22,5 @@ defmodule Loqui.Protocol.Codec do
   The name of the codec used in the negotiation
   phase of the loqui protocol
   """
-  @callback name() :: String.t
+  @callback name() :: String.t()
 end

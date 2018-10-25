@@ -7,8 +7,9 @@ defmodule ClientTest do
     def loqui_init(_transport, _opts) do
       opts = %{
         supported_encodings: ["erlpack"],
-        supported_compressions: [],
+        supported_compressions: []
       }
+
       {:ok, opts}
     end
 
@@ -41,20 +42,18 @@ defmodule ClientTest do
     end
   end
 
-
   setup_all do
     {:ok, _server} = Loqui.Server.start_link(8080, "/_rpc", Server)
-    {:ok, _push_server} = Loqui.Server.start_link(8081, "/_rpc", ServerWithPush, [
-          server_name: :push_server])
+
+    {:ok, _push_server} =
+      Loqui.Server.start_link(8081, "/_rpc", ServerWithPush, server_name: :push_server)
 
     :ok
   end
 
   setup do
     Process.register(self(), Test)
-    {:ok, client_pid} = Loqui.Client.start_link("localhost", 8080, "/_rpc",
-      loqui_opts: [
-      ])
+    {:ok, client_pid} = Loqui.Client.start_link("localhost", 8080, "/_rpc", loqui_opts: [])
 
     {:ok, client: client_pid}
   end
@@ -78,7 +77,8 @@ defmodule ClientTest do
   end
 
   test "it should respond to go away packets", ctx do
-    assert {:error, {:remote_went_away, 32, "Leave me alone!"}} = Loqui.Client.request(ctx.client, "go away")
+    assert {:error, {:remote_went_away, 32, "Leave me alone!"}} =
+             Loqui.Client.request(ctx.client, "go away")
   end
 
   test "it should handle really big requests and responses", ctx do
@@ -101,9 +101,10 @@ defmodule ClientTest do
     end
 
     test "requests go through the loqui_request function", ctx do
-      assert "there are still requests" = Loqui.Client.request(ctx.push_client, "there are still requests")
+      assert "there are still requests" =
+               Loqui.Client.request(ctx.push_client, "there are still requests")
+
       assert_receive {:request, "there are still requests"}
     end
   end
-
 end

@@ -7,7 +7,12 @@ defmodule Loqui.Protocol.Frames do
   end
 
   def hello_ack(flags, ping_interval, settings_payload) do
-    [@opcode_hello_ack, flags, <<ping_interval::uint32>>, <<size_of(settings_payload)::uint32>> | settings_payload]
+    [
+      @opcode_hello_ack,
+      flags,
+      <<ping_interval::uint32>>,
+      <<size_of(settings_payload)::uint32>> | settings_payload
+    ]
   end
 
   def ping(flags, seq) do
@@ -31,7 +36,13 @@ defmodule Loqui.Protocol.Frames do
   end
 
   def error(flags, code, seq, reason) do
-    [@opcode_error, flags, <<seq::uint32>>, <<code::uint16>>, <<size_of(reason)::uint32>> | reason]
+    [
+      @opcode_error,
+      flags,
+      <<seq::uint32>>,
+      <<code::uint16>>,
+      <<size_of(reason)::uint32>> | reason
+    ]
   end
 
   def goaway(flags, code, reason) do
@@ -43,5 +54,4 @@ defmodule Loqui.Protocol.Frames do
 
   def size_of(io_data) when is_list(io_data),
     do: IO.iodata_length(io_data)
-
 end
