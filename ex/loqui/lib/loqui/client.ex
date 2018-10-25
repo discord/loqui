@@ -333,10 +333,7 @@ defmodule Loqui.Client do
     {:reply, {:error, :remote_went_away}, state}
   end
 
-  def handle_call(:close, from, %State{sock: sock} = s) do
-    go_away_packet = Frames.goaway(0, 0, "Closing")
-    :gen_tcp.send(sock, go_away_packet)
-
+  def handle_call(:close, from, %State{} = s) do
     {:disconnect, {:close, from}, s}
   end
 
