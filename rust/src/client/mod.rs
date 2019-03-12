@@ -23,8 +23,8 @@ impl Client {
         }
         await!(self.socket.flush_async()).map_err(|e| Error::from(e))?;
 
-        let mut response = [0; 1024];
-        let bytes_read = dbg!(await!(self.socket.read_async(&mut response))?);
-        Ok(String::from_utf8(response[..bytes_read].to_vec())?)
+        let mut response = [0; 4];
+        await!(self.socket.read_exact_async(&mut response))?;
+        Ok(String::from_utf8(response.to_vec())?)
     }
 }
