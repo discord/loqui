@@ -32,9 +32,8 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
 
 async fn handle_connection(mut tcp_stream: TcpStream) -> Result<(), Error> {
     let mut data = [0; 1024];
-    // TODO: handle disconnect
-    while let Ok(x) = await!(tcp_stream.read_async(&mut data)) {
-        println!("data! {:?}", x);
+    // TODO: handle disconnect, bytes_read=0
+    while let Ok(_bytes_read) = await!(tcp_stream.read_async(&mut data)) {
         if let Err(e) = await!(tcp_stream.write_all_async(&data)) {
             println!("Failed to write {:?}", e);
         }

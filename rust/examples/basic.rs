@@ -10,11 +10,13 @@ const ADDRESS: &'static str = "127.0.0.1:3000";
 
 fn main() {
     tokio::run_async(
-        async move {
-            tokio::spawn_async(async {
-                let result = await!(run(ADDRESS));
-                println!("Run result={:?}", result);
-            });
+        async {
+            tokio::spawn_async(
+                async {
+                    let result = await!(run(ADDRESS));
+                    println!("Run result={:?}", result);
+                },
+            );
             thread::sleep(Duration::from_secs(1));
             let mut client = await!(Client::connect(ADDRESS)).unwrap();
             let response = await!(client.request("test".to_string()));
