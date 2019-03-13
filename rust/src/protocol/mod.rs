@@ -1,4 +1,1 @@
-
-pub struct Handshake {
-
-}
+pub struct Handshake {}
