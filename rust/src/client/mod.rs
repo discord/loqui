@@ -49,8 +49,7 @@ impl Client {
 
             let mut total = reader.map(|frame| Message::Response(frame)).select(rx.map_err(|()| err_msg("rx error")));
 
-            // TOOD: loop?
-            while let Some(item) = await!(total.next()) {//.select(reader) {
+            while let Some(item) = await!(total.next()) {
                 match item {
                     Ok(Message::Request(seq, sender)) => {
                         waiters.insert(seq, sender);
