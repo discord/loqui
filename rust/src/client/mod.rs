@@ -9,8 +9,11 @@ use std::task::{Poll as StdPoll, Waker};
 use tokio::await;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_io::io::WriteHalf;
-use futures::oneshot;
-use futures::sync::oneshot::Sender;
+use futures::channel::mpsc;
+use futures::future::{self, FutureExt};
+use futures::stream::{self, StreamExt};
+use futures::select;
+use futures::channel::oneshot::{channel as oneshot, Sender as OneShotSender};
 use tokio::prelude::*;
 
 const UPGRADE_REQUEST: &'static str =
@@ -19,8 +22,8 @@ const UPGRADE_REQUEST: &'static str =
 pub struct Client {
     //reader: ReadHalf<TcpStream>,
     writer: WriteHalf<TcpStream>,
+    sender: mpsc::UnboundedSender<(u32, OneShotSender<String>)>,
     // TODO: should probably sweep these
-    waiters: Arc<RwLock<HashMap<u32, Sender<String>>>>,
 }
 
 impl Client {
@@ -28,22 +31,34 @@ impl Client {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
         let (mut reader, writer) = socket.split();
-        let waiters : Arc<RwLock<HashMap<u32, Sender<String>>>> = Arc::new(RwLock::new(HashMap::new()));
-        let read_waiters = waiters.clone();
+        let (tx, rx) = mpsc::unbounded();
 
         // read task
         tokio::spawn_async(async move {
+            let waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
             let mut data = [0; 1024];
+            let mut rx = rx.fuse();
+            let mut x = reader.read_async(&mut data).fuse();
+            select! {
+                message = rx.next() => {
+                    println!("received a message. message={:?}", message)
+                }
+                _ =  x => {
+                    println!("read data {:?}", data.to_vec());
+                },
+            };
+            /*
             while let Ok(_bytes_read) = await!(reader.read_async(&mut data)) {
                 println!("received data from server {:?}", data.to_vec());
                 let sender = read_waiters.write().unwrap().remove(&1).unwrap();
                 sender.send(String::from_utf8(data.to_vec()).unwrap());
             }
+            */
         });
 
         let mut client = Self {
+            sender: tx,
             writer,
-            waiters
         };
 
         await!(client.upgrade())?;
@@ -66,7 +81,7 @@ impl Client {
         await!(self.write(data))?;
         let seq = self.next_seq();
         let (sender, receiver) = oneshot();
-        self.waiters.write().unwrap().insert(seq, sender);
+        self.sender.unbounded_send((seq, sender))?;
         let result = await!(receiver)?;
         Ok(result)
     }
