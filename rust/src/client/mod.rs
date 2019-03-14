@@ -31,19 +31,23 @@ impl Client {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
         let (mut reader, writer) = socket.split();
-        let (tx, rx) = mpsc::unbounded();
+        let (tx, rx) = mpsc::unbounded::<(u32, OneShotSender<String>)>();
 
         // read task
         tokio::spawn_async(async move {
-            let waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
+            let mut waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
             let mut data = [0; 1024];
             let mut rx = rx.fuse();
-            let mut x = reader.read_async(&mut data).fuse();
+            let mut read = reader.read_async(&mut data).fuse();
             select! {
                 message = rx.next() => {
-                    println!("received a message. message={:?}", message)
+                    println!("received a message. message={:?}", message);
+                    if let Some(message) = message {
+                        waiters.insert(message.0, message.1);
+                    }
                 }
-                _ =  x => {
+                _ = read => {
+                    let sender = waiters.remove(&1).unwrap();
                     println!("read data {:?}", data.to_vec());
                 },
             };
