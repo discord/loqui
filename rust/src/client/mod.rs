@@ -52,7 +52,7 @@ impl Client {
             while let Some(item) = await!(total.next()) {//.select(reader) {
                 match item {
                     Ok(Message::Request(seq, sender)) => {
-                        writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {flags: 0, sequence_id: 0}))).unwrap();
+                        writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {flags: 2, sequence_id: 1}))).unwrap();
                     },
                     Ok(Message::Response(frame)) => {
                         dbg!(frame);
