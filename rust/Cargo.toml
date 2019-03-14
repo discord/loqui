@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 failure = "0.1.1"
 log = "0.4"
-futures-preview = "0.3.0-alpha.13"
+futures = "0.1.25"
 tokio = { version = "0.1.16", features = ["async-await-preview"] }
 tokio-io = { version = "0.1.12" }
 tokio-async-await = "0.1.4"

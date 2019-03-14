@@ -9,11 +9,9 @@ use std::task::{Poll as StdPoll, Waker};
 use tokio::await;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_io::io::WriteHalf;
-use futures::channel::mpsc;
-use futures::future::{self, FutureExt};
-use futures::stream::{self, StreamExt};
-use futures::select;
-use futures::channel::oneshot::{channel as oneshot, Sender as OneShotSender};
+use futures::sync::mpsc;
+use futures::oneshot;
+use futures::sync::oneshot::{Sender as OneShotSender};
 use tokio::prelude::*;
 
 const UPGRADE_REQUEST: &'static str =
@@ -31,14 +29,18 @@ impl Client {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
         let (mut reader, writer) = socket.split();
-        let (tx, rx) = mpsc::unbounded::<(u32, OneShotSender<String>)>();
+        let (tx, mut rx) = mpsc::unbounded::<(u32, OneShotSender<String>)>();
 
         // read task
         tokio::spawn_async(async move {
             let mut waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
             let mut data = [0; 1024];
-            let mut rx = rx.fuse();
-            let mut read = reader.read_async(&mut data).fuse();
+            //let mut read = reader.read_async(&mut data).fuse();
+
+            while let Some(item) = await!(rx.next()) {//.select(reader) {
+                println!("item {:?}", item);
+            }
+            /*
             select! {
                 message = rx.next() => {
                     println!("received a message. message={:?}", message);
@@ -51,6 +53,7 @@ impl Client {
                     println!("read data {:?}", data.to_vec());
                 },
             };
+            */
             /*
             while let Ok(_bytes_read) = await!(reader.read_async(&mut data)) {
                 println!("received data from server {:?}", data.to_vec());
