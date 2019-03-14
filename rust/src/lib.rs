@@ -1,6 +1,9 @@
 #![feature(await_macro, async_await, futures_api)]
 #![feature(arbitrary_self_types)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
+
+#[macro_use]
+extern crate log;
 
 pub mod client;
 pub mod protocol;

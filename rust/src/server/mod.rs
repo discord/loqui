@@ -17,13 +17,7 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
     loop {
         match await!(incoming.next()) {
             Some(Ok(tcp_stream)) => {
-                tokio::spawn_async(
-                    async {
-                        if let Err(e) = await!(handle_connection(tcp_stream)) {
-                            println!("Socket error. e={:?}", e);
-                        }
-                    },
-                );
+                tokio::spawn_async(handle_connection(tcp_stream));
             }
             other => {
                 println!("incoming.next() return odd result. {:?}", other);
@@ -33,7 +27,7 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
     Ok(())
 }
 
-async fn handle_connection(mut socket: TcpStream) -> Result<(), Error> {
+async fn handle_connection(mut socket: TcpStream) {
     let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
     let (mut writer, mut reader) = framed_socket.split();
     // TODO: handle disconnect, bytes_read=0
@@ -42,12 +36,17 @@ async fn handle_connection(mut socket: TcpStream) -> Result<(), Error> {
         match result {
             Ok(frame) => {
                 // TODO: better handle this error
-                writer = await!(writer.send(frame))?;
-            },
+                match await!(writer.send(frame)) {
+                    Ok(new_writer) => writer = new_writer,
+                    Err(e) => {
+                        error!("Failed to write. error={:?}", e);
+                        return;
+                    }
+                }
+            }
             Err(e) => {
                 dbg!(e);
             }
         }
     }
-    Ok(())
 }

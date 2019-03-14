@@ -1,12 +1,11 @@
-use bytes::{BufMut, BytesMut};
 use byteorder::{BigEndian, ByteOrder};
+use bytes::{BufMut, BytesMut};
 
-use crate::protocol::codec::{LoquiCodec};
-use crate::protocol::errors::{ProtocolError};
+use crate::protocol::codec::LoquiCodec;
+use crate::protocol::errors::ProtocolError;
 
 type DecodeResult<T> = Result<Option<T>, ProtocolError>;
 type EncodeResult = Result<(), ProtocolError>;
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Hello {
@@ -15,7 +14,6 @@ pub struct Hello {
     pub encodings: Vec<String>,
     pub compressions: Vec<String>,
 }
-
 
 impl Hello {
     pub const OP_CODE: u8 = 1;
@@ -49,7 +47,10 @@ impl Hello {
         let payload_bytes = BigEndian::read_u32(&buf[3..7]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -66,7 +67,9 @@ impl Hello {
 
         let settings: Vec<&str> = payload.split("|").collect();
         if settings.len() != 2 {
-            return Err(ProtocolError::InvalidPayload("Expected exactly two settings.".into()));
+            return Err(ProtocolError::InvalidPayload(
+                "Expected exactly two settings.".into(),
+            ));
         }
 
         let encodings = settings[0]
@@ -86,10 +89,7 @@ impl Hello {
             compressions: compressions,
         }))
     }
-
-
 }
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct HelloAck {
@@ -98,7 +98,6 @@ pub struct HelloAck {
     pub encoding: String,
     pub compression: String,
 }
-
 
 impl HelloAck {
     pub const OP_CODE: u8 = 2;
@@ -126,7 +125,10 @@ impl HelloAck {
         let payload_bytes = BigEndian::read_u32(&buf[6..10]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -143,7 +145,9 @@ impl HelloAck {
 
         let settings: Vec<&str> = payload.split("|").collect();
         if settings.len() != 2 {
-            return Err(ProtocolError::InvalidPayload("Expected exactly two settings.".into()));
+            return Err(ProtocolError::InvalidPayload(
+                "Expected exactly two settings.".into(),
+            ));
         }
 
         Ok(Some(Self {
@@ -154,26 +158,28 @@ impl HelloAck {
         }))
     }
 
-    fn negotiate_encoding(server_encodings: &[String], client_encodings: &[String])
-        -> Option<String>
-    {
+    fn negotiate_encoding(
+        server_encodings: &[String],
+        client_encodings: &[String],
+    ) -> Option<String> {
         for server_encoding in server_encodings {
             for client_encoding in client_encodings {
                 if server_encoding == client_encoding {
-                    return Some(server_encoding.clone())
+                    return Some(server_encoding.clone());
                 }
             }
         }
         None
     }
 
-    fn negotiate_compression(server_compressions: &[String], client_compressions: &[String])
-        -> Option<String>
-    {
+    fn negotiate_compression(
+        server_compressions: &[String],
+        client_compressions: &[String],
+    ) -> Option<String> {
         for server_compression in server_compressions {
             for client_compression in client_compressions {
                 if server_compression == client_compression {
-                    return Some(server_compression.clone())
+                    return Some(server_compression.clone());
                 }
             }
         }
@@ -187,12 +193,11 @@ impl HelloAck {
         encodings: &[String],
         compressions: &[String],
     ) -> Option<Self> {
-
         let encoding = HelloAck::negotiate_encoding(encodings, hello.encodings.as_ref())?;
 
-        let compression = HelloAck::negotiate_compression(
-            compressions, hello.compressions.as_ref()
-        ).unwrap_or(String::from(""));
+        let compression =
+            HelloAck::negotiate_compression(compressions, hello.compressions.as_ref())
+                .unwrap_or(String::from(""));
 
         Some(HelloAck {
             flags: 0,
@@ -202,7 +207,6 @@ impl HelloAck {
         })
     }
 }
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ping {
@@ -248,7 +252,6 @@ impl Ping {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Pong {
     pub flags: u8,
@@ -286,7 +289,6 @@ impl Pong {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Request {
     pub flags: u8,
@@ -318,7 +320,10 @@ impl Request {
         let payload_bytes = BigEndian::read_u32(&buf[6..10]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -340,14 +345,12 @@ impl Request {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Response {
     pub flags: u8,
     pub sequence_id: u32,
     pub payload: Vec<u8>,
 }
-
 
 impl Response {
     pub const OP_CODE: u8 = 6;
@@ -373,7 +376,10 @@ impl Response {
         let payload_bytes = BigEndian::read_u32(&buf[6..10]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -395,13 +401,11 @@ impl Response {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Push {
     pub flags: u8,
     pub payload: Vec<u8>,
 }
-
 
 impl Push {
     pub const OP_CODE: u8 = 7;
@@ -425,7 +429,10 @@ impl Push {
         let payload_bytes = BigEndian::read_u32(&buf[2..6]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -446,14 +453,12 @@ impl Push {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct GoAway {
     pub flags: u8,
     pub code: u16,
     pub payload: Vec<u8>,
 }
-
 
 impl GoAway {
     pub const OP_CODE: u8 = 8;
@@ -479,7 +484,10 @@ impl GoAway {
         let payload_bytes = BigEndian::read_u32(&buf[4..8]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
@@ -501,7 +509,6 @@ impl GoAway {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Error {
     pub flags: u8,
@@ -509,7 +516,6 @@ pub struct Error {
     pub code: u16,
     pub payload: Vec<u8>,
 }
-
 
 impl Error {
     pub const OP_CODE: u8 = 9;
@@ -537,7 +543,10 @@ impl Error {
         let payload_bytes = BigEndian::read_u32(&buf[8..12]);
 
         if payload_bytes > codec.max_payload_bytes {
-            return Err(ProtocolError::PayloadTooLarge(payload_bytes, codec.max_payload_bytes));
+            return Err(ProtocolError::PayloadTooLarge(
+                payload_bytes,
+                codec.max_payload_bytes,
+            ));
         }
 
         let required_len = Self::MIN_BYTES as usize + payload_bytes as usize;
