@@ -8,6 +8,8 @@ use std::sync::{Arc, RwLock};
 use std::task::{Poll as StdPoll, Waker};
 use tokio::await;
 use tokio::net::{TcpListener, TcpStream};
+use tokio_io::io::{ReadHalf, WriteHalf};
+use futures::oneshot;
 use tokio::prelude::*;
 use tokio::spawn_async;
 
@@ -15,7 +17,8 @@ const UPGRADE_REQUEST: &'static str =
     "GET #{loqui_path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 pub struct Client {
-    socket: TcpStream,
+    //reader: ReadHalf<TcpStream>,
+    writer: WriteHalf<TcpStream>,
     // TODO: should probably sweep these
     waiters: Arc<RwLock<HashMap<u32, Option<String>>>>,
 }
@@ -51,17 +54,30 @@ impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
+        let (mut reader, writer) = socket.split();
+        let waiters = Arc::new(RwLock::new(HashMap::new()));
+        let read_waiters = waiters.clone();
+
+        tokio::spawn_async(async move {
+            let mut data = [0; 1024];
+            while let Ok(_bytes_read) = await!(reader.read_async(&mut data)) {
+                println!("received data from server {:?}", data.to_vec());
+                read_waiters.write().unwrap().insert(1, Some("done".to_string()));
+            }
+        });
+
         let mut client = Self {
-            socket,
-            waiters: Arc::new(RwLock::new(HashMap::new())),
+            writer,
+            waiters
         };
+
         await!(client.upgrade())?;
         Ok(client)
     }
 
     async fn write<'a>(&'a mut self, data: &'a [u8]) -> Result<(), Error> {
-        await!(self.socket.write_all_async(data))?;
-        await!(self.socket.flush_async())?;
+        await!(self.writer.write_all_async(data))?;
+        await!(self.writer.flush_async())?;
         Ok(())
     }
 
@@ -81,7 +97,6 @@ impl Client {
             async move {
                 let mut response = [0; 4];
                 // TODO unwrap
-                await!(self.socket.read_exact_async(&mut response)).unwrap();
                 println!("writing");
                 waiters.write().unwrap().insert(seq, Some("done".to_string()));
                 println!("wrote");
@@ -91,12 +106,6 @@ impl Client {
             waiters: self.waiters.clone(),
             seq,
         })
-
-        /*
-        let mut response = [0; 4];
-        await!(self.socket.read_exact_async(&mut response))?;
-        Ok(String::from_utf8(response.to_vec())?)
-        */
     }
 
     fn next_seq(&mut self) -> u32 {
