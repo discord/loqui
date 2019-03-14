@@ -11,61 +11,62 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_io::io::WriteHalf;
 use futures::sync::mpsc;
 use futures::oneshot;
+use futures::stream::SplitSink;
 use futures::sync::oneshot::{Sender as OneShotSender};
 use tokio::prelude::*;
+use tokio_codec::Framed;
+
+use crate::protocol::codec::LoquiCodec;
+use crate::protocol::codec::LoquiFrame;
 
 const UPGRADE_REQUEST: &'static str =
     "GET #{loqui_path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 pub struct Client {
     //reader: ReadHalf<TcpStream>,
-    writer: WriteHalf<TcpStream>,
-    sender: mpsc::UnboundedSender<(u32, OneShotSender<String>)>,
+    //writer: SplitSink<Framed<TcpStream, LoquiCodec>>,
+    sender: mpsc::UnboundedSender<Message>,
     // TODO: should probably sweep these
+}
+
+#[derive(Debug)]
+enum Message {
+    Request(u32, OneShotSender<String>),
+    Response(LoquiFrame)
 }
 
 impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
-        let (mut reader, writer) = socket.split();
-        let (tx, mut rx) = mpsc::unbounded::<(u32, OneShotSender<String>)>();
+        let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
+        let (mut writer, mut reader) = framed_socket.split();
+        let (tx, mut rx) = mpsc::unbounded::<Message>();
 
         // read task
         tokio::spawn_async(async move {
             let mut waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
-            let mut data = [0; 1024];
-            //let mut read = reader.read_async(&mut data).fuse();
 
-            while let Some(item) = await!(rx.next()) {//.select(reader) {
-                println!("item {:?}", item);
-            }
-            /*
-            select! {
-                message = rx.next() => {
-                    println!("received a message. message={:?}", message);
-                    if let Some(message) = message {
-                        waiters.insert(message.0, message.1);
+            let mut total = reader.map(|frame| Message::Response(frame)).select(rx.map_err(|()| err_msg("rx error")));
+
+            while let Some(item) = await!(total.next()) {//.select(reader) {
+                match item {
+                    Ok(Message::Request(seq, sender)) => {
+                        writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {flags: 0, sequence_id: 0}))).unwrap();
+                    },
+                    Ok(Message::Response(frame)) => {
+                        dbg!(frame);
+                    },
+                    Err(e) => {
+                        dbg!(e);
                     }
                 }
-                _ = read => {
-                    let sender = waiters.remove(&1).unwrap();
-                    println!("read data {:?}", data.to_vec());
-                },
-            };
-            */
-            /*
-            while let Ok(_bytes_read) = await!(reader.read_async(&mut data)) {
-                println!("received data from server {:?}", data.to_vec());
-                let sender = read_waiters.write().unwrap().remove(&1).unwrap();
-                sender.send(String::from_utf8(data.to_vec()).unwrap());
             }
-            */
         });
 
         let mut client = Self {
             sender: tx,
-            writer,
+            //writer,
         };
 
         await!(client.upgrade())?;
@@ -73,8 +74,8 @@ impl Client {
     }
 
     async fn write<'a>(&'a mut self, data: &'a [u8]) -> Result<(), Error> {
-        await!(self.writer.write_all_async(data))?;
-        await!(self.writer.flush_async())?;
+        //await!(self.writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {flags: 0, sequence_id: 0})))?;
+        //await!(self.writer.flush_async())?;
         Ok(())
     }
 
@@ -88,7 +89,7 @@ impl Client {
         await!(self.write(data))?;
         let seq = self.next_seq();
         let (sender, receiver) = oneshot();
-        self.sender.unbounded_send((seq, sender))?;
+        self.sender.unbounded_send(Message::Request(seq, sender))?;
         let result = await!(receiver)?;
         Ok(result)
     }
