@@ -26,7 +26,6 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
             }
         }
     }
-    println!("Shut down.");
     Ok(())
 }
 
