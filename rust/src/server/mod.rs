@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use tokio::await;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
+use tokio_codec::Framed;
 
 use crate::protocol::codec::LoquiCodec;
 use crate::protocol::codec::LoquiFrame;
@@ -32,16 +33,21 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
     Ok(())
 }
 
-async fn handle_connection(mut tcp_stream: TcpStream) -> Result<(), Error> {
+async fn handle_connection(mut socket: TcpStream) -> Result<(), Error> {
     let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
     let (mut writer, mut reader) = framed_socket.split();
     // TODO: handle disconnect, bytes_read=0
-    while let Ok(frame) = await!(reader.next()) {
-        dbg!((bytes_read, data.to_vec()));
-        if let Err(e) = await!(tcp_stream.write_all_async(&data)) {
-            println!("Failed to write {:?}", e);
+    while let Some(result) = await!(reader.next()) {
+        dbg!(&result);
+        match result {
+            Ok(frame) => {
+                // TODO: better handle this error
+                writer = await!(writer.send(frame))?;
+            },
+            Err(e) => {
+                dbg!(e);
+            }
         }
     }
-    await!(tcp_stream.flush_async()).unwrap();
     Ok(())
 }

@@ -20,7 +20,7 @@ fn main() {
             thread::sleep(Duration::from_secs(1));
             let mut client = await!(Client::connect(ADDRESS)).unwrap();
             let response = await!(client.request("test".to_string()));
-            println!("Response={:?}", response);
+            dbg!(response);
         },
     );
 }

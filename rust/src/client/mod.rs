@@ -49,19 +49,26 @@ impl Client {
 
             let mut total = reader.map(|frame| Message::Response(frame)).select(rx.map_err(|()| err_msg("rx error")));
 
+            // TOOD: loop?
             while let Some(item) = await!(total.next()) {//.select(reader) {
                 match item {
                     Ok(Message::Request(seq, sender)) => {
+                        waiters.insert(seq, sender);
                         writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {flags: 2, sequence_id: 1}))).unwrap();
                     },
                     Ok(Message::Response(frame)) => {
-                        dbg!(frame);
+                        dbg!(&frame);
+                        if let LoquiFrame::Ping(ping) = frame {
+                            let sender = waiters.remove(&ping.sequence_id).unwrap();
+                            sender.send("ping back".to_string());
+                        }
                     },
                     Err(e) => {
                         dbg!(e);
                     }
                 }
             }
+            println!("client exit");
         });
 
         let mut client = Self {
@@ -91,6 +98,7 @@ impl Client {
         let (sender, receiver) = oneshot();
         self.sender.unbounded_send(Message::Request(seq, sender))?;
         let result = await!(receiver)?;
+        dbg!(&result);
         Ok(result)
     }
 
