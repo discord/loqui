@@ -20,6 +20,7 @@ impl Hello {
     pub const MIN_BYTES: u8 = 7;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u8(self.version);
@@ -31,6 +32,7 @@ impl Hello {
         );
         let payload = payload.bytes().collect::<Vec<u8>>();
 
+        maybe_extend(dst, 32 + payload.len() * 8);
         dst.put_u32_be(payload.len() as u32);
         dst.put(payload);
         Ok(())
@@ -104,11 +106,13 @@ impl HelloAck {
     pub const MIN_BYTES: u8 = 10;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 8 + 32);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.ping_interval_ms);
 
         let payload = format!("{}|{}", self.encoding, self.compression);
+        maybe_extend(dst, 32 + payload.len() * 8);
         dst.put_u32_be(payload.len() as u32);
         dst.put(payload);
         Ok(())
@@ -208,6 +212,18 @@ impl HelloAck {
     }
 }
 
+fn maybe_extend(dst: &mut BytesMut, message_size: usize) {
+    let remaining = dst.remaining_mut();
+    if remaining >= message_size {
+        return;
+    }
+
+    let missing = message_size - remaining;
+    if missing > 0 {
+        dst.reserve(missing);
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ping {
     pub flags: u8,
@@ -219,13 +235,7 @@ impl Ping {
     pub const MIN_BYTES: u8 = 6;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
-        //dst.resize((8 + 8 + 32), 0);
-        let remaining = dst.remaining_mut();
-        let missing = remaining - 8 + 8 + 32;
-        if missing < 0 {
-            dst.reserve(0 - missing);
-        }
-
+        maybe_extend(dst, 8 + 8 + 32);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
@@ -263,6 +273,7 @@ impl Pong {
     pub const MIN_BYTES: u8 = 6;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 32);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
@@ -301,6 +312,7 @@ impl Request {
     pub const MIN_BYTES: u8 = 10;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 32 + 32 + self.payload.len() * 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
@@ -357,6 +369,7 @@ impl Response {
     pub const MIN_BYTES: u8 = 10;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 32 + 32 + self.payload.len() * 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
@@ -412,6 +425,7 @@ impl Push {
     pub const MIN_BYTES: u8 = 6;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 32 + self.payload.len() * 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.payload.len() as u32);
@@ -465,6 +479,7 @@ impl GoAway {
     pub const MIN_BYTES: u8 = 8;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 16 + 32 + self.payload.len() * 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u16_be(self.code);
@@ -522,6 +537,7 @@ impl Error {
     pub const MIN_BYTES: u8 = 12;
 
     pub fn encode(&mut self, dst: &mut BytesMut) -> EncodeResult {
+        maybe_extend(dst, 8 + 8 + 32 + 16 + 32 + self.payload.len() * 8);
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);

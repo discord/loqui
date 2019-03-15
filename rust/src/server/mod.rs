@@ -46,12 +46,15 @@ fn handle_frame(frame: LoquiFrame) -> Option<LoquiFrame> {
             compressions,
         }) => Some(LoquiFrame::HelloAck(HelloAck {
             flags,
-            ping_interval_ms: 100,
-            encoding: "".to_string(),
+            ping_interval_ms: 5000,
+            encoding: encodings[0].clone(),
             compression: "".to_string(),
         })),
+        LoquiFrame::Ping(Ping { flags, sequence_id }) => {
+            Some(LoquiFrame::Pong(Pong { flags, sequence_id }))
+        }
         frame => {
-            info!("unhandled frame {:?}", frame);
+            println!("unhandled frame {:?}", frame);
             None
         }
     }
@@ -76,7 +79,7 @@ async fn upgrade(mut socket: TcpStream) -> TcpStream {
 
 async fn handle_connection(mut socket: TcpStream) {
     socket = await!(upgrade(socket));
-    let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
+    let framed_socket = Framed::new(socket, LoquiCodec::new(50000 * 1000));
     let (mut writer, mut reader) = framed_socket.split();
     // TODO: handle disconnect, bytes_read=0
     while let Some(result) = await!(reader.next()) {
@@ -98,4 +101,5 @@ async fn handle_connection(mut socket: TcpStream) {
             }
         }
     }
+    println!("connection closed");
 }
