@@ -374,7 +374,7 @@ impl Response {
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
         dst.put_u32_be(self.payload.len() as u32);
-        dst.put(self.payload.clone());
+        dst.extend_from_slice(&self.payload[..]);
         Ok(())
     }
 
@@ -429,7 +429,7 @@ impl Push {
         dst.put_u8(Self::OP_CODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.payload.len() as u32);
-        dst.put(self.payload.clone());
+        dst.extend_from_slice(&self.payload[..]);
         Ok(())
     }
 
