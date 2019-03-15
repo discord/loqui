@@ -27,6 +27,36 @@ pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
     Ok(())
 }
 
+fn handle_frame(frame: LoquiFrame) -> Option<LoquiFrame> {
+    match frame {
+        LoquiFrame::Request(Request {
+            flags,
+            sequence_id,
+            payload,
+            ..
+        }) => Some(LoquiFrame::Response(Response {
+            flags,
+            sequence_id,
+            payload,
+        })),
+        LoquiFrame::Hello(Hello {
+            flags,
+            version,
+            encodings,
+            compressions,
+        }) => Some(LoquiFrame::HelloAck(HelloAck {
+            flags,
+            ping_interval_ms: 100,
+            encoding: "".to_string(),
+            compression: "".to_string(),
+        })),
+        frame => {
+            info!("unhandled frame {:?}", frame);
+            None
+        }
+    }
+}
+
 async fn handle_connection(mut socket: TcpStream) {
     let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
     let (mut writer, mut reader) = framed_socket.split();
@@ -34,25 +64,14 @@ async fn handle_connection(mut socket: TcpStream) {
     while let Some(result) = await!(reader.next()) {
         match result {
             Ok(frame) => {
-                let response = match frame {
-                    LoquiFrame::Request(Request {
-                        flags,
-                        sequence_id,
-                        payload,
-                        ..
-                    }) => LoquiFrame::Response(Response {
-                        flags,
-                        sequence_id,
-                        payload,
-                    }),
-                    frame => frame,
-                };
-                // TODO: better handle this error
-                match await!(writer.send(response)) {
-                    Ok(new_writer) => writer = new_writer,
-                    Err(e) => {
-                        error!("Failed to write. error={:?}", e);
-                        return;
+                if let Some(response) = handle_frame(frame) {
+                    match await!(writer.send(response)) {
+                        Ok(new_writer) => writer = new_writer,
+                        // TODO: better handle this error
+                        Err(e) => {
+                            error!("Failed to write. error={:?}", e);
+                            return;
+                        }
                     }
                 }
             }
