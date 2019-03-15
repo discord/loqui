@@ -59,8 +59,6 @@ impl Decoder for LoquiCodec {
             return Ok(None);
         }
 
-        dbg!(buf.clone());
-
         let op_code = buf[0];
         Ok(match op_code {
             frames::Hello::OP_CODE => {

@@ -6,8 +6,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use crate::protocol::codec::LoquiCodec;
-use crate::protocol::codec::LoquiFrame;
+use crate::protocol::codec::{LoquiCodec, LoquiFrame};
+use crate::protocol::frames::*;
 
 pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
     let addr: SocketAddr = address.as_ref().parse()?;
@@ -32,11 +32,26 @@ async fn handle_connection(mut socket: TcpStream) {
     let (mut writer, mut reader) = framed_socket.split();
     // TODO: handle disconnect, bytes_read=0
     while let Some(result) = await!(reader.next()) {
-        dbg!(&result);
         match result {
             Ok(frame) => {
+                let response = match frame {
+                    LoquiFrame::Request(Request {
+                        flags,
+                        sequence_id,
+                        payload,
+                        ..}) => {
+                        LoquiFrame::Response(Response {
+                            flags,
+                            sequence_id,
+                            payload,
+
+                        })
+
+                    },
+                    frame => frame
+                };
                 // TODO: better handle this error
-                match await!(writer.send(frame)) {
+                match await!(writer.send(response)) {
                     Ok(new_writer) => writer = new_writer,
                     Err(e) => {
                         error!("Failed to write. error={:?}", e);

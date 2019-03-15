@@ -18,9 +18,28 @@ fn main() {
                 },
             );
             thread::sleep(Duration::from_secs(1));
-            let mut client = await!(Client::connect(ADDRESS)).unwrap();
-            let response = await!(client.request("test".to_string().as_bytes().to_vec()));
-            dbg!(response);
+            let client = await!(Client::connect(ADDRESS)).unwrap();
+            let messages = vec![
+                "test",
+                "test2",
+                "test3",
+            ];
+
+            for message in messages {
+                let message = message.clone().to_string();
+                let client = client.clone();
+                tokio::spawn_async(async move {
+                    let resp = await!(client.request(message.as_bytes().to_vec()));
+                    match resp {
+                        Ok(resp) => {
+                            dbg!(String::from_utf8(resp).unwrap());
+                        },
+                        Err(e) => {
+                            dbg!(e);
+                        }
+                    }
+                });
+            }
         },
     );
 }

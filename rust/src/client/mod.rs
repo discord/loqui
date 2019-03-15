@@ -24,6 +24,7 @@ use futures::sync::mpsc::UnboundedReceiver;
 const UPGRADE_REQUEST: &'static str =
     "GET #{loqui_path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
+#[derive(Debug, Clone)]
 pub struct Client {
     sender: mpsc::UnboundedSender<Message>,
 }
@@ -31,11 +32,12 @@ pub struct Client {
 #[derive(Debug)]
 enum Message {
     Request {
-        data: Vec<u8>,
-        sender: OneShotSender<String>,
+        payload: Vec<u8>,
+        // TODO: probably need to handle error better?
+        sender: OneShotSender<Result<Vec<u8>, Error>>,
     },
     Push {
-        data: Vec<u8>,
+        payload: Vec<u8>,
     },
     Response(LoquiFrame),
 }
@@ -50,7 +52,7 @@ impl SocketHandler {
         let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: should probably sweep these, probably request timeout
-        let mut waiters: HashMap<u32, OneShotSender<String>> = HashMap::new();
+        let mut waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>> = HashMap::new();
         let mut next_seq = 1;
         let mut stream = reader
             .map(|frame| Message::Response(frame))
@@ -58,25 +60,33 @@ impl SocketHandler {
 
         while let Some(item) = await!(stream.next()) {
             match item {
-                Ok(Message::Request { data, sender }) => {
+                Ok(Message::Request { payload, sender }) => {
                     let seq = next_seq;
                     next_seq += 1;
                     waiters.insert(seq, sender);
                     writer = await!(writer.send(LoquiFrame::Request(Request {
-                        sequence_id: seq
+                        sequence_id: seq,
                         flags: 2,
-                        data,
+                        payload,
                     })))
                     .unwrap();
                 }
-                Ok(Message::Push {data}) => {
-                    println!("push {:?}", data);
+                Ok(Message::Push {payload}) => {
+                    println!("push {:?}", payload);
                 }
                 Ok(Message::Response(frame)) => {
-                    dbg!(&frame);
-                    if let LoquiFrame::Ping(ping) = frame {
-                        let sender = waiters.remove(&ping.sequence_id).unwrap();
-                        sender.send("ping back".to_string());
+                    match frame {
+                        LoquiFrame::Response(Response {
+                            flags,
+                            sequence_id,
+                            payload
+                        }) => {
+                            let sender = waiters.remove(&sequence_id).unwrap();
+                            sender.send(Ok(payload));
+                        }
+                        frame => {
+                            dbg!(frame);
+                        }
                     }
                 }
                 Err(e) => {
@@ -98,12 +108,13 @@ impl Client {
         Ok(client)
     }
 
-    pub async fn request(&mut self, data: Vec<u8>) -> Result<String, Error> {
+    pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot();
         self.sender.unbounded_send(Message::Request {
-            data,
+            payload,
             sender,
         })?;
-        await!(receiver).map_err(|e| Error::from(e))
+        // TODO: handle send error better
+        await!(receiver).map_err(|e| Error::from(e))?
     }
 }
