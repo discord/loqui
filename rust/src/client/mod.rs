@@ -71,24 +71,22 @@ impl SocketHandler {
                     })))
                     .unwrap();
                 }
-                Ok(Message::Push {payload}) => {
+                Ok(Message::Push { payload }) => {
                     println!("push {:?}", payload);
                 }
-                Ok(Message::Response(frame)) => {
-                    match frame {
-                        LoquiFrame::Response(Response {
-                            flags,
-                            sequence_id,
-                            payload
-                        }) => {
-                            let sender = waiters.remove(&sequence_id).unwrap();
-                            sender.send(Ok(payload));
-                        }
-                        frame => {
-                            dbg!(frame);
-                        }
+                Ok(Message::Response(frame)) => match frame {
+                    LoquiFrame::Response(Response {
+                        flags,
+                        sequence_id,
+                        payload,
+                    }) => {
+                        let sender = waiters.remove(&sequence_id).unwrap();
+                        sender.send(Ok(payload));
                     }
-                }
+                    frame => {
+                        dbg!(frame);
+                    }
+                },
                 Err(e) => {
                     dbg!(e);
                 }
@@ -110,10 +108,8 @@ impl Client {
 
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot();
-        self.sender.unbounded_send(Message::Request {
-            payload,
-            sender,
-        })?;
+        self.sender
+            .unbounded_send(Message::Request { payload, sender })?;
         // TODO: handle send error better
         await!(receiver).map_err(|e| Error::from(e))?
     }

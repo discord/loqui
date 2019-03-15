@@ -39,16 +39,13 @@ async fn handle_connection(mut socket: TcpStream) {
                         flags,
                         sequence_id,
                         payload,
-                        ..}) => {
-                        LoquiFrame::Response(Response {
-                            flags,
-                            sequence_id,
-                            payload,
-
-                        })
-
-                    },
-                    frame => frame
+                        ..
+                    }) => LoquiFrame::Response(Response {
+                        flags,
+                        sequence_id,
+                        payload,
+                    }),
+                    frame => frame,
                 };
                 // TODO: better handle this error
                 match await!(writer.send(response)) {
