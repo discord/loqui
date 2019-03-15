@@ -62,9 +62,10 @@ impl SocketHandler {
                     let seq = next_seq;
                     next_seq += 1;
                     waiters.insert(seq, sender);
-                    writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {
-                        flags: 2,
+                    writer = await!(writer.send(LoquiFrame::Request(Request {
                         sequence_id: seq
+                        flags: 2,
+                        data,
                     })))
                     .unwrap();
                 }
