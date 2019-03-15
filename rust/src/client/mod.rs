@@ -100,7 +100,7 @@ impl MessageHandler {
 struct SocketHandler {}
 
 impl SocketHandler {
-    async fn handle(socket: TcpStream, rx: UnboundedReceiver<Message>) {
+    async fn run(socket: TcpStream, rx: UnboundedReceiver<Message>) {
         //  TODO: also, don't allow requests until ready?
         // await!(client.upgrade())?;
 
@@ -116,6 +116,8 @@ impl SocketHandler {
             match message {
                 Ok(message) => {
                     if let Some(frame) = message_handler.handle(message) {
+                        // TODO: should probably batch and send_all
+                        // https://docs.rs/futures/0.1.5/futures/sink/trait.Sink.html#method.send_all
                         writer = await!(writer.send(frame)).unwrap();
                     }
                 }
@@ -133,7 +135,7 @@ impl Client {
         let addr: SocketAddr = address.as_ref().parse()?;
         let socket = await!(TcpStream::connect(&addr))?;
         let (tx, mut rx) = mpsc::unbounded::<Message>();
-        tokio::spawn_async(SocketHandler::handle(socket, rx));
+        tokio::spawn_async(SocketHandler::run(socket, rx));
         let mut client = Self { sender: tx };
         Ok(client)
     }
