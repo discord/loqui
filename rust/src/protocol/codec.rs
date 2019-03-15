@@ -89,7 +89,10 @@ impl Decoder for LoquiCodec {
                 frames::Error::decode(self, buf)?.map(|frame| LoquiFrame::Error(frame))
             }
             // TODO: we need to drop the bad stuff from this byte buffer, otherwise it loops forever
-            _ => return Err(ProtocolError::InvalidOpcode(op_code).into()),
+            _ => {
+                dbg!(buf);
+                return Err(ProtocolError::InvalidOpcode(op_code).into());
+            }
         })
     }
 }

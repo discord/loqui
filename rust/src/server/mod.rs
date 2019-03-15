@@ -57,7 +57,24 @@ fn handle_frame(frame: LoquiFrame) -> Option<LoquiFrame> {
     }
 }
 
+async fn upgrade(mut socket: TcpStream) -> TcpStream {
+    // TODO: buffering
+    let mut payload = [0; 1024];
+    while let Ok(bytes_read) = await!(socket.read_async(&mut payload)) {
+        let request = String::from_utf8(payload.to_vec()).unwrap();
+        if request.contains(&"upgrade") {
+            let response =
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
+            await!(socket.write_all_async(&response.as_bytes()[..])).unwrap();
+            await!(socket.flush_async()).unwrap();
+            break;
+        }
+    }
+    socket
+}
+
 async fn handle_connection(mut socket: TcpStream) {
+    socket = await!(upgrade(socket));
     let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
     let (mut writer, mut reader) = framed_socket.split();
     // TODO: handle disconnect, bytes_read=0
