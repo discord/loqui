@@ -12,9 +12,9 @@ use self::socket_handler::{Message, SocketHandler};
 
 mod socket_handler;
 
-// TODO: loqui_path
+// TODO: get right values
 const UPGRADE_REQUEST: &'static str =
-    "GET #{loqui_path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
+    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 #[derive(Debug, Clone)]
 pub struct Client {
