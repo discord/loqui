@@ -64,7 +64,7 @@ impl SocketHandler {
                     waiters.insert(seq, sender);
                     writer = await!(writer.send(LoquiFrame::Ping(crate::protocol::frames::Ping {
                         flags: 2,
-                        sequence_id: 1
+                        sequence_id: seq
                     })))
                     .unwrap();
                 }
