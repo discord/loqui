@@ -92,9 +92,11 @@ fn main() {
     let log_state = state.clone();
     tokio::run_async(
         async move {
-            tokio::spawn_async(async move {
-                log_loop(log_state.clone());
-            });
+            tokio::spawn_async(
+                async move {
+                    log_loop(log_state.clone());
+                },
+            );
 
             let client = await!(Client::connect(ADDRESS)).unwrap();
             for _ in 0..100 {

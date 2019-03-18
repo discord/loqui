@@ -1,4 +1,5 @@
 use failure::Error;
+use std::future::Future;
 use std::net::SocketAddr;
 
 use tokio::await;
@@ -9,22 +10,58 @@ use tokio_codec::Framed;
 use crate::protocol::codec::{LoquiCodec, LoquiFrame};
 use crate::protocol::frames::*;
 
-pub async fn run<A: AsRef<str>>(address: A) -> Result<(), Error> {
-    let addr: SocketAddr = address.as_ref().parse()?;
-    let listener = TcpListener::bind(&addr)?;
-    println!("Starting {:?} ...", address.as_ref());
-    let mut incoming = listener.incoming();
-    loop {
-        match await!(incoming.next()) {
-            Some(Ok(tcp_stream)) => {
-                tokio::spawn_async(handle_connection(tcp_stream));
-            }
-            other => {
-                println!("incoming.next() return odd result. {:?}", other);
-            }
+pub struct SRequest {}
+
+pub struct SResponse {}
+/*
+trait Feature {
+    /// Create a new type-erased instance of this feature.
+    fn boxed_default() -> Box<dyn Feature> where Self: Default
+    {
+        Box::<Self>::default()
+    }
+}
+*/
+
+pub trait Handler: Send + Sync {
+    fn handle_request(
+        &self,
+        request: SRequest,
+    ) -> Box<dyn Future<Output = Result<SResponse, Error>>>;
+}
+
+pub struct Server {
+    handler: Box<Handler>,
+}
+
+impl Server {
+    /*
+    pub fn new(handler: Handler) -> Self {
+        Self {
+            handler
         }
     }
-    Ok(())
+    */
+
+    // TODO
+    //pub async fn serve<A: AsRef<str>>(&self, address: A) -> Result<(), Error> {
+    pub async fn serve(&self, address: String) -> Result<(), Error> {
+        let addr: SocketAddr = address.parse()?;
+        let listener = TcpListener::bind(&addr)?;
+        println!("Starting {:?} ...", address);
+        let mut incoming = listener.incoming();
+        loop {
+            match await!(incoming.next()) {
+                Some(Ok(tcp_stream)) => {
+                    tokio::spawn_async(handle_connection(tcp_stream));
+                }
+                other => {
+                    println!("incoming.next() return odd result. {:?}", other);
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 fn handle_frame(frame: LoquiFrame) -> Option<LoquiFrame> {

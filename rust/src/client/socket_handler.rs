@@ -58,11 +58,7 @@ impl MessageHandler {
             }
             Message::Push { payload } => {
                 println!("push {:?}", payload);
-                Some(LoquiFrame::Push(Push {
-                    flags: 0,
-                    payload,
-
-                }))
+                Some(LoquiFrame::Push(Push { flags: 0, payload }))
             }
             Message::Response(frame) => {
                 match frame {
