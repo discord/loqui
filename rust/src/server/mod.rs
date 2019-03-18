@@ -10,12 +10,13 @@ use tokio_codec::Framed;
 use crate::protocol::codec::{LoquiCodec, LoquiFrame};
 use crate::protocol::frames::*;
 use std::sync::Arc;
+use std::pin::Pin;
 
 pub trait Handler: Send + Sync {
     fn handle_request(
         &self,
         request: Request,
-    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>>;
 }
 
 pub struct Server {
@@ -55,18 +56,25 @@ impl Server {
 async fn handle_frame<'e>(frame: LoquiFrame, handler: Arc<Handler + 'e>) -> Result<Option<LoquiFrame>, Error> {
     match frame {
         LoquiFrame::Request(request @ Request {
-            flags,
-            sequence_id,
-            payload,
             ..
         }) => {
+            let sequence_id = request.sequence_id;
+            let flags = request.flags;
             let result = await!(handler.handle_request(request));
-            println!("result {:?}", result);
-            Ok(Some(LoquiFrame::Response(Response {
-                flags,
-                sequence_id,
-                payload,
-            })))
+            match result {
+                Ok(payload) => {
+                    Ok(Some(LoquiFrame::Response(Response {
+                        flags,
+                        sequence_id,
+                        payload,
+                    })))
+                },
+                Err(e) => {
+                    dbg!(e);
+                    // TODO:
+                    Ok(None)
+                }
+            }
         },
         LoquiFrame::Hello(Hello {
             flags,

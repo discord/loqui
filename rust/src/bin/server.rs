@@ -2,28 +2,37 @@
 
 extern crate loqui;
 
+use failure::Error;
 use loqui::client::Client;
-use loqui::server::{Handler, Request, Response, Server};
+use loqui::protocol::Request;
+use loqui::server::{Handler, Server};
+use std::future::Future;
 use std::{thread, time::Duration};
+use tokio_async_await::compat::forward::IntoAwaitable;
+use std::sync::Arc;
+use std::pin::Pin;
 
 const ADDRESS: &'static str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
 impl Handler for EchoHandler {
-    // TODO: this should probably be loqui frames
-    async fn handle_request(request: Request) -> Response {}
+    fn handle_request(&self, request: Request) -> Pin<Box<dyn Future<Output=Result<Vec<u8>, Error>> + Send>> {
+        use tokio_async_await::compat::forward::IntoAwaitable;
+
+        Box::pin(futures::future::ok(request.payload).into_awaitable())
+    }
 }
 
 fn main() {
     tokio::run_async(
         async {
             let server = Server {
-                handler: EchoHandler {},
+                handler: Arc::new(EchoHandler {}),
             };
             //let server = Server::new(handler: EchoHandler{});
-            let result = server.serve(ADDRESS);
+            let result = await!(server.serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);
-        },
+        }
     );
 }
