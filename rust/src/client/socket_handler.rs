@@ -52,13 +52,17 @@ impl MessageHandler {
                 self.waiters.insert(sequence_id, sender);
                 Some(LoquiFrame::Request(Request {
                     sequence_id,
-                    flags: 2,
+                    flags: 0,
                     payload,
                 }))
             }
             Message::Push { payload } => {
                 println!("push {:?}", payload);
-                None
+                Some(LoquiFrame::Push(Push {
+                    flags: 0,
+                    payload,
+
+                }))
             }
             Message::Response(frame) => {
                 match frame {
