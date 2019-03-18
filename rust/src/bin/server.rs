@@ -11,6 +11,7 @@ use std::{thread, time::Duration};
 use tokio_async_await::compat::forward::IntoAwaitable;
 use std::sync::Arc;
 use std::pin::Pin;
+use tokio_async_await::compat::forward::IntoAwaitable;
 
 const ADDRESS: &'static str = "127.0.0.1:8080";
 
@@ -18,8 +19,6 @@ struct EchoHandler {}
 
 impl Handler for EchoHandler {
     fn handle_request(&self, request: Request) -> Pin<Box<dyn Future<Output=Result<Vec<u8>, Error>> + Send>> {
-        use tokio_async_await::compat::forward::IntoAwaitable;
-
         Box::pin(futures::future::ok(request.payload).into_awaitable())
     }
 }
