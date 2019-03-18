@@ -9,29 +9,17 @@ use tokio_codec::Framed;
 
 use crate::protocol::codec::{LoquiCodec, LoquiFrame};
 use crate::protocol::frames::*;
-
-pub struct SRequest {}
-
-pub struct SResponse {}
-/*
-trait Feature {
-    /// Create a new type-erased instance of this feature.
-    fn boxed_default() -> Box<dyn Feature> where Self: Default
-    {
-        Box::<Self>::default()
-    }
-}
-*/
+use std::sync::Arc;
 
 pub trait Handler: Send + Sync {
     fn handle_request(
         &self,
-        request: SRequest,
-    ) -> Box<dyn Future<Output = Result<SResponse, Error>>>;
+        request: Request,
+    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>>>;
 }
 
 pub struct Server {
-    handler: Box<Handler>,
+    pub handler: Arc<Handler>,
 }
 
 impl Server {
@@ -53,7 +41,7 @@ impl Server {
         loop {
             match await!(incoming.next()) {
                 Some(Ok(tcp_stream)) => {
-                    tokio::spawn_async(handle_connection(tcp_stream));
+                    tokio::spawn_async(handle_connection(tcp_stream, self.handler.clone()));
                 }
                 other => {
                     println!("incoming.next() return odd result. {:?}", other);
@@ -64,35 +52,39 @@ impl Server {
     }
 }
 
-fn handle_frame(frame: LoquiFrame) -> Option<LoquiFrame> {
+async fn handle_frame<'e>(frame: LoquiFrame, handler: Arc<Handler + 'e>) -> Result<Option<LoquiFrame>, Error> {
     match frame {
-        LoquiFrame::Request(Request {
+        LoquiFrame::Request(request @ Request {
             flags,
             sequence_id,
             payload,
             ..
-        }) => Some(LoquiFrame::Response(Response {
-            flags,
-            sequence_id,
-            payload,
-        })),
+        }) => {
+            let result = await!(handler.handle_request(request));
+            println!("result {:?}", result);
+            Ok(Some(LoquiFrame::Response(Response {
+                flags,
+                sequence_id,
+                payload,
+            })))
+        },
         LoquiFrame::Hello(Hello {
             flags,
             version,
             encodings,
             compressions,
-        }) => Some(LoquiFrame::HelloAck(HelloAck {
+        }) => Ok(Some(LoquiFrame::HelloAck(HelloAck {
             flags,
             ping_interval_ms: 5000,
             encoding: encodings[0].clone(),
             compression: "".to_string(),
-        })),
+        }))),
         LoquiFrame::Ping(Ping { flags, sequence_id }) => {
-            Some(LoquiFrame::Pong(Pong { flags, sequence_id }))
+            Ok(Some(LoquiFrame::Pong(Pong { flags, sequence_id })))
         }
         frame => {
             println!("unhandled frame {:?}", frame);
-            None
+            Ok(None)
         }
     }
 }
@@ -114,7 +106,7 @@ async fn upgrade(mut socket: TcpStream) -> TcpStream {
     socket
 }
 
-async fn handle_connection(mut socket: TcpStream) {
+async fn handle_connection<'e>(mut socket: TcpStream, handler: Arc<Handler + 'e>) {
     socket = await!(upgrade(socket));
     let framed_socket = Framed::new(socket, LoquiCodec::new(50000 * 1000));
     let (mut writer, mut reader) = framed_socket.split();
@@ -122,7 +114,8 @@ async fn handle_connection(mut socket: TcpStream) {
     while let Some(result) = await!(reader.next()) {
         match result {
             Ok(frame) => {
-                if let Some(response) = handle_frame(frame) {
+                // TODO: handle error
+                if let Ok(Some(response)) = await!(handle_frame(frame, handler.clone())) {
                     match await!(writer.send(response)) {
                         Ok(new_writer) => writer = new_writer,
                         // TODO: better handle this error
