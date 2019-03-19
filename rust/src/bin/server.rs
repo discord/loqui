@@ -8,7 +8,6 @@ use loqui::server::{Handler, Server};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio_async_await::compat::forward::IntoAwaitable;
 
 const ADDRESS: &'static str = "127.0.0.1:8080";
 
@@ -19,7 +18,7 @@ impl Handler for EchoHandler {
         &self,
         request: Request,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>> {
-        Box::pin(futures::future::ok(request.payload).into_awaitable())
+        Box::pin(async { Ok(request.payload) })
     }
 }
 
@@ -29,9 +28,8 @@ fn main() {
             let server = Server {
                 handler: Arc::new(EchoHandler {}),
             };
-            //let server = Server::new(handler: EchoHandler{});
             let result = await!(server.serve(ADDRESS.to_string()));
-            println!("Run result={:?}", result);
+            println!("Server finished. result={:?}", result);
         },
     );
 }
