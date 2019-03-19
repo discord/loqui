@@ -25,7 +25,8 @@ async fn upgrade(mut socket: TcpStream) -> TcpStream {
     await!(socket.write_all_async(&UPGRADE_REQUEST.as_bytes())).unwrap();
     await!(socket.flush_async()).unwrap();
     let mut payload = [0; 1024];
-    while let Ok(bytes_read) = await!(socket.read_async(&mut payload)) {
+    // TODO: handle disconnect, bytes_read=0
+    while let Ok(_bytes_read) = await!(socket.read_async(&mut payload)) {
         let response = String::from_utf8(payload.to_vec()).unwrap();
         // TODO: case insensitive
         if response.contains(&"Upgrade") {
@@ -40,9 +41,9 @@ impl Client {
         let addr: SocketAddr = address.as_ref().parse()?;
         let mut socket = await!(TcpStream::connect(&addr))?;
         socket = await!(upgrade(socket));
-        let (tx, mut rx) = mpsc::unbounded::<Message>();
+        let (tx, rx) = mpsc::unbounded::<Message>();
         tokio::spawn_async(SocketHandler::run(socket, rx));
-        let mut client = Self { sender: tx };
+        let client = Self { sender: tx };
         Ok(client)
     }
 
@@ -52,5 +53,11 @@ impl Client {
             .unbounded_send(Message::Request { payload, sender })?;
         // TODO: handle send error better
         await!(receiver).map_err(|e| Error::from(e))?
+    }
+
+    pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
+        self.sender
+            .unbounded_send(Message::Push { payload })
+            .map_err(|e| Error::from(e))
     }
 }

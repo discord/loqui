@@ -48,6 +48,5 @@ impl Server {
                 }
             }
         }
-        Ok(())
     }
 }

@@ -3,13 +3,11 @@
 extern crate loqui;
 
 use failure::Error;
-use loqui::client::Client;
 use loqui::protocol::Request;
 use loqui::server::{Handler, Server};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::{thread, time::Duration};
 use tokio_async_await::compat::forward::IntoAwaitable;
 
 const ADDRESS: &'static str = "127.0.0.1:8080";

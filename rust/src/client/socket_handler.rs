@@ -56,10 +56,7 @@ impl MessageHandler {
                     payload,
                 }))
             }
-            Message::Push { payload } => {
-                println!("push {:?}", payload);
-                Some(LoquiFrame::Push(Push { flags: 0, payload }))
-            }
+            Message::Push { payload } => Some(LoquiFrame::Push(Push { flags: 0, payload })),
             Message::Response(frame) => {
                 match frame {
                     LoquiFrame::Response(Response {
@@ -68,7 +65,7 @@ impl MessageHandler {
                         payload,
                     }) => {
                         let sender = self.waiters.remove(&sequence_id).unwrap();
-                        sender.send(Ok(payload));
+                        sender.send(Ok(payload)).unwrap();
                     }
                     frame => {
                         dbg!(frame);
@@ -85,7 +82,7 @@ pub struct SocketHandler {}
 impl SocketHandler {
     pub async fn run(socket: TcpStream, rx: UnboundedReceiver<Message>) {
         let framed_socket = Framed::new(socket, LoquiCodec::new(50000));
-        let (mut writer, mut reader) = framed_socket.split();
+        let (mut writer, reader) = framed_socket.split();
         let mut message_handler = MessageHandler::new();
 
         writer = await!(writer.send(LoquiFrame::Hello(Hello {

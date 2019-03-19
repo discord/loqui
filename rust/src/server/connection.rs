@@ -26,7 +26,7 @@ impl Connection {
         self = await!(self.upgrade());
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
-        // TODO: handle disconnect, bytes_read=0
+        // TODO: handle disconnect
         while let Some(result) = await!(reader.next()) {
             match result {
                 Ok(frame) => {
@@ -55,7 +55,8 @@ impl Connection {
     async fn upgrade(mut self) -> Self {
         // TODO: buffering
         let mut payload = [0; 1024];
-        while let Ok(bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
+        // TODO: handle disconnect, bytes_read=0
+        while let Ok(_bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
             let request = String::from_utf8(payload.to_vec()).unwrap();
             // TODO: better
             if request.contains(&"upgrade") || request.contains(&"Upgrade") {
