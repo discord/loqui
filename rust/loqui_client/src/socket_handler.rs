@@ -8,9 +8,9 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use crate::protocol::codec::LoquiCodec;
-use crate::protocol::codec::LoquiFrame;
-use crate::protocol::frames::*;
+use loqui_protocol::codec::LoquiCodec;
+use loqui_protocol::codec::LoquiFrame;
+use loqui_protocol::frames::*;
 
 #[derive(Debug)]
 pub enum Message {

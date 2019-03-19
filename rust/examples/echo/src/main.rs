@@ -1,11 +1,9 @@
 #![feature(await_macro, async_await, futures_api)]
 
-extern crate loqui;
-
 use failure::Error;
-use loqui::client::Client;
-use loqui::protocol::Request;
-use loqui::server::{Handler, Server};
+use loqui_client::Client;
+use loqui_protocol::Request;
+use loqui_server::{Handler, Server};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

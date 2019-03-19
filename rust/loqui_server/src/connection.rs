@@ -6,8 +6,8 @@ use tokio::prelude::*;
 use tokio_codec::Framed;
 
 use super::Handler;
-use crate::protocol::codec::{LoquiCodec, LoquiFrame};
-use crate::protocol::frames::*;
+use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
+use loqui_protocol::frames::*;
 
 pub struct Connection {
     tcp_stream: TcpStream,

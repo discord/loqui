@@ -1,3 +1,5 @@
+#![feature(await_macro, async_await, futures_api)]
+
 use std::net::SocketAddr;
 
 use failure::Error;

@@ -1,0 +1,12 @@
+[package]
+name = "loqui_protocol"
+version = "0.0.1"
+authors = ["Discord Inc."]
+edition = "2018"
+
+[dependencies]
+byteorder = "1.2.4"
+bytes = "0.4.9"
+failure = "0.1.1"
+log = "0.4"
+tokio-codec = "0.1"

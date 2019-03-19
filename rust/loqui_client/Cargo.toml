@@ -1,0 +1,14 @@
+[package]
+name = "loqui_client"
+version = "0.0.1"
+authors = ["Discord Inc."]
+edition = "2018"
+
+[dependencies]
+loqui_protocol = { path = "../loqui_protocol" }
+failure = "0.1.1"
+log = "0.4"
+futures = "0.1.25"
+tokio = { version = "0.1.16", features = ["async-await-preview"] }
+tokio-codec = "0.1"
+tokio-io = { version = "0.1.12" }

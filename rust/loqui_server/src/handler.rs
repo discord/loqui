@@ -1,4 +1,4 @@
-use crate::protocol::Request;
+use loqui_protocol::Request;
 use failure::Error;
 use std::future::Future;
 use std::pin::Pin;

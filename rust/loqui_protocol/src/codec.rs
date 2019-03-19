@@ -1,8 +1,8 @@
 use bytes::BytesMut;
 use tokio_codec::{Decoder, Encoder};
 
-use crate::protocol::errors::ProtocolError;
-use crate::protocol::frames;
+use crate::errors::ProtocolError;
+use crate::frames;
 
 #[derive(Debug, PartialEq)]
 pub enum LoquiFrame {

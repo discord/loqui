@@ -1,16 +1,7 @@
-[package]
-name = "loqui"
-version = "0.0.1"
-authors = ["Discord Inc."]
-edition = "2018"
-
-[dependencies]
-byteorder = "1.2.4"
-bytes = "0.4.9"
-failure = "0.1.1"
-log = "0.4"
-futures = "0.1.25"
-tokio = { version = "0.1.16", features = ["async-await-preview"] }
-tokio-codec = "0.1"
-tokio-io = { version = "0.1.12" }
-tokio-async-await = "0.1.4"
+[workspace]
+members = [
+  "loqui_protocol",
+  "loqui_client",
+  "loqui_server",
+  "examples/echo",
+]

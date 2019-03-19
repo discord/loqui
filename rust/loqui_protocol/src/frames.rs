@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, BytesMut};
 
-use crate::protocol::codec::LoquiCodec;
-use crate::protocol::errors::ProtocolError;
+use crate::codec::LoquiCodec;
+use crate::errors::ProtocolError;
 
 type DecodeResult<T> = Result<Option<T>, ProtocolError>;
 type EncodeResult = Result<(), ProtocolError>;

@@ -1,3 +1,9 @@
+#![feature(await_macro, async_await, futures_api)]
+//#![recursion_limit = "128"]
+
+#[macro_use]
+extern crate log;
+
 use failure::Error;
 use std::net::SocketAddr;
 
