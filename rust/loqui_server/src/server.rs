@@ -9,8 +9,10 @@ use std::sync::Arc;
 
 use super::connection::Connection;
 use super::handler::Handler;
+use loqui_protocol::codec::LoquiFrame;
 
 pub struct Server {
+    pub supported_encodings: Vec<String>,
     pub handler: Arc<Handler>,
 }
 

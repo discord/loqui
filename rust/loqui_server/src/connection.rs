@@ -5,13 +5,14 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use super::Handler;
+use super::{Handler, RequestContext};
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::*;
 
 pub struct Connection {
     tcp_stream: TcpStream,
     handler: Arc<Handler>,
+    encoding: String,
 }
 
 impl Connection {
@@ -19,6 +20,8 @@ impl Connection {
         Self {
             tcp_stream,
             handler,
+            // TODO:
+            encoding: "json".to_string(),
         }
     }
 
@@ -75,10 +78,18 @@ impl Connection {
         handler: Arc<Handler + 'e>,
     ) -> Result<Option<LoquiFrame>, Error> {
         match frame {
-            LoquiFrame::Request(request @ Request { .. }) => {
-                let sequence_id = request.sequence_id;
-                let flags = request.flags;
-                let result = await!(handler.handle_request(request));
+            LoquiFrame::Request(Request {
+                payload,
+                flags,
+                sequence_id,
+            }) => {
+                let request_context = RequestContext {
+                    payload,
+                    flags,
+                    // TODO:
+                    encoding: "json".to_string(),
+                };
+                let result = await!(handler.handle_request(request_context));
                 match result {
                     Ok(payload) => Ok(Some(LoquiFrame::Response(Response {
                         flags,

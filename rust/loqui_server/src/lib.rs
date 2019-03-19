@@ -3,9 +3,9 @@
 #[macro_use]
 extern crate log;
 
-mod server;
 mod connection;
 mod handler;
+mod server;
 
-pub use self::handler::Handler;
+pub use self::handler::{Handler, RequestContext};
 pub use self::server::Server;
