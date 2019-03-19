@@ -24,10 +24,11 @@ pub struct Server {
 }
 
 impl Server {
+    // TODO
     /*
     pub fn new(handler: Handler) -> Self {
         Self {
-            handler
+            handler: Arc::new(handler),
         }
     }
     */
@@ -39,7 +40,7 @@ impl Server {
 
     // TODO
     //pub async fn serve<A: AsRef<str>>(&self, address: A) -> Result<(), Error> {
-    pub async fn serve(&self, address: String) -> Result<(), Error> {
+    pub async fn listen_and_serve(&self, address: String) -> Result<(), Error> {
         let addr: SocketAddr = address.parse()?;
         let listener = TcpListener::bind(&addr)?;
         println!("Starting {:?} ...", address);
