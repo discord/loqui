@@ -9,12 +9,22 @@ use super::Handler;
 use crate::protocol::codec::{LoquiCodec, LoquiFrame};
 use crate::protocol::frames::*;
 
-pub struct Connection {}
+pub struct Connection {
+    tcp_stream: TcpStream,
+    handler: Arc<Handler>,
+}
 
 impl Connection {
-    pub async fn run<'e>(mut socket: TcpStream, handler: Arc<Handler + 'e>) {
-        socket = await!(Connection::upgrade(socket));
-        let framed_socket = Framed::new(socket, LoquiCodec::new(50000 * 1000));
+    pub fn new(tcp_stream: TcpStream, handler: Arc<Handler>) -> Self {
+        Self {
+            tcp_stream,
+            handler,
+        }
+    }
+
+    pub async fn run<'e>(mut self) {
+        self = await!(self.upgrade());
+        let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect, bytes_read=0
         while let Some(result) = await!(reader.next()) {
@@ -22,7 +32,7 @@ impl Connection {
                 Ok(frame) => {
                     // TODO: handle error
                     if let Ok(Some(response)) =
-                        await!(Connection::handle_frame(frame, handler.clone()))
+                        await!(Connection::handle_frame(frame, self.handler.clone()))
                     {
                         match await!(writer.send(response)) {
                             Ok(new_writer) => writer = new_writer,
@@ -42,21 +52,21 @@ impl Connection {
         println!("connection closed");
     }
 
-    async fn upgrade(mut socket: TcpStream) -> TcpStream {
+    async fn upgrade(mut self) -> Self {
         // TODO: buffering
         let mut payload = [0; 1024];
-        while let Ok(bytes_read) = await!(socket.read_async(&mut payload)) {
+        while let Ok(bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
             let request = String::from_utf8(payload.to_vec()).unwrap();
             // TODO: better
             if request.contains(&"upgrade") || request.contains(&"Upgrade") {
                 let response =
                     "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
-                await!(socket.write_all_async(&response.as_bytes()[..])).unwrap();
-                await!(socket.flush_async()).unwrap();
+                await!(self.tcp_stream.write_all_async(&response.as_bytes()[..])).unwrap();
+                await!(self.tcp_stream.flush_async()).unwrap();
                 break;
             }
         }
-        socket
+        self
     }
 
     async fn handle_frame<'e>(

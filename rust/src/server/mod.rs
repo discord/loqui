@@ -26,6 +26,11 @@ impl Server {
     }
     */
 
+    fn handle_connection(&self, tcp_stream: TcpStream) {
+        let connection = Connection::new(tcp_stream, self.handler.clone());
+        tokio::spawn_async(connection.run());
+    }
+
     // TODO
     //pub async fn serve<A: AsRef<str>>(&self, address: A) -> Result<(), Error> {
     pub async fn serve(&self, address: String) -> Result<(), Error> {
@@ -36,7 +41,7 @@ impl Server {
         loop {
             match await!(incoming.next()) {
                 Some(Ok(tcp_stream)) => {
-                    tokio::spawn_async(Connection::run(tcp_stream, self.handler.clone()));
+                    self.handle_connection(tcp_stream);
                 }
                 other => {
                     println!("incoming.next() return odd result. {:?}", other);
