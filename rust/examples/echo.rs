@@ -10,7 +10,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{thread, time::Duration};
-use tokio_async_await::compat::forward::IntoAwaitable;
 
 const ADDRESS: &'static str = "127.0.0.1:3000";
 
@@ -21,9 +20,7 @@ impl Handler for EchoHandler {
         &self,
         request: Request,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>> {
-        use tokio_async_await::compat::forward::IntoAwaitable;
-
-        Box::pin(futures::future::ok(request.payload).into_awaitable())
+        Box::pin(async { Ok(request.payload) })
     }
 }
 
