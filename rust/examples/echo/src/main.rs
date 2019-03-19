@@ -30,7 +30,7 @@ fn main() {
                     let server = Server {
                         handler: Arc::new(EchoHandler {}),
                     };
-                    let result = await!(server.serve(ADDRESS.to_string()));
+                    let result = await!(server.listen_and_serve(ADDRESS.to_string()));
                     println!("Run result={:?}", result);
                 },
             );
