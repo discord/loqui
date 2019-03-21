@@ -1,13 +1,21 @@
 use std::sync::Arc;
 
+use futures::sync::mpsc;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
 use super::{Handler, RequestContext};
+use failure::err_msg;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::*;
+
+#[derive(Debug)]
+enum Message {
+    Request(LoquiFrame),
+    Response(LoquiFrame),
+}
 
 pub struct Connection {
     tcp_stream: TcpStream,
@@ -30,19 +38,45 @@ impl Connection {
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
-        while let Some(result) = await!(reader.next()) {
-            match result {
-                Ok(frame) => {
-                    // TODO: handle error
-                    if let Ok(Some(response)) =
-                        await!(Connection::handle_frame(frame, self.handler.clone()))
-                    {
-                        match await!(writer.send(response)) {
-                            Ok(new_writer) => writer = new_writer,
-                            // TODO: better handle this error
-                            Err(e) => {
-                                error!("Failed to write. error={:?}", e);
-                                return;
+
+        let (tx, rx) = mpsc::unbounded::<Message>();
+        let mut stream = reader
+            .map(|frame| Message::Request(frame))
+            .select(rx.map_err(|()| err_msg("rx error")));
+
+        while let Some(message) = await!(stream.next()) {
+            // TODO: handle error
+            match message {
+                Ok(message) => {
+                    match message {
+                        Message::Request(frame) => {
+                            let tx = tx.clone();
+                            let handler = self.handler.clone();
+                            tokio::spawn_async(
+                                async move {
+                                    // TODO: handle error
+                                    match await!(Connection::handle_frame(frame, handler)) {
+                                        Ok(Some(frame)) => {
+                                            await!(tx.send(Message::Response(frame)));
+                                        }
+                                        Ok(None) => {
+                                            dbg!("None");
+                                        }
+                                        Err(e) => {
+                                            dbg!(e);
+                                        }
+                                    }
+                                },
+                            );
+                        }
+                        Message::Response(frame) => {
+                            match await!(writer.send(frame)) {
+                                Ok(new_writer) => writer = new_writer,
+                                // TODO: better handle this error
+                                Err(e) => {
+                                    error!("Failed to write. error={:?}", e);
+                                    return;
+                                }
                             }
                         }
                     }
@@ -89,7 +123,7 @@ impl Connection {
                     // TODO:
                     encoding: "json".to_string(),
                 };
-                let result = await!(handler.handle_request(request_context));
+                let result = await!(Box::into_pin(handler.handle_request(request_context)));
                 match result {
                     Ok(payload) => Ok(Some(LoquiFrame::Response(Response {
                         flags,

@@ -2,10 +2,8 @@
 
 use failure::Error;
 use loqui_client::Client;
-use loqui_protocol::Request;
-use loqui_server::{Handler, Server};
+use loqui_server::{Handler, RequestContext, Server};
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::{thread, time::Duration};
 
@@ -16,9 +14,9 @@ struct EchoHandler {}
 impl Handler for EchoHandler {
     fn handle_request(
         &self,
-        request: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>> {
-        Box::pin(async { Ok(request.payload) })
+        request: RequestContext,
+    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send> {
+        Box::new(async { Ok(request.payload) })
     }
 }
 
@@ -29,6 +27,7 @@ fn main() {
                 async {
                     let server = Server {
                         handler: Arc::new(EchoHandler {}),
+                        supported_encodings: vec!["json".to_string()],
                     };
                     let result = await!(server.listen_and_serve(ADDRESS.to_string()));
                     println!("Run result={:?}", result);

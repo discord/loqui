@@ -14,5 +14,5 @@ pub trait Handler: Send + Sync {
     fn handle_request(
         &self,
         request: RequestContext,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>>;
+    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>;
 }
