@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate log;
 
-mod connection;
-mod frame_handler;
+pub mod connection;
+pub mod frame_handler;
 mod request_handler;
 mod server;
 

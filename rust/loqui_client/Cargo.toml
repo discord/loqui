@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 loqui_protocol = { path = "../loqui_protocol" }
+loqui_server = { path = "../loqui_server" }
 failure = "0.1.1"
 log = "0.4"
 futures = "0.1.25"

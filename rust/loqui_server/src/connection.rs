@@ -10,8 +10,14 @@ use tokio_codec::Framed;
 
 use super::{frame_handler::FrameHandler, RequestContext};
 use failure::{err_msg, Error};
+use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
+use loqui_protocol::frames::Hello;
+
+// TODO: get right values
+const UPGRADE_REQUEST: &'static str =
+    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 #[derive(Debug)]
 pub enum Event<E> {
@@ -22,42 +28,51 @@ pub enum Event<E> {
 pub type HandleEventResult = Box<dyn Future<Output = Result<Option<LoquiFrame>, Error>> + Send>;
 
 pub trait EventHandler<E>: Send + Sync {
-    fn handle_event(&self, event: Event<E>, tx: UnboundedSender<Event<E>>) -> HandleEventResult;
+    fn handle_event(&mut self, event: Event<E>) -> HandleEventResult;
 }
 
 pub struct Connection<E> {
     tcp_stream: TcpStream,
+    rx: UnboundedReceiver<Event<E>>,
     //frame_handler: Arc<dyn FrameHandler>,
-    event_handler: Arc<dyn EventHandler<E>>,
     encoding: String,
 }
 
-impl<E> Connection<E> {
-    pub fn new(tcp_stream: TcpStream, event_handler: Arc<dyn EventHandler<E>>) -> Self {
+use std::fmt::Debug;
+impl<E: Debug> Connection<E> {
+    pub fn new(rx: UnboundedReceiver<Event<E>>, tcp_stream: TcpStream) -> Self {
         Self {
+            rx,
             tcp_stream,
-            event_handler,
             // TODO:
             encoding: "json".to_string(),
         }
     }
 
-    pub async fn run<'e>(mut self) {
-        self = await!(self.await_upgrade());
+    pub async fn run(mut self, mut event_handler: Box<dyn EventHandler<E> + 'static>) {
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        let (tx, rx) = mpsc::unbounded::<Event<E>>();
+        // TODO: this should only be sent from client
+        writer = tokio_await!(writer.send(LoquiFrame::Hello(Hello {
+            flags: 0,
+            version: 1,
+            encodings: vec!["msgpack".to_string()],
+            compressions: vec![],
+        })))
+        .unwrap();
+
         let mut stream = reader
             .map(|frame| Event::Socket(frame))
-            .select(rx.map_err(|()| err_msg("rx error")));
+            .select(self.rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
             // TODO: handle error
             match event {
                 Ok(event) => {
-                    match await!(Box::into_pin(self.event_handler.handle_event(event, tx.clone()))) {
+                    let fut = event_handler.handle_event(event);
+                    match await!(Box::into_pin(fut)) {
                         Ok(Some(frame)) => {
                             match tokio_await!(writer.send(frame)) {
                                 Ok(new_writer) => writer = new_writer,
@@ -96,6 +111,21 @@ impl<E> Connection<E> {
                     "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
                 await!(self.tcp_stream.write_all_async(&response.as_bytes()[..])).unwrap();
                 await!(self.tcp_stream.flush_async()).unwrap();
+                break;
+            }
+        }
+        self
+    }
+
+    pub async fn upgrade(mut self) -> Self {
+        await!(self.tcp_stream.write_all_async(&UPGRADE_REQUEST.as_bytes())).unwrap();
+        await!(self.tcp_stream.flush_async()).unwrap();
+        let mut payload = [0; 1024];
+        // TODO: handle disconnect, bytes_read=0
+        while let Ok(_bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
+            let response = String::from_utf8(payload.to_vec()).unwrap();
+            // TODO: case insensitive
+            if response.contains(&"Upgrade") {
                 break;
             }
         }

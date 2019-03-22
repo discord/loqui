@@ -10,12 +10,12 @@ use std::sync::Arc;
 use super::connection::{Connection, Event, EventHandler, HandleEventResult};
 use super::frame_handler::{FrameHandler, ServerFrameHandler};
 use super::request_handler::RequestHandler;
+use futures::sync::mpsc::{self, UnboundedSender};
 use loqui_protocol::codec::LoquiFrame;
-use futures::sync::mpsc::UnboundedSender;
 
 pub struct Server {
     supported_encodings: Vec<String>,
-    event_handler: Arc<dyn EventHandler<InternalEvent>>,
+    frame_handler: Arc<dyn FrameHandler>,
 }
 
 #[derive(Debug)]
@@ -25,18 +25,22 @@ enum InternalEvent {
 
 struct ServerEventHandler {
     frame_handler: Arc<dyn FrameHandler>,
+    tx: UnboundedSender<Event<InternalEvent>>,
 }
 
 impl ServerEventHandler {
-    fn new(frame_handler: Arc<dyn FrameHandler>) -> Self {
-        Self { frame_handler }
+    fn new(
+        tx: UnboundedSender<Event<InternalEvent>>,
+        frame_handler: Arc<dyn FrameHandler>,
+    ) -> Self {
+        Self { tx, frame_handler }
     }
 }
 
 impl EventHandler<InternalEvent> for ServerEventHandler {
-    fn handle_event(&self, event: Event<InternalEvent>, tx: UnboundedSender<Event<InternalEvent>>) -> HandleEventResult {
+    fn handle_event(&mut self, event: Event<InternalEvent>) -> HandleEventResult {
         let frame_handler = self.frame_handler.clone();
-        let tx = tx.clone();
+        let tx = self.tx.clone();
         Box::new(
             async move {
                 match event {
@@ -70,9 +74,8 @@ impl EventHandler<InternalEvent> for ServerEventHandler {
 impl Server {
     pub fn new(request_handler: Arc<dyn RequestHandler>, supported_encodings: Vec<String>) -> Self {
         let frame_handler = ServerFrameHandler::new(request_handler);
-        let event_handler = ServerEventHandler::new(Arc::new(frame_handler));
         Self {
-            event_handler: Arc::new(event_handler),
+            frame_handler: Arc::new(frame_handler),
             supported_encodings,
         }
     }
@@ -87,8 +90,16 @@ impl Server {
     */
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let connection = Connection::new(tcp_stream, self.event_handler.clone());
-        tokio::spawn_async(connection.run());
+        let (tx, rx) = mpsc::unbounded::<Event<InternalEvent>>();
+        let mut connection = Connection::new(rx, tcp_stream);
+        let frame_handler = self.frame_handler.clone();
+        tokio::spawn_async(
+            async {
+                connection = await!(connection.await_upgrade());
+                let event_handler = ServerEventHandler::new(tx, frame_handler);
+                await!(connection.run(Box::new(event_handler)));
+            },
+        );
     }
 
     // TODO
