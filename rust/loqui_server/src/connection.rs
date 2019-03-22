@@ -43,7 +43,7 @@ impl<E> Connection<E> {
     }
 
     pub async fn run<'e>(mut self) {
-        self = await!(self.upgrade());
+        self = await!(self.await_upgrade());
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
@@ -84,7 +84,7 @@ impl<E> Connection<E> {
         println!("connection closed");
     }
 
-    async fn upgrade(mut self) -> Self {
+    pub async fn await_upgrade(mut self) -> Self {
         // TODO: buffering
         let mut payload = [0; 1024];
         // TODO: handle disconnect, bytes_read=0
