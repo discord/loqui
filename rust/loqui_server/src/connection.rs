@@ -118,10 +118,6 @@ impl Connection {
                     Err(e) => dbg!(Err(e)),
                 }
             }
-            event => {
-                dbg!(event);
-                Ok(writer)
-            }
         }
     }
 
