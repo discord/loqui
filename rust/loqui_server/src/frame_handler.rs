@@ -24,7 +24,8 @@ impl ServerFrameHandler {
         frame: LoquiFrame,
         // TODO: should we just return LoquiFrame::Error if there is an error??
     ) -> Box<dyn Future<Output = Result<Option<LoquiFrame>, Error>> + Send + 'static> {
-        self.inner.clone().handle_frame(frame)
+        let inner = self.inner.clone();
+        Box::new(async move { await!(inner.handle_frame(frame)) })
     }
 }
 
@@ -33,30 +34,26 @@ pub struct InnerHandler {
 }
 
 impl InnerHandler {
-    pub fn handle_frame(
+    pub async fn handle_frame(
         &self,
         frame: LoquiFrame,
         // TODO: should we just return LoquiFrame::Error if there is an error??
-    ) -> Box<dyn Future<Output = Result<Option<LoquiFrame>, Error>> + Send + 'static> {
-        Box::new(
-            async move {
-                match frame {
-                    LoquiFrame::Request(request) => await!(self.handle_request(request)),
-                    LoquiFrame::Hello(hello) => {
-                        Ok(None)
-                        //self.handle_hello(hello)
-                    },
-                    LoquiFrame::Ping(ping) => {
-                        Ok(None)
-                        //Ok(Some(self.handle_ping(ping)))
-                    },
-                    frame => {
-                        println!("unhandled frame {:?}", frame);
-                        Ok(None)
-                    }
-                }
+    ) -> Result<Option<LoquiFrame>, Error> {
+        match frame {
+            LoquiFrame::Request(request) => await!(self.handle_request(request)),
+            LoquiFrame::Hello(hello) => {
+                Ok(None)
+                //self.handle_hello(hello)
             }
-        )
+            LoquiFrame::Ping(ping) => {
+                Ok(None)
+                //Ok(Some(self.handle_ping(ping)))
+            }
+            frame => {
+                println!("unhandled frame {:?}", frame);
+                Ok(None)
+            }
+        }
     }
 
     fn handle_ping(&self, ping: Ping) -> LoquiFrame {
