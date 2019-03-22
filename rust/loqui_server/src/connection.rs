@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use futures::sync::mpsc;
-use tokio::await;
+use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use super::{RequestHandler, RequestContext};
+use super::{frame_handler::FrameHandler, RequestContext};
 use failure::err_msg;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::*;
@@ -19,15 +19,15 @@ enum Message {
 
 pub struct Connection {
     tcp_stream: TcpStream,
-    handler: Arc<RequestHandler>,
+    frame_handler: Arc<dyn FrameHandler>,
     encoding: String,
 }
 
 impl Connection {
-    pub fn new(tcp_stream: TcpStream, handler: Arc<RequestHandler>) -> Self {
+    pub fn new(tcp_stream: TcpStream, frame_handler: Arc<FrameHandler>) -> Self {
         Self {
             tcp_stream,
-            handler,
+            frame_handler,
             // TODO:
             encoding: "json".to_string(),
         }
@@ -51,13 +51,13 @@ impl Connection {
                     match message {
                         Message::Request(frame) => {
                             let tx = tx.clone();
-                            let handler = self.handler.clone();
+                            let frame_handler = self.frame_handler.clone();
                             tokio::spawn_async(
                                 async move {
                                     // TODO: handle error
-                                    match await!(Connection::handle_frame(frame, handler)) {
+                                    match tokio_await!(Box::into_pin(frame_handler.handle_frame(frame))) {
                                         Ok(Some(frame)) => {
-                                            await!(tx.send(Message::Response(frame)));
+                                            tokio_await!(tx.send(Message::Response(frame)));
                                         }
                                         Ok(None) => {
                                             dbg!("None");
@@ -70,7 +70,7 @@ impl Connection {
                             );
                         }
                         Message::Response(frame) => {
-                            match await!(writer.send(frame)) {
+                            match tokio_await!(writer.send(frame)) {
                                 Ok(new_writer) => writer = new_writer,
                                 // TODO: better handle this error
                                 Err(e) => {
@@ -105,56 +105,5 @@ impl Connection {
             }
         }
         self
-    }
-
-    async fn handle_frame<'e>(
-        frame: LoquiFrame,
-        handler: Arc<RequestHandler + 'e>,
-    ) -> Result<Option<LoquiFrame>, Error> {
-        match frame {
-            LoquiFrame::Request(Request {
-                payload,
-                flags,
-                sequence_id,
-            }) => {
-                let request_context = RequestContext {
-                    payload,
-                    flags,
-                    // TODO:
-                    encoding: "json".to_string(),
-                };
-                let result = await!(Box::into_pin(handler.handle_request(request_context)));
-                match result {
-                    Ok(payload) => Ok(Some(LoquiFrame::Response(Response {
-                        flags,
-                        sequence_id,
-                        payload,
-                    }))),
-                    Err(e) => {
-                        dbg!(e);
-                        // TODO:
-                        Ok(None)
-                    }
-                }
-            }
-            LoquiFrame::Hello(Hello {
-                flags,
-                version,
-                encodings,
-                compressions,
-            }) => Ok(Some(LoquiFrame::HelloAck(HelloAck {
-                flags,
-                ping_interval_ms: 5000,
-                encoding: encodings[0].clone(),
-                compression: "".to_string(),
-            }))),
-            LoquiFrame::Ping(Ping { flags, sequence_id }) => {
-                Ok(Some(LoquiFrame::Pong(Pong { flags, sequence_id })))
-            }
-            frame => {
-                println!("unhandled frame {:?}", frame);
-                Ok(None)
-            }
-        }
     }
 }

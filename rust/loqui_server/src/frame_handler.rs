@@ -19,13 +19,15 @@ pub struct ServerFrameHandler {
 }
 
 impl ServerFrameHandler {
-    fn new(request_handler: Arc<dyn RequestHandler>) -> Self {
+    pub fn new(request_handler: Arc<dyn RequestHandler>) -> Self {
         Self {
             inner: Arc::new(InnerHandler::new(request_handler)),
         }
     }
+}
 
-    pub fn handle_frame(
+impl FrameHandler for ServerFrameHandler {
+    fn handle_frame(
         &self,
         frame: LoquiFrame,
         // TODO: should we just return LoquiFrame::Error if there is an error??

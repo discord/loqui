@@ -2,7 +2,7 @@
 
 use failure::Error;
 use loqui_client::Client;
-use loqui_server::{RequestHandler, RequestContext, Server};
+use loqui_server::{RequestContext, RequestHandler, Server};
 use std::future::Future;
 use std::sync::Arc;
 use std::{thread, time::Duration};
@@ -25,10 +25,7 @@ fn main() {
         async {
             tokio::spawn_async(
                 async {
-                    let server = Server {
-                        handler: Arc::new(EchoHandler {}),
-                        supported_encodings: vec!["json".to_string()],
-                    };
+                    let server = Server::new(Arc::new(EchoHandler {}), vec!["json".to_string()]);
                     let result = await!(server.listen_and_serve(ADDRESS.to_string()));
                     println!("Run result={:?}", result);
                 },

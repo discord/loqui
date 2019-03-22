@@ -9,14 +9,23 @@ use std::sync::Arc;
 
 use super::connection::Connection;
 use super::request_handler::RequestHandler;
+use super::frame_handler::{FrameHandler, ServerFrameHandler};
 use loqui_protocol::codec::LoquiFrame;
 
 pub struct Server {
     pub supported_encodings: Vec<String>,
-    pub handler: Arc<RequestHandler>,
+    pub frame_handler: Arc<dyn FrameHandler>,
 }
 
 impl Server {
+
+    pub fn new(request_handler: Arc<dyn RequestHandler>, supported_encodings: Vec<String>) -> Self {
+        Self {
+            frame_handler: Arc::new(ServerFrameHandler::new(request_handler)),
+            supported_encodings,
+        }
+    }
+
     // TODO
     /*
     pub fn new(handler: Handler) -> Self {
@@ -27,7 +36,7 @@ impl Server {
     */
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let connection = Connection::new(tcp_stream, self.handler.clone());
+        let connection = Connection::new(tcp_stream, self.frame_handler.clone());
         tokio::spawn_async(connection.run());
     }
 
