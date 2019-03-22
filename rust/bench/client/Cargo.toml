@@ -1,5 +1,5 @@
 [package]
-name = "loqui_examples_echo"
+name = "loqui_bench_client"
 version = "0.0.1"
 authors = ["Discord Inc."]
 edition = "2018"
@@ -9,5 +9,4 @@ failure = "0.1.1"
 futures = "0.1.25"
 loqui_protocol = { path = "../../loqui_protocol" }
 loqui_client = { path = "../../loqui_client" }
-loqui_server = { path = "../../loqui_server" }
 tokio = { version = "0.1.16", features = ["async-await-preview"] }

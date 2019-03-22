@@ -211,6 +211,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "loqui_bench_client"
+version = "0.0.1"
+dependencies = [
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_client 0.0.1",
+ "loqui_protocol 0.0.1",
+ "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "loqui_bench_server"
+version = "0.0.1"
+dependencies = [
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_protocol 0.0.1",
+ "loqui_server 0.0.1",
+ "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "loqui_client"
 version = "0.0.1"
 dependencies = [
@@ -225,7 +247,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "loqui_example"
+name = "loqui_examples_echo"
 version = "0.0.1"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
