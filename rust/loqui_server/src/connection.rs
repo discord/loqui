@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use futures::stream::SplitSink;
 use futures::sync::mpsc::{self, UnboundedSender};
+use std::future::Future;
 use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -9,41 +10,33 @@ use tokio_codec::Framed;
 
 use super::{frame_handler::FrameHandler, RequestContext};
 use failure::{err_msg, Error};
-use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use futures::sync::oneshot::Sender as OneShotSender;
+use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 
 #[derive(Debug)]
-enum Event<T> {
+pub enum Event<E> {
     Socket(LoquiFrame),
-    Internal(T),
+    Internal(E),
 }
 
-#[derive(Debug)]
-enum InternalEvent {
-    /*
-    Request {
-        payload: Vec<u8>,
-        // TODO: probably need to handle error better?
-        sender: OneShotSender<Result<Vec<u8>, Error>>,
-    },
-    Push {
-        payload: Vec<u8>,
-    },
-    */
-    Complete(LoquiFrame),
+pub type HandleEventResult = Box<dyn Future<Output = Result<Option<LoquiFrame>, Error>> + Send>;
+
+pub trait EventHandler<E>: Send + Sync {
+    fn handle_event(&self, event: Event<E>, tx: UnboundedSender<Event<E>>) -> HandleEventResult;
 }
 
-pub struct Connection {
+pub struct Connection<E> {
     tcp_stream: TcpStream,
-    frame_handler: Arc<dyn FrameHandler>,
+    //frame_handler: Arc<dyn FrameHandler>,
+    event_handler: Arc<dyn EventHandler<E>>,
     encoding: String,
 }
 
-impl Connection {
-    pub fn new(tcp_stream: TcpStream, frame_handler: Arc<FrameHandler>) -> Self {
+impl<E> Connection<E> {
+    pub fn new(tcp_stream: TcpStream, event_handler: Arc<dyn EventHandler<E>>) -> Self {
         Self {
             tcp_stream,
-            frame_handler,
+            event_handler,
             // TODO:
             encoding: "json".to_string(),
         }
@@ -55,7 +48,7 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        let (tx, rx) = mpsc::unbounded::<Event<InternalEvent>>();
+        let (tx, rx) = mpsc::unbounded::<Event<E>>();
         let mut stream = reader
             .map(|frame| Event::Socket(frame))
             .select(rx.map_err(|()| err_msg("rx error")));
@@ -64,13 +57,19 @@ impl Connection {
             // TODO: handle error
             match event {
                 Ok(event) => {
-                    match await!(Self::handle_event(
-                        event,
-                        writer,
-                        tx.clone(),
-                        self.frame_handler.clone()
-                    )) {
-                        Ok(new_writer) => writer = new_writer,
+                    match await!(Box::into_pin(self.event_handler.handle_event(event, tx.clone()))) {
+                        Ok(Some(frame)) => {
+                            match tokio_await!(writer.send(frame)) {
+                                Ok(new_writer) => writer = new_writer,
+                                // TODO: better handle this error
+                                Err(e) => {
+                                    // TODO
+                                    dbg!(e);
+                                    return;
+                                }
+                            }
+                        }
+                        Ok(None) => {}
                         Err(e) => {
                             dbg!(e);
                             return;
@@ -83,42 +82,6 @@ impl Connection {
             }
         }
         println!("connection closed");
-    }
-
-    async fn handle_event(
-        event: Event<InternalEvent>,
-        writer: SplitSink<Framed<TcpStream, LoquiCodec>>,
-        tx: UnboundedSender<Event<InternalEvent>>,
-        frame_handler: Arc<dyn FrameHandler + 'static>,
-    ) -> Result<SplitSink<Framed<TcpStream, LoquiCodec>>, Error> {
-        match event {
-            Event::Socket(frame) => {
-                tokio::spawn_async(
-                    async move {
-                        // TODO: handle error
-                        match tokio_await!(Box::into_pin(frame_handler.handle_frame(frame))) {
-                            Ok(Some(frame)) => {
-                                tokio_await!(tx.send(Event::Internal(InternalEvent::Complete(frame))));
-                            }
-                            Ok(None) => {
-                                dbg!("None");
-                            }
-                            Err(e) => {
-                                dbg!(e);
-                            }
-                        }
-                    },
-                );
-                Ok(writer)
-            }
-            Event::Internal(InternalEvent::Complete(frame)) => {
-                match tokio_await!(writer.send(frame)) {
-                    Ok(new_writer) => Ok(new_writer),
-                    // TODO: better handle this error
-                    Err(e) => dbg!(Err(e)),
-                }
-            }
-        }
     }
 
     async fn upgrade(mut self) -> Self {
