@@ -8,8 +8,8 @@ use tokio::prelude::*;
 use std::sync::Arc;
 
 use super::connection::Connection;
-use super::request_handler::RequestHandler;
 use super::frame_handler::{FrameHandler, ServerFrameHandler};
+use super::request_handler::RequestHandler;
 use loqui_protocol::codec::LoquiFrame;
 
 pub struct Server {
@@ -18,7 +18,6 @@ pub struct Server {
 }
 
 impl Server {
-
     pub fn new(request_handler: Arc<dyn RequestHandler>, supported_encodings: Vec<String>) -> Self {
         Self {
             frame_handler: Arc::new(ServerFrameHandler::new(request_handler)),

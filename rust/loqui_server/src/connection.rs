@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
-use futures::sync::mpsc;
+use futures::stream::SplitSink;
+use futures::sync::mpsc::{self, UnboundedSender};
 use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
 use super::{frame_handler::FrameHandler, RequestContext};
-use failure::err_msg;
+use failure::{err_msg, Error};
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::*;
 
 #[derive(Debug)]
-enum Message {
-    Request(LoquiFrame),
-    Response(LoquiFrame),
+enum Event {
+    Socket(LoquiFrame),
+    Internal(LoquiFrame),
 }
 
 pub struct Connection {
@@ -39,45 +39,25 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        let (tx, rx) = mpsc::unbounded::<Message>();
+        let (tx, rx) = mpsc::unbounded::<Event>();
         let mut stream = reader
-            .map(|frame| Message::Request(frame))
+            .map(|frame| Event::Socket(frame))
             .select(rx.map_err(|()| err_msg("rx error")));
 
-        while let Some(message) = await!(stream.next()) {
+        while let Some(event) = await!(stream.next()) {
             // TODO: handle error
-            match message {
-                Ok(message) => {
-                    match message {
-                        Message::Request(frame) => {
-                            let tx = tx.clone();
-                            let frame_handler = self.frame_handler.clone();
-                            tokio::spawn_async(
-                                async move {
-                                    // TODO: handle error
-                                    match tokio_await!(Box::into_pin(frame_handler.handle_frame(frame))) {
-                                        Ok(Some(frame)) => {
-                                            tokio_await!(tx.send(Message::Response(frame)));
-                                        }
-                                        Ok(None) => {
-                                            dbg!("None");
-                                        }
-                                        Err(e) => {
-                                            dbg!(e);
-                                        }
-                                    }
-                                },
-                            );
-                        }
-                        Message::Response(frame) => {
-                            match tokio_await!(writer.send(frame)) {
-                                Ok(new_writer) => writer = new_writer,
-                                // TODO: better handle this error
-                                Err(e) => {
-                                    error!("Failed to write. error={:?}", e);
-                                    return;
-                                }
-                            }
+            match event {
+                Ok(event) => {
+                    match await!(Self::handle_event(
+                        event,
+                        writer,
+                        tx.clone(),
+                        self.frame_handler.clone()
+                    )) {
+                        Ok(new_writer) => writer = new_writer,
+                        Err(e) => {
+                            dbg!(e);
+                            return;
                         }
                     }
                 }
@@ -87,6 +67,42 @@ impl Connection {
             }
         }
         println!("connection closed");
+    }
+
+    async fn handle_event(
+        event: Event,
+        writer: SplitSink<Framed<TcpStream, LoquiCodec>>,
+        tx: UnboundedSender<Event>,
+        frame_handler: Arc<dyn FrameHandler + 'static>,
+    ) -> Result<SplitSink<Framed<TcpStream, LoquiCodec>>, Error> {
+        match event {
+            Event::Socket(frame) => {
+                tokio::spawn_async(
+                    async move {
+                        // TODO: handle error
+                        match tokio_await!(Box::into_pin(frame_handler.handle_frame(frame))) {
+                            Ok(Some(frame)) => {
+                                tokio_await!(tx.send(Event::Internal(frame)));
+                            }
+                            Ok(None) => {
+                                dbg!("None");
+                            }
+                            Err(e) => {
+                                dbg!(e);
+                            }
+                        }
+                    },
+                );
+                Ok(writer)
+            }
+            Event::Internal(frame) => {
+                match tokio_await!(writer.send(frame)) {
+                    Ok(new_writer) => Ok(new_writer),
+                    // TODO: better handle this error
+                    Err(e) => dbg!(Err(e)),
+                }
+            }
+        }
     }
 
     async fn upgrade(mut self) -> Self {

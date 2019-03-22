@@ -3,7 +3,7 @@ use std::future::Future;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Error as ErrorFrame, Hello, HelloAck, Ping, Pong, Request, Response};
 // TODO: rename this to request handler
-use super::request_handler::{RequestHandler, RequestContext};
+use super::request_handler::{RequestContext, RequestHandler};
 use failure::Error;
 use std::sync::Arc;
 
@@ -43,9 +43,7 @@ pub struct InnerHandler {
 
 impl InnerHandler {
     fn new(request_handler: Arc<dyn RequestHandler>) -> Self {
-        Self {
-            request_handler
-        }
+        Self { request_handler }
     }
 
     pub async fn handle_frame(
@@ -55,14 +53,9 @@ impl InnerHandler {
     ) -> Result<Option<LoquiFrame>, Error> {
         match frame {
             LoquiFrame::Request(request) => await!(self.handle_request(request)),
-            LoquiFrame::Hello(hello) => {
-                Ok(None)
-                //self.handle_hello(hello)
-            }
-            LoquiFrame::Ping(ping) => {
-                Ok(None)
-                //Ok(Some(self.handle_ping(ping)))
-            }
+            LoquiFrame::Hello(hello) => self.handle_hello(hello),
+            LoquiFrame::Ping(ping) => Ok(Some(self.handle_ping(ping))),
+            LoquiFrame::Pong(_) => Ok(None),
             frame => {
                 println!("unhandled frame {:?}", frame);
                 Ok(None)
