@@ -10,11 +10,25 @@ use tokio_codec::Framed;
 use super::{frame_handler::FrameHandler, RequestContext};
 use failure::{err_msg, Error};
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
+use futures::sync::oneshot::Sender as OneShotSender;
 
 #[derive(Debug)]
 enum Event {
-    Socket(LoquiFrame),
-    Internal(LoquiFrame),
+    Frame(LoquiFrame),
+    Internal(InternalEvent),
+}
+
+#[derive(Debug)]
+enum InternalEvent {
+    Request {
+        payload: Vec<u8>,
+        // TODO: probably need to handle error better?
+        sender: OneShotSender<Result<Vec<u8>, Error>>,
+    },
+    Push {
+        payload: Vec<u8>,
+    },
+    Complete(LoquiFrame),
 }
 
 pub struct Connection {
@@ -41,7 +55,7 @@ impl Connection {
 
         let (tx, rx) = mpsc::unbounded::<Event>();
         let mut stream = reader
-            .map(|frame| Event::Socket(frame))
+            .map(|frame| Event::Frame(frame))
             .select(rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
@@ -76,13 +90,13 @@ impl Connection {
         frame_handler: Arc<dyn FrameHandler + 'static>,
     ) -> Result<SplitSink<Framed<TcpStream, LoquiCodec>>, Error> {
         match event {
-            Event::Socket(frame) => {
+            Event::Frame(frame) => {
                 tokio::spawn_async(
                     async move {
                         // TODO: handle error
                         match tokio_await!(Box::into_pin(frame_handler.handle_frame(frame))) {
                             Ok(Some(frame)) => {
-                                tokio_await!(tx.send(Event::Internal(frame)));
+                                tokio_await!(tx.send(Event::Internal(InternalEvent::Complete(frame))));
                             }
                             Ok(None) => {
                                 dbg!("None");
@@ -95,12 +109,16 @@ impl Connection {
                 );
                 Ok(writer)
             }
-            Event::Internal(frame) => {
+            Event::Internal(InternalEvent::Complete(frame)) => {
                 match tokio_await!(writer.send(frame)) {
                     Ok(new_writer) => Ok(new_writer),
                     // TODO: better handle this error
                     Err(e) => dbg!(Err(e)),
                 }
+            }
+            event => {
+                dbg!(event);
+                Ok(writer)
             }
         }
     }
