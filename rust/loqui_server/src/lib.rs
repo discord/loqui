@@ -4,6 +4,7 @@
 extern crate log;
 
 mod connection;
+mod frame_handler;
 mod handler;
 mod server;
 
