@@ -25,11 +25,11 @@ const UPGRADE_REQUEST: &'static str =
 
 #[derive(Clone)]
 pub struct Client {
-    sender: mpsc::UnboundedSender<Event<InternalEvent>>,
+    sender: mpsc::UnboundedSender<Event<ClientEvent>>,
 }
 
 #[derive(Debug)]
-enum InternalEvent {
+enum ClientEvent {
     Request {
         payload: Vec<u8>,
         // TODO: probably need to handle error better?
@@ -61,10 +61,10 @@ impl ClientEventHandler {
     }
 }
 
-impl EventHandler<InternalEvent> for ClientEventHandler {
-    fn handle_event(&mut self, event: Event<InternalEvent>) -> HandleEventResult {
+impl EventHandler<ClientEvent> for ClientEventHandler {
+    fn handle_event(&mut self, event: Event<ClientEvent>) -> HandleEventResult {
         match event {
-            Event::Internal(InternalEvent::Request { payload, sender }) => {
+            Event::Internal(ClientEvent::Request { payload, sender }) => {
                 let sequence_id = self.next_seq();
                 self.waiters.insert(sequence_id, sender);
                 Box::new(
@@ -77,7 +77,7 @@ impl EventHandler<InternalEvent> for ClientEventHandler {
                     },
                 )
             }
-            Event::Internal(InternalEvent::Push { payload }) => {
+            Event::Internal(ClientEvent::Push { payload }) => {
                 Box::new(async move { Ok(Some(LoquiFrame::Push(Push { flags: 0, payload }))) })
             }
             Event::Socket(frame) => {
@@ -106,7 +106,7 @@ impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
-        let (tx, rx) = mpsc::unbounded::<Event<InternalEvent>>();
+        let (tx, rx) = mpsc::unbounded::<Event<ClientEvent>>();
         let mut connection = Connection::new(rx, tcp_stream);
         connection = await!(connection.upgrade());
         tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new())));
@@ -117,14 +117,14 @@ impl Client {
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot();
         self.sender
-            .unbounded_send(Event::Internal(InternalEvent::Request { payload, sender }))?;
+            .unbounded_send(Event::Internal(ClientEvent::Request { payload, sender }))?;
         // TODO: handle send error better
         await!(receiver).map_err(|e| Error::from(e))?
     }
 
     pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
         self.sender
-            .unbounded_send(Event::Internal(InternalEvent::Push { payload }))
+            .unbounded_send(Event::Internal(ClientEvent::Push { payload }))
             .map_err(|e| Error::from(e))
     }
 }

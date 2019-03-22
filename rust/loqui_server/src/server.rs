@@ -19,26 +19,23 @@ pub struct Server {
 }
 
 #[derive(Debug)]
-enum InternalEvent {
+enum ServerEvent {
     Complete(LoquiFrame),
 }
 
 struct ServerEventHandler {
     frame_handler: Arc<dyn FrameHandler>,
-    tx: UnboundedSender<Event<InternalEvent>>,
+    tx: UnboundedSender<Event<ServerEvent>>,
 }
 
 impl ServerEventHandler {
-    fn new(
-        tx: UnboundedSender<Event<InternalEvent>>,
-        frame_handler: Arc<dyn FrameHandler>,
-    ) -> Self {
+    fn new(tx: UnboundedSender<Event<ServerEvent>>, frame_handler: Arc<dyn FrameHandler>) -> Self {
         Self { tx, frame_handler }
     }
 }
 
-impl EventHandler<InternalEvent> for ServerEventHandler {
-    fn handle_event(&mut self, event: Event<InternalEvent>) -> HandleEventResult {
+impl EventHandler<ServerEvent> for ServerEventHandler {
+    fn handle_event(&mut self, event: Event<ServerEvent>) -> HandleEventResult {
         let frame_handler = self.frame_handler.clone();
         let tx = self.tx.clone();
         Box::new(
@@ -50,8 +47,9 @@ impl EventHandler<InternalEvent> for ServerEventHandler {
                                 // TODO: handle error
                                 match await!(Box::into_pin(frame_handler.handle_frame(frame))) {
                                     Ok(Some(frame)) => {
-                                        tokio_await!(tx
-                                            .send(Event::Internal(InternalEvent::Complete(frame))));
+                                        tokio_await!(
+                                            tx.send(Event::Internal(ServerEvent::Complete(frame)))
+                                        );
                                     }
                                     Ok(None) => {
                                         dbg!("None");
@@ -64,7 +62,7 @@ impl EventHandler<InternalEvent> for ServerEventHandler {
                         );
                         Ok(None)
                     }
-                    Event::Internal(InternalEvent::Complete(frame)) => Ok(Some(frame)),
+                    Event::Internal(ServerEvent::Complete(frame)) => Ok(Some(frame)),
                 }
             },
         )
@@ -90,7 +88,7 @@ impl Server {
     */
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let (tx, rx) = mpsc::unbounded::<Event<InternalEvent>>();
+        let (tx, rx) = mpsc::unbounded::<Event<ServerEvent>>();
         let mut connection = Connection::new(rx, tcp_stream);
         let frame_handler = self.frame_handler.clone();
         tokio::spawn_async(
