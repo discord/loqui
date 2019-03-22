@@ -13,9 +13,9 @@ use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use futures::sync::oneshot::Sender as OneShotSender;
 
 #[derive(Debug)]
-enum Event {
+enum Event<T> {
     Socket(LoquiFrame),
-    Internal(InternalEvent),
+    Internal(T),
 }
 
 #[derive(Debug)]
@@ -53,7 +53,7 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        let (tx, rx) = mpsc::unbounded::<Event>();
+        let (tx, rx) = mpsc::unbounded::<Event<InternalEvent>>();
         let mut stream = reader
             .map(|frame| Event::Socket(frame))
             .select(rx.map_err(|()| err_msg("rx error")));
@@ -84,9 +84,9 @@ impl Connection {
     }
 
     async fn handle_event(
-        event: Event,
+        event: Event<InternalEvent>,
         writer: SplitSink<Framed<TcpStream, LoquiCodec>>,
-        tx: UnboundedSender<Event>,
+        tx: UnboundedSender<Event<InternalEvent>>,
         frame_handler: Arc<dyn FrameHandler + 'static>,
     ) -> Result<SplitSink<Framed<TcpStream, LoquiCodec>>, Error> {
         match event {
