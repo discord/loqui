@@ -20,6 +20,7 @@ enum Event<T> {
 
 #[derive(Debug)]
 enum InternalEvent {
+    /*
     Request {
         payload: Vec<u8>,
         // TODO: probably need to handle error better?
@@ -28,6 +29,7 @@ enum InternalEvent {
     Push {
         payload: Vec<u8>,
     },
+    */
     Complete(LoquiFrame),
 }
 
