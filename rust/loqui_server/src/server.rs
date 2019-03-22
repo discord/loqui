@@ -8,12 +8,12 @@ use tokio::prelude::*;
 use std::sync::Arc;
 
 use super::connection::Connection;
-use super::handler::Handler;
+use super::request_handler::RequestHandler;
 use loqui_protocol::codec::LoquiFrame;
 
 pub struct Server {
     pub supported_encodings: Vec<String>,
-    pub handler: Arc<Handler>,
+    pub handler: Arc<RequestHandler>,
 }
 
 impl Server {

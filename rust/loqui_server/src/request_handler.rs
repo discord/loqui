@@ -10,7 +10,7 @@ pub struct RequestContext {
     pub encoding: String,
 }
 
-pub trait Handler: Send + Sync {
+pub trait RequestHandler: Send + Sync {
     fn handle_request(
         &self,
         request: RequestContext,

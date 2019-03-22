@@ -2,7 +2,7 @@
 
 use failure::Error;
 use loqui_client::Client;
-use loqui_server::{Handler, RequestContext, Server};
+use loqui_server::{RequestHandler, RequestContext, Server};
 use std::future::Future;
 use std::sync::Arc;
 use std::{thread, time::Duration};
@@ -11,7 +11,7 @@ const ADDRESS: &'static str = "127.0.0.1:3000";
 
 struct EchoHandler {}
 
-impl Handler for EchoHandler {
+impl RequestHandler for EchoHandler {
     fn handle_request(
         &self,
         request: RequestContext,

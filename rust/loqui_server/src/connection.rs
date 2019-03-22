@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use super::{Handler, RequestContext};
+use super::{RequestHandler, RequestContext};
 use failure::err_msg;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::*;
@@ -19,12 +19,12 @@ enum Message {
 
 pub struct Connection {
     tcp_stream: TcpStream,
-    handler: Arc<Handler>,
+    handler: Arc<RequestHandler>,
     encoding: String,
 }
 
 impl Connection {
-    pub fn new(tcp_stream: TcpStream, handler: Arc<Handler>) -> Self {
+    pub fn new(tcp_stream: TcpStream, handler: Arc<RequestHandler>) -> Self {
         Self {
             tcp_stream,
             handler,
@@ -109,7 +109,7 @@ impl Connection {
 
     async fn handle_frame<'e>(
         frame: LoquiFrame,
-        handler: Arc<Handler + 'e>,
+        handler: Arc<RequestHandler + 'e>,
     ) -> Result<Option<LoquiFrame>, Error> {
         match frame {
             LoquiFrame::Request(Request {

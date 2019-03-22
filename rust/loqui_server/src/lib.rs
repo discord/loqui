@@ -5,8 +5,8 @@ extern crate log;
 
 mod connection;
 mod frame_handler;
-mod handler;
+mod request_handler;
 mod server;
 
-pub use self::handler::{Handler, RequestContext};
+pub use self::request_handler::{RequestHandler, RequestContext};
 pub use self::server::Server;
