@@ -13,14 +13,13 @@ use tokio::prelude::*;
 
 pub struct Server {
     supported_encodings: Vec<String>,
-    frame_handler: Arc<dyn FrameHandler>,
+    request_handler: Arc<dyn RequestHandler>,
 }
 
 impl Server {
     pub fn new(request_handler: Arc<dyn RequestHandler>, supported_encodings: Vec<String>) -> Self {
-        let frame_handler = ServerFrameHandler::new(request_handler);
         Self {
-            frame_handler: Arc::new(frame_handler),
+            request_handler,
             supported_encodings,
         }
     }
@@ -28,11 +27,11 @@ impl Server {
     fn handle_connection(&self, tcp_stream: TcpStream) {
         let (tx, rx) = mpsc::unbounded::<Event<ServerEvent>>();
         let mut connection = Connection::new(rx, tcp_stream);
-        let frame_handler = self.frame_handler.clone();
+        let request_handler = self.request_handler.clone();
         tokio::spawn_async(
             async {
                 connection = await!(connection.await_upgrade());
-                let event_handler = ServerEventHandler::new(tx, frame_handler);
+                let event_handler = ServerEventHandler::new(tx, request_handler);
                 await!(connection.run(Box::new(event_handler)));
             },
         );

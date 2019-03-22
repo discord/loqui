@@ -67,18 +67,14 @@ impl EventHandler<ClientEvent> for ClientEventHandler {
             Event::Internal(ClientEvent::Request { payload, sender }) => {
                 let sequence_id = self.next_seq();
                 self.waiters.insert(sequence_id, sender);
-                Box::new(
-                    async move {
-                        Ok(Some(LoquiFrame::Request(Request {
-                            sequence_id,
-                            flags: 0,
-                            payload,
-                        })))
-                    },
-                )
+                Ok(Some(LoquiFrame::Request(Request {
+                    sequence_id,
+                    flags: 0,
+                    payload,
+                })))
             }
             Event::Internal(ClientEvent::Push { payload }) => {
-                Box::new(async move { Ok(Some(LoquiFrame::Push(Push { flags: 0, payload }))) })
+                Ok(Some(LoquiFrame::Push(Push { flags: 0, payload })))
             }
             Event::Socket(frame) => {
                 match frame {
@@ -95,8 +91,7 @@ impl EventHandler<ClientEvent> for ClientEventHandler {
                         dbg!(frame);
                     }
                 }
-
-                Box::new(async { Ok(None) })
+                Ok(None)
             }
         }
     }

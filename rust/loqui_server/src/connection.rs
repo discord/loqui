@@ -25,7 +25,7 @@ pub enum Event<E> {
     Internal(E),
 }
 
-pub type HandleEventResult = Box<dyn Future<Output = Result<Option<LoquiFrame>, Error>> + Send>;
+pub type HandleEventResult = Result<Option<LoquiFrame>, Error>;
 
 pub trait EventHandler<E>: Send + Sync {
     fn handle_event(&mut self, event: Event<E>) -> HandleEventResult;
@@ -71,8 +71,7 @@ impl<E: Debug> Connection<E> {
             // TODO: handle error
             match event {
                 Ok(event) => {
-                    let fut = event_handler.handle_event(event);
-                    match await!(Box::into_pin(fut)) {
+                    match event_handler.handle_event(event) {
                         Ok(Some(frame)) => {
                             match tokio_await!(writer.send(frame)) {
                                 Ok(new_writer) => writer = new_writer,
