@@ -14,7 +14,7 @@ use futures::sync::oneshot::Sender as OneShotSender;
 
 #[derive(Debug)]
 enum Event {
-    Frame(LoquiFrame),
+    Socket(LoquiFrame),
     Internal(InternalEvent),
 }
 
@@ -55,7 +55,7 @@ impl Connection {
 
         let (tx, rx) = mpsc::unbounded::<Event>();
         let mut stream = reader
-            .map(|frame| Event::Frame(frame))
+            .map(|frame| Event::Socket(frame))
             .select(rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
@@ -90,7 +90,7 @@ impl Connection {
         frame_handler: Arc<dyn FrameHandler + 'static>,
     ) -> Result<SplitSink<Framed<TcpStream, LoquiCodec>>, Error> {
         match event {
-            Event::Frame(frame) => {
+            Event::Socket(frame) => {
                 tokio::spawn_async(
                     async move {
                         // TODO: handle error
