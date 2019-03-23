@@ -5,7 +5,6 @@ extern crate log;
 
 pub mod connection;
 mod event_handler;
-pub mod frame_handler;
 mod request_handler;
 mod server;
 

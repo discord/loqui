@@ -8,7 +8,6 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-use super::{frame_handler::FrameHandler, RequestContext};
 use failure::{err_msg, Error};
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot::Sender as OneShotSender;
@@ -34,7 +33,6 @@ pub trait EventHandler<E>: Send + Sync {
 pub struct Connection<E> {
     tcp_stream: TcpStream,
     rx: UnboundedReceiver<Event<E>>,
-    //frame_handler: Arc<dyn FrameHandler>,
     encoding: String,
 }
 

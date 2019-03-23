@@ -1,6 +1,5 @@
 use super::connection::{Connection, Event, EventHandler, HandleEventResult};
 use super::event_handler::{ServerEvent, ServerEventHandler};
-use super::frame_handler::{FrameHandler, ServerFrameHandler};
 use super::request_handler::RequestHandler;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
