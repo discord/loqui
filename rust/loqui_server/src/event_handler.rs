@@ -70,7 +70,6 @@ pub async fn handle_frame(
         LoquiFrame::Request(request) => await!(handle_request(request, request_handler)),
         LoquiFrame::Hello(hello) => handle_hello(hello),
         LoquiFrame::Ping(ping) => Ok(Some(handle_ping(ping))),
-        LoquiFrame::Pong(_) => Ok(None),
         frame => {
             println!("unhandled frame {:?}", frame);
             Ok(None)
