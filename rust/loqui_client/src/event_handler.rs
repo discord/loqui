@@ -4,6 +4,7 @@ use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Push, Request, Response};
 use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult};
+use loqui_server::error::LoquiError;
 use std::collections::HashMap;
 
 pub struct ClientEventHandler {
@@ -29,13 +30,14 @@ impl EventHandler for ClientEventHandler {
             }) => {
                 let sender = self.waiters.remove(&sequence_id).unwrap();
                 sender.send(Ok(payload)).unwrap();
+                Ok(None)
             }
+            LoquiFrame::HelloAck(hello_ack) => Ok(None),
             frame => {
-                // TODO:
-                dbg!(frame);
+                dbg!(&frame);
+                Err(LoquiError::InvalidFrame { frame }.into())
             }
         }
-        Ok(None)
     }
 
     fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>) {

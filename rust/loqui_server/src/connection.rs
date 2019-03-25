@@ -37,11 +37,11 @@ impl Sequencer {
 #[derive(Debug)]
 pub enum Event {
     SocketReceive(LoquiFrame),
-    Forward(ForwardRequest),
+    Forward(Forward),
 }
 
 #[derive(Debug)]
-pub enum ForwardRequest {
+pub enum Forward {
     Request {
         payload: Vec<u8>,
         waiter_tx: OneShotSender<Result<Vec<u8>, Error>>,
@@ -63,7 +63,6 @@ pub struct Connection {
     tcp_stream: TcpStream,
     rx: UnboundedReceiver<Event>,
     sequencer: Sequencer,
-    encoding: String,
 }
 
 use loqui_protocol::Response;
@@ -75,8 +74,6 @@ impl Connection {
             rx,
             tcp_stream,
             sequencer: Sequencer::new(),
-            // TODO:
-            encoding: "json".to_string(),
         }
     }
 
@@ -85,14 +82,16 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
+        /*
         // TODO: this should only be sent from client
         writer = tokio_await!(writer.send(LoquiFrame::Hello(Hello {
             flags: 0,
             version: 1,
-            encodings: vec!["msgpack".to_string()],
+            encodings: vec!["json".to_string()],
             compressions: vec![],
         })))
         .unwrap();
+        */
 
         let mut stream = reader
             .map(|frame| Event::SocketReceive(frame))
@@ -127,7 +126,7 @@ impl Connection {
                         }
                         Event::Forward(forward_request) => {
                             match forward_request {
-                                ForwardRequest::Request { payload, waiter_tx } => {
+                                Forward::Request { payload, waiter_tx } => {
                                     let sequence_id = self.sequencer.next_seq();
                                     let frame = LoquiFrame::Request(Request {
                                         payload,
@@ -148,7 +147,7 @@ impl Connection {
                                         }
                                     }
                                 }
-                                ForwardRequest::Push { payload } => {
+                                Forward::Push { payload } => {
                                     let sequence_id = self.sequencer.next_seq();
                                     let frame = LoquiFrame::Push(Push { payload, flags: 0 });
                                     match tokio_await!(writer.send(frame)) {
@@ -163,7 +162,7 @@ impl Connection {
                                         }
                                     }
                                 }
-                                ForwardRequest::Frame(frame) => {
+                                Forward::Frame(frame) => {
                                     match tokio_await!(writer.send(frame)) {
                                         Ok(new_writer) => {
                                             writer = new_writer;

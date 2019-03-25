@@ -7,9 +7,7 @@ use futures::sync::mpsc;
 use futures::sync::mpsc::UnboundedSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Push, Request, Response};
-use loqui_server::connection::{
-    Connection, Event, EventHandler, ForwardRequest, HandleEventResult,
-};
+use loqui_server::connection::{Connection, Event, EventHandler, Forward, HandleEventResult};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -43,17 +41,14 @@ impl Client {
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (waiter_tx, waiter_rx) = oneshot();
         self.sender
-            .unbounded_send(Event::Forward(ForwardRequest::Request {
-                payload,
-                waiter_tx,
-            }))?;
+            .unbounded_send(Event::Forward(Forward::Request { payload, waiter_tx }))?;
         // TODO: handle send error better
         await!(waiter_rx).map_err(|e| Error::from(e))?
     }
 
     pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
         self.sender
-            .unbounded_send(Event::Forward(ForwardRequest::Push { payload }))
+            .unbounded_send(Event::Forward(Forward::Push { payload }))
             .map_err(|e| Error::from(e))
     }
 }
