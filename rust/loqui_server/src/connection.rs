@@ -41,6 +41,7 @@ impl Sequencer {
 #[derive(Debug)]
 pub enum Event {
     SocketReceive(LoquiFrame),
+    Ping,
     Forward(Forward),
 }
 
@@ -95,13 +96,7 @@ impl ConnectionSender {
     }
 
     fn ping(&self) -> Result<(), Error> {
-        self.tx
-            .unbounded_send(Event::Forward(Forward::Frame(LoquiFrame::Ping(Ping {
-                // TODO
-                sequence_id: 0,
-                flags: 0,
-            }))))
-            .map_err(Error::from)
+        self.tx.unbounded_send(Event::Ping).map_err(Error::from)
     }
 
     pub fn hello(&self) -> Result<(), Error> {
@@ -183,6 +178,24 @@ impl Connection {
             match event {
                 Ok(event) => {
                     match event {
+                        Event::Ping => {
+                            let sequence_id = self.sequencer.next_seq();
+                            let frame = LoquiFrame::Ping(Ping {
+                                sequence_id,
+                                flags: 0,
+                            });
+                            match tokio_await!(writer.send(frame)) {
+                                Ok(new_writer) => {
+                                    writer = new_writer;
+                                }
+                                // TODO: better handle this error
+                                Err(e) => {
+                                    // TODO
+                                    dbg!(e);
+                                    return;
+                                }
+                            }
+                        }
                         Event::SocketReceive(frame) => {
                             match frame {
                                 LoquiFrame::Ping(ping) => {
