@@ -7,15 +7,22 @@ use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResul
 use loqui_server::error::LoquiError;
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub struct Ready {
+    encoding: String,
+}
+
 pub struct ClientEventHandler {
+    ready_tx: Option<OneShotSender<Result<Ready, Error>>>,
     waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>>,
 }
 
 impl ClientEventHandler {
-    pub fn new() -> Self {
+    pub fn new(ready_tx: OneShotSender<Result<Ready, Error>>) -> Self {
         Self {
             // TODO: should probably sweep these, probably request timeout
             waiters: HashMap::new(),
+            ready_tx: Some(ready_tx),
         }
     }
 }
@@ -32,8 +39,20 @@ impl EventHandler for ClientEventHandler {
                 sender.send(Ok(payload)).unwrap();
                 Ok(None)
             }
-            LoquiFrame::HelloAck(hello_ack) => Ok(None),
+            LoquiFrame::HelloAck(hello_ack) => {
+                // TODO: compression
+                let ready = Ready {
+                    encoding: hello_ack.encoding,
+                };
+                // todo take doc and handle error
+                let ready_tx = self.ready_tx.take().expect("already sent ready")
+                    .send(Ok(ready))
+                    .expect("failed to send to ready");
+                Ok(None)
+            }
             frame => {
+                // TODO: handle invalid encoding or compression
+                // self.ready_tx.send(Err(...));
                 dbg!(&frame);
                 Err(LoquiError::InvalidFrame { frame }.into())
             }

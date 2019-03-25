@@ -58,7 +58,7 @@ impl ServerEventHandler {
             LoquiFrame::Hello(hello) => {
                 let hello_ack = self.handle_hello(hello);
                 Ok(Some(hello_ack))
-            },
+            }
             frame => {
                 dbg!(&frame);
                 Err(LoquiError::InvalidFrame { frame }.into())
@@ -66,10 +66,7 @@ impl ServerEventHandler {
         }
     }
 
-    fn negotiate_encoding(
-        &self,
-        client_encodings: &[String],
-    ) -> Option<String> {
+    fn negotiate_encoding(&self, client_encodings: &[String]) -> Option<String> {
         for supported_encoding in &self.supported_encodings {
             for client_encoding in client_encodings {
                 if supported_encoding == client_encoding {
@@ -93,7 +90,9 @@ impl ServerEventHandler {
             encodings,
             compressions,
         } = hello;
-        let encoding = self.negotiate_encoding(&encodings).expect("no common encoding");
+        let encoding = self
+            .negotiate_encoding(&encodings)
+            .expect("no common encoding");
         LoquiFrame::HelloAck(HelloAck {
             flags,
             ping_interval_ms: 5000,
@@ -102,10 +101,7 @@ impl ServerEventHandler {
         })
     }
 
-    fn handle_request(
-        &mut self,
-        request: Request,
-    ) {
+    fn handle_request(&mut self, request: Request) {
         let Request {
             payload,
             flags,
@@ -145,4 +141,3 @@ impl ServerEventHandler {
         );
     }
 }
-

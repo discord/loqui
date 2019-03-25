@@ -1,6 +1,6 @@
 #![feature(await_macro, async_await, futures_api)]
 
-use self::event_handler::ClientEventHandler;
+use self::event_handler::{ClientEventHandler, Ready};
 use failure::Error;
 use futures::oneshot;
 use futures::sync::mpsc;
@@ -33,7 +33,11 @@ impl Client {
         let (tx, rx) = mpsc::unbounded::<Event>();
         let mut connection = Connection::new(rx, tcp_stream);
         connection = await!(connection.upgrade());
-        tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new())));
+        let (ready_tx, ready_rx) = oneshot();
+        tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new(ready_tx))));
+        // TODO; set encoding somewhere
+        println!("[loqui_client] Waiting for ready...");
+        let ready = await!(ready_rx).map_err(|e| Error::from(e))?;
         let client = Self { sender: tx };
         Ok(client)
     }
