@@ -34,7 +34,8 @@ impl Client {
         let mut connection = Connection::new(connection_rx, tcp_stream);
         connection = await!(connection.upgrade());
         let (ready_tx, ready_rx) = oneshot();
-        tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new(ready_tx))));
+        let client_event_handler = ClientEventHandler::new(ready_tx);
+        tokio::spawn_async(connection.run(Box::new(client_event_handler)));
         // TODO; set encoding somewhere
         await!(connection_tx
             .clone()
