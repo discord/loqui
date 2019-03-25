@@ -14,7 +14,7 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 // TODO: can probably encapsulate the Message in SocketHandler
 use self::event_handler::{ClientEvent, ClientEventHandler};
-use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult};
+use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult, ForwardRequest};
 
 mod event_handler;
 
@@ -24,14 +24,14 @@ const UPGRADE_REQUEST: &'static str =
 
 #[derive(Clone)]
 pub struct Client {
-    sender: mpsc::UnboundedSender<Event<ClientEvent>>,
+    sender: mpsc::UnboundedSender<Event>,
 }
 
 impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
-        let (tx, rx) = mpsc::unbounded::<Event<ClientEvent>>();
+        let (tx, rx) = mpsc::unbounded::<Event>();
         let mut connection = Connection::new(rx, tcp_stream);
         connection = await!(connection.upgrade());
         tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new())));
@@ -42,14 +42,14 @@ impl Client {
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot();
         self.sender
-            .unbounded_send(Event::Internal(ClientEvent::Request { payload, sender }))?;
+            .unbounded_send(Event::Internal(Event::Forward(ForwardRequest::Request { payload, sender })))?;
         // TODO: handle send error better
         await!(receiver).map_err(|e| Error::from(e))?
     }
 
     pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
         self.sender
-            .unbounded_send(Event::Internal(ClientEvent::Push { payload }))
+            .unbounded_send(Event::Internal(Event::Forward(ForwardRequest::Push { payload })))?;
             .map_err(|e| Error::from(e))
     }
 }
