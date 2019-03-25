@@ -14,7 +14,7 @@ use failure::{err_msg, Error};
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{Hello, Ping, Push, Request};
+use loqui_protocol::frames::{Hello, Ping, Pong, Push, Request};
 
 // TODO: get right values
 const UPGRADE_REQUEST: &'static str =
@@ -96,9 +96,10 @@ impl Connection {
     fn spawn_ping(self_tx: UnboundedSender<Event>) {
         tokio::spawn_async(
             async move {
+                // TODO: from hello ack
+                // TODO: need to timeout from pong
                 let mut interval = Interval::new(Duration::from_secs(3));
-                while let Some(result) = tokio_await!(interval.next()) {
-                    println!("result {:?}", result);
+                while let Some(Ok(())) = tokio_await!(interval.next()) {
                     let self_tx = self_tx.clone();
                     tokio_await!(self_tx.send(Event::Forward(Forward::Frame(LoquiFrame::Ping(
                         Ping {
@@ -123,6 +124,7 @@ impl Connection {
         Connection::spawn_ping(self.self_tx.clone());
 
         let mut stream = reader
+            // TODO: we might want to separate out the ping channel so it doesn't get backed up
             .map(|frame| Event::SocketReceive(frame))
             .select(self.self_rx.map_err(|()| err_msg("rx error")));
 
@@ -133,8 +135,13 @@ impl Connection {
                 Ok(event) => {
                     match event {
                         Event::SocketReceive(frame) => {
-                            match event_handler.handle_received(frame) {
-                                Ok(Some(frame)) => {
+                            match frame {
+                                LoquiFrame::Ping(ping) => {
+                                    let pong = Pong {
+                                        flags: ping.flags,
+                                        sequence_id: ping.sequence_id,
+                                    };
+                                    let frame = LoquiFrame::Pong(pong);
                                     match tokio_await!(writer.send(frame)) {
                                         Ok(new_writer) => {
                                             writer = new_writer;
@@ -147,10 +154,31 @@ impl Connection {
                                         }
                                     }
                                 }
-                                Ok(None) => {}
-                                Err(e) => {
-                                    dbg!(e);
-                                    return;
+                                LoquiFrame::Pong(pong) => {
+                                    // TODO
+                                    dbg!(pong);
+                                }
+                                frame => {
+                                    match event_handler.handle_received(frame) {
+                                        Ok(Some(frame)) => {
+                                            match tokio_await!(writer.send(frame)) {
+                                                Ok(new_writer) => {
+                                                    writer = new_writer;
+                                                }
+                                                // TODO: better handle this error
+                                                Err(e) => {
+                                                    // TODO
+                                                    dbg!(e);
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        Ok(None) => {}
+                                        Err(e) => {
+                                            dbg!(e);
+                                            return;
+                                        }
+                                    }
                                 }
                             }
                         }
