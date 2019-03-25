@@ -22,18 +22,17 @@ const UPGRADE_REQUEST: &'static str =
     "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 struct Sequencer {
-    next_seq: u32,
+    next: u32,
 }
 
-// TODO: maybe make this an iterator?
 impl Sequencer {
     fn new() -> Self {
-        Self { next_seq: 1 }
+        Self { next: 1 }
     }
 
-    fn next_seq(&mut self) -> u32 {
-        let seq = self.next_seq;
-        self.next_seq += 1;
+    fn next(&mut self) -> u32 {
+        let seq = self.next;
+        self.next += 1;
         seq
     }
 }
@@ -179,7 +178,7 @@ impl Connection {
                 Ok(event) => {
                     match event {
                         Event::Ping => {
-                            let sequence_id = self.sequencer.next_seq();
+                            let sequence_id = self.sequencer.next();
                             let frame = LoquiFrame::Ping(Ping {
                                 sequence_id,
                                 flags: 0,
@@ -247,7 +246,7 @@ impl Connection {
                         Event::Forward(forward_request) => {
                             match forward_request {
                                 Forward::Request { payload, waiter_tx } => {
-                                    let sequence_id = self.sequencer.next_seq();
+                                    let sequence_id = self.sequencer.next();
                                     let frame = LoquiFrame::Request(Request {
                                         payload,
                                         sequence_id,
@@ -268,7 +267,7 @@ impl Connection {
                                     }
                                 }
                                 Forward::Push { payload } => {
-                                    let sequence_id = self.sequencer.next_seq();
+                                    let sequence_id = self.sequencer.next();
                                     let frame = LoquiFrame::Push(Push { payload, flags: 0 });
                                     match tokio_await!(writer.send(frame)) {
                                         Ok(new_writer) => {
