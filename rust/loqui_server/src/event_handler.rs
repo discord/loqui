@@ -49,6 +49,9 @@ impl ServerEventHandler {
     ) -> Result<Option<LoquiFrame>, Error> {
         match frame {
             LoquiFrame::Request(request) => {
+                if self.encoding.is_none() {
+                    return Err(LoquiError::NotReady.into());
+                }
                 self.handle_request(request);
                 Ok(None)
             }
