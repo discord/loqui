@@ -1,20 +1,21 @@
 use std::sync::Arc;
 
+use failure::{err_msg, Error};
 use futures::stream::SplitSink;
+use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::mpsc::{self, UnboundedSender};
+use futures::oneshot;
+use futures::sync::oneshot::{Sender as OneShotSender, Receiver as OneShotReceiver};
 use futures_timer::Interval;
+use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
+use loqui_protocol::frames::{Hello, Ping, Pong, Push, Request, Response};
 use std::future::Future;
 use std::time::Duration;
 use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
-
-use failure::{err_msg, Error};
-use futures::sync::mpsc::UnboundedReceiver;
-use futures::sync::oneshot::Sender as OneShotSender;
-use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{Hello, Ping, Pong, Push, Request};
+use futures::sync::mpsc::unbounded;
 
 // TODO: get right values
 const UPGRADE_REQUEST: &'static str =
@@ -24,6 +25,7 @@ struct Sequencer {
     next_seq: u32,
 }
 
+// TODO: maybe make this an iterator?
 impl Sequencer {
     fn new() -> Self {
         Self { next_seq: 1 }
@@ -65,15 +67,35 @@ pub trait EventHandler: Send + Sync {
     fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>);
 }
 
+#[derive(Clone)]
+pub struct ConnectionSender {
+    tx: UnboundedSender<Event>,
+}
+
+impl ConnectionSender {
+    fn new() -> (Self, UnboundedReceiver<Event>) {
+        let (tx, rx) = mpsc::unbounded();
+        (Self { tx }, rx)
+    }
+
+    fn request(&self, payload: Vec<u8>) -> Result<OneShotReceiver<Result<Vec<u8>, Error>>, Error> {
+        let (waiter_tx, waiter_rx) = oneshot();
+        self.tx.unbounded_send(Event::Forward(Forward::Request {
+            payload,
+            waiter_tx,
+        }))?;
+        Ok(waiter_rx)
+    }
+
+
+}
+
 pub struct Connection {
     tcp_stream: TcpStream,
     self_rx: UnboundedReceiver<Event>,
     self_tx: UnboundedSender<Event>,
     sequencer: Sequencer,
 }
-
-use loqui_protocol::Response;
-use std::fmt::Debug;
 
 impl Connection {
     pub fn new(tcp_stream: TcpStream) -> (UnboundedSender<Event>, Self) {
