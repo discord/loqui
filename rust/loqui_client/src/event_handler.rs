@@ -3,6 +3,7 @@ use futures::sync::mpsc::UnboundedSender;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Push, Request, Response};
+use loqui_server::connection::ConnectionSender;
 use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult};
 use loqui_server::error::LoquiError;
 use std::collections::HashMap;
@@ -20,14 +21,19 @@ pub struct Ready {
 }
 
 pub struct ClientEventHandler {
+    connection_sender: ConnectionSender,
     ready_tx: Option<OneShotSender<Result<Ready, Error>>>,
     waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>>,
 }
 
 impl ClientEventHandler {
-    pub fn new(ready_tx: OneShotSender<Result<Ready, Error>>) -> Self {
+    pub fn new(
+        connection_sender: ConnectionSender,
+        ready_tx: OneShotSender<Result<Ready, Error>>,
+    ) -> Self {
         Self {
             // TODO: should probably sweep these, probably request timeout
+            connection_sender,
             waiters: HashMap::new(),
             ready_tx: Some(ready_tx),
         }
@@ -79,6 +85,9 @@ impl EventHandler for ClientEventHandler {
                     .expect("already sent ready")
                     .send(Ok(ready))
                     .expect("failed to send to ready");
+                self.connection_sender
+                    .ready(hello_ack.ping_interval_ms)
+                    .expect("conn dead");
                 Ok(None)
             }
             frame => {

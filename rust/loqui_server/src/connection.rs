@@ -131,8 +131,7 @@ pub struct Connection {
     self_rx: UnboundedReceiver<Event>,
     self_sender: ConnectionSender,
     sequencer: Sequencer,
-    last_pong: Instant,
-    ping_interval: Duration,
+    pong_received: bool,
 }
 
 impl Connection {
@@ -146,8 +145,7 @@ impl Connection {
                 tcp_stream,
                 sequencer: Sequencer::new(),
                 // TODO: these prob shouldn't be set??
-                last_pong: Instant::now(),
-                ping_interval: Duration::from_secs(5),
+                pong_received: true,
             },
         )
     }
@@ -190,10 +188,26 @@ impl Connection {
                 Ok(event) => {
                     match event {
                         Event::Ready { ping_interval } => {
-                            self.last_pong = Instant::now();
-                            self.ping_interval = Duration::from_millis(ping_interval as u64);
+                            // TODO: code cleanup
+                            let sequence_id = self.sequencer.next();
+                            let frame = LoquiFrame::Ping(Ping {
+                                sequence_id,
+                                flags: 0,
+                            });
+                            match tokio_await!(writer.send(frame)) {
+                                Ok(new_writer) => {
+                                    writer = new_writer;
+                                }
+                                // TODO: better handle this error
+                                Err(e) => {
+                                    // TODO
+                                    dbg!(e);
+                                    return;
+                                }
+                            }
+                            self.pong_received = false;
                             Connection::spawn_ping(
-                                self.ping_interval.clone(),
+                                Duration::from_millis(ping_interval as u64),
                                 self.self_sender.clone(),
                             );
                         }
@@ -214,7 +228,7 @@ impl Connection {
                                     return;
                                 }
                             }
-                            if Instant::now().duration_since(self.last_pong) > self.ping_interval {
+                            if dbg!(!self.pong_received) {
                                 // TODO: tell them it's due to ping timeout
                                 let frame = LoquiFrame::GoAway(GoAway {
                                     flags: 0,
@@ -224,6 +238,7 @@ impl Connection {
                                 tokio_await!(writer.send(frame)).ok();
                                 return;
                             }
+                            self.pong_received = false;
                         }
                         Event::SocketReceive(frame) => {
                             match frame {
@@ -246,8 +261,7 @@ impl Connection {
                                     }
                                 }
                                 LoquiFrame::Pong(pong) => {
-                                    // TODO
-                                    dbg!(pong);
+                                    self.pong_received = true;
                                 }
                                 LoquiFrame::GoAway(goaway) => {
                                     // TODO

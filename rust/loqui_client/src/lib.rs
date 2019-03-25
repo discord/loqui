@@ -29,7 +29,7 @@ impl Client {
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
         let (connection_sender, connection) = Connection::new(tcp_stream);
         let (ready_tx, ready_rx) = oneshot();
-        let client_event_handler = ClientEventHandler::new(ready_tx);
+        let client_event_handler = ClientEventHandler::new(connection_sender.clone(), ready_tx);
         connection.spawn(Box::new(client_event_handler));
         // TODO; set encoding somewhere
         connection_sender.hello()?;
