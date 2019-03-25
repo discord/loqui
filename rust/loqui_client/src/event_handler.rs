@@ -44,8 +44,10 @@ impl EventHandler for ClientEventHandler {
                 let ready = Ready {
                     encoding: hello_ack.encoding,
                 };
-                // todo take doc and handle error
-                let ready_tx = self.ready_tx.take().expect("already sent ready")
+                let ready_tx = self
+                    .ready_tx
+                    .take()
+                    .expect("already sent ready")
                     .send(Ok(ready))
                     .expect("failed to send to ready");
                 Ok(None)
