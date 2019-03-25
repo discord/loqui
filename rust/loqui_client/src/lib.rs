@@ -17,10 +17,6 @@ use tokio::prelude::*;
 
 mod event_handler;
 
-// TODO: get right values
-const UPGRADE_REQUEST: &'static str =
-    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
-
 #[derive(Clone)]
 pub struct Client {
     sender: mpsc::UnboundedSender<Event>,
@@ -32,7 +28,6 @@ impl Client {
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
         let (connection_tx, connection_rx) = mpsc::unbounded::<Event>();
         let mut connection = Connection::new(connection_rx, tcp_stream);
-        connection = await!(connection.upgrade());
         let (ready_tx, ready_rx) = oneshot();
         let client_event_handler = ClientEventHandler::new(ready_tx);
         tokio::spawn_async(connection.run(Box::new(client_event_handler)));

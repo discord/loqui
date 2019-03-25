@@ -55,6 +55,10 @@ pub enum Forward {
 pub type HandleEventResult = Result<Option<LoquiFrame>, Error>;
 
 pub trait EventHandler: Send + Sync {
+    fn upgrade(
+        &self,
+        tcp_stream: TcpStream,
+    ) -> Box<dyn Future<Output = Result<TcpStream, Error>> + Send>;
     fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult;
     fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>);
 }
@@ -78,6 +82,8 @@ impl Connection {
     }
 
     pub async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
+        self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
+            .expect("Failed to upgrade");
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
@@ -175,38 +181,5 @@ impl Connection {
             }
         }
         println!("connection closed");
-    }
-
-    pub async fn await_upgrade(mut self) -> Self {
-        // TODO: buffering
-        let mut payload = [0; 1024];
-        // TODO: handle disconnect, bytes_read=0
-        while let Ok(_bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
-            let request = String::from_utf8(payload.to_vec()).unwrap();
-            // TODO: better
-            if request.contains(&"upgrade") || request.contains(&"Upgrade") {
-                let response =
-                    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
-                await!(self.tcp_stream.write_all_async(&response.as_bytes()[..])).unwrap();
-                await!(self.tcp_stream.flush_async()).unwrap();
-                break;
-            }
-        }
-        self
-    }
-
-    pub async fn upgrade(mut self) -> Self {
-        await!(self.tcp_stream.write_all_async(&UPGRADE_REQUEST.as_bytes())).unwrap();
-        await!(self.tcp_stream.flush_async()).unwrap();
-        let mut payload = [0; 1024];
-        // TODO: handle disconnect, bytes_read=0
-        while let Ok(_bytes_read) = await!(self.tcp_stream.read_async(&mut payload)) {
-            let response = String::from_utf8(payload.to_vec()).unwrap();
-            // TODO: case insensitive
-            if response.contains(&"Upgrade") {
-                break;
-            }
-        }
-        self
     }
 }

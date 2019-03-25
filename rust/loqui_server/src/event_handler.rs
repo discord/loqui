@@ -7,8 +7,10 @@ use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Error as ErrorFrame, Hello, HelloAck, Ping, Pong, Request, Response};
+use std::future::Future;
 use std::sync::Arc;
 use tokio::await as tokio_await;
+use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 pub struct ServerEventHandler {
@@ -34,6 +36,30 @@ impl ServerEventHandler {
 }
 
 impl EventHandler for ServerEventHandler {
+    fn upgrade(
+        &self,
+        mut tcp_stream: TcpStream,
+    ) -> Box<dyn Future<Output = Result<TcpStream, Error>> + Send> {
+        Box::new(
+            async {
+                let mut payload = [0; 1024];
+                // TODO: handle disconnect, bytes_read=0
+                while let Ok(_bytes_read) = await!(tcp_stream.read_async(&mut payload)) {
+                    let request = String::from_utf8(payload.to_vec()).unwrap();
+                    // TODO: better
+                    if request.contains(&"upgrade") || request.contains(&"Upgrade") {
+                        let response =
+                        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
+                        await!(tcp_stream.write_all_async(&response.as_bytes()[..])).unwrap();
+                        await!(tcp_stream.flush_async()).unwrap();
+                        break;
+                    }
+                }
+                Ok(tcp_stream)
+            },
+        )
+    }
+
     fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult {
         self.handle_frame(frame)
     }
