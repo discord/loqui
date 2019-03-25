@@ -11,3 +11,4 @@ futures = "0.1.25"
 loqui_protocol = { path = "../loqui_protocol" }
 tokio = { version = "0.1.16", features = ["async-await-preview"] }
 tokio-codec = "0.1"
+futures-timer = "0.1"

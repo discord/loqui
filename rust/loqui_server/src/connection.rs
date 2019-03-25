@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use futures::stream::SplitSink;
 use futures::sync::mpsc::{self, UnboundedSender};
+use futures_timer::Interval;
 use std::future::Future;
+use std::time::Duration;
 use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -12,7 +14,7 @@ use failure::{err_msg, Error};
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{Hello, Push, Request};
+use loqui_protocol::frames::{Hello, Ping, Push, Request};
 
 // TODO: get right values
 const UPGRADE_REQUEST: &'static str =
@@ -65,7 +67,8 @@ pub trait EventHandler: Send + Sync {
 
 pub struct Connection {
     tcp_stream: TcpStream,
-    rx: UnboundedReceiver<Event>,
+    self_rx: UnboundedReceiver<Event>,
+    self_tx: UnboundedSender<Event>,
     sequencer: Sequencer,
 }
 
@@ -74,11 +77,12 @@ use std::fmt::Debug;
 
 impl Connection {
     pub fn new(tcp_stream: TcpStream) -> (UnboundedSender<Event>, Self) {
-        let (tx, rx) = mpsc::unbounded();
+        let (self_tx, self_rx) = mpsc::unbounded();
         (
-            tx,
+            self_tx.clone(),
             Self {
-                rx,
+                self_tx,
+                self_rx,
                 tcp_stream,
                 sequencer: Sequencer::new(),
             },
@@ -89,6 +93,26 @@ impl Connection {
         tokio::spawn_async(self.run(event_handler));
     }
 
+    fn spawn_ping(self_tx: UnboundedSender<Event>) {
+        tokio::spawn_async(
+            async move {
+                let mut interval = Interval::new(Duration::from_secs(3));
+                while let Some(result) = tokio_await!(interval.next()) {
+                    println!("result {:?}", result);
+                    let self_tx = self_tx.clone();
+                    tokio_await!(self_tx.send(Event::Forward(Forward::Frame(LoquiFrame::Ping(
+                        Ping {
+                            flags: 0,
+                            // TODO
+                            sequence_id: 1
+                        }
+                    )))))
+                    .expect("We need to handle this so we dont do this forever");
+                }
+            },
+        );
+    }
+
     async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
         self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
             .expect("Failed to upgrade");
@@ -96,9 +120,11 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
+        Connection::spawn_ping(self.self_tx.clone());
+
         let mut stream = reader
             .map(|frame| Event::SocketReceive(frame))
-            .select(self.rx.map_err(|()| err_msg("rx error")));
+            .select(self.self_rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
             // TODO: handle error
