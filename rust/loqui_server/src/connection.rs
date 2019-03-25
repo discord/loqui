@@ -87,23 +87,22 @@ impl ConnectionSender {
         Ok(waiter_rx)
     }
 
-
 }
 
 pub struct Connection {
     tcp_stream: TcpStream,
     self_rx: UnboundedReceiver<Event>,
-    self_tx: UnboundedSender<Event>,
+    self_sender: ConnectionSender,
     sequencer: Sequencer,
 }
 
 impl Connection {
-    pub fn new(tcp_stream: TcpStream) -> (UnboundedSender<Event>, Self) {
-        let (self_tx, self_rx) = mpsc::unbounded();
+    pub fn new(tcp_stream: TcpStream) -> (ConnectionSender, Self) {
+        let (self_sender, self_rx) = ConnectionSender::new();
         (
-            self_tx.clone(),
+            self_sender.clone(),
             Self {
-                self_tx,
+                self_sender,
                 self_rx,
                 tcp_stream,
                 sequencer: Sequencer::new(),
