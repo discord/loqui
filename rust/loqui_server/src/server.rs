@@ -1,5 +1,5 @@
 use super::connection::{Connection, Event, EventHandler, HandleEventResult};
-use super::event_handler::{ServerEvent, ServerEventHandler};
+use super::event_handler::ServerEventHandler;
 use super::request_handler::RequestHandler;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
@@ -24,7 +24,7 @@ impl Server {
     }
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let (tx, rx) = mpsc::unbounded::<Event<ServerEvent>>();
+        let (tx, rx) = mpsc::unbounded::<Event>();
         let mut connection = Connection::new(rx, tcp_stream);
         let request_handler = self.request_handler.clone();
         tokio::spawn_async(

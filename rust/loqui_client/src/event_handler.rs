@@ -20,7 +20,6 @@ pub enum ClientEvent {
 
 pub struct ClientEventHandler {
     waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>>,
-    next_seq: u32,
 }
 
 impl ClientEventHandler {
@@ -28,14 +27,7 @@ impl ClientEventHandler {
         Self {
             // TODO: should probably sweep these, probably request timeout
             waiters: HashMap::new(),
-            next_seq: 1,
         }
-    }
-
-    fn next_seq(&mut self) -> u32 {
-        let seq = self.next_seq;
-        self.next_seq += 1;
-        seq
     }
 }
 
@@ -54,7 +46,7 @@ impl EventHandler<ClientEvent> for ClientEventHandler {
             Event::Internal(ClientEvent::Push { payload }) => {
                 Ok(Some(LoquiFrame::Push(Push { flags: 0, payload })))
             }
-            Event::Socket(frame) => {
+            Event::SocketReceive(frame) => {
                 match frame {
                     LoquiFrame::Response(Response {
                         flags,

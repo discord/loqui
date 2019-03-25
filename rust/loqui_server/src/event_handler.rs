@@ -1,30 +1,22 @@
-use super::connection::{Connection, Event, EventHandler, HandleEventResult};
-//use super::frame_handler::{FrameHandler, ServerFrameHandler};
+use super::connection::{Connection, Event, EventHandler, ForwardRequest, HandleEventResult};
 use super::request_handler::RequestHandler;
 use super::RequestContext;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
+use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Error as ErrorFrame, Hello, HelloAck, Ping, Pong, Request, Response};
 use std::sync::Arc;
 use tokio::await as tokio_await;
 use tokio::prelude::*;
 
-#[derive(Debug)]
-pub enum ServerEvent {
-    Complete(LoquiFrame),
-}
-
 pub struct ServerEventHandler {
-    tx: UnboundedSender<Event<ServerEvent>>,
+    tx: UnboundedSender<Event>,
     request_handler: Arc<dyn RequestHandler>,
 }
 
 impl ServerEventHandler {
-    pub fn new(
-        tx: UnboundedSender<Event<ServerEvent>>,
-        request_handler: Arc<dyn RequestHandler>,
-    ) -> Self {
+    pub fn new(tx: UnboundedSender<Event>, request_handler: Arc<dyn RequestHandler>) -> Self {
         Self {
             tx,
             request_handler,
@@ -32,33 +24,30 @@ impl ServerEventHandler {
     }
 }
 
-impl EventHandler<ServerEvent> for ServerEventHandler {
-    fn handle_event(&mut self, event: Event<ServerEvent>) -> HandleEventResult {
+impl EventHandler for ServerEventHandler {
+    fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult {
         let tx = self.tx.clone();
-        match event {
-            Event::Socket(frame) => {
-                let request_handler = self.request_handler.clone();
-                tokio::spawn_async(
-                    async move {
-                        // TODO: handle error
-                        match await!(Box::pin(handle_frame(frame, request_handler))) {
-                            Ok(Some(frame)) => {
-                                tokio_await!(tx.send(Event::Internal(ServerEvent::Complete(frame))));
-                            }
-                            Ok(None) => {
-                                dbg!("None");
-                            }
-                            Err(e) => {
-                                dbg!(e);
-                            }
-                        }
-                    },
-                );
-                Ok(None)
-            }
-            Event::Internal(ServerEvent::Complete(frame)) => Ok(Some(frame)),
-        }
+        let request_handler = self.request_handler.clone();
+        tokio::spawn_async(
+            async move {
+                // TODO: handle error
+                match await!(Box::pin(handle_frame(frame, request_handler))) {
+                    Ok(Some(frame)) => {
+                        tokio_await!(tx.send(Event::Forward(ForwardRequest::Frame(frame))));
+                    }
+                    Ok(None) => {
+                        dbg!("None");
+                    }
+                    Err(e) => {
+                        dbg!(e);
+                    }
+                }
+            },
+        );
+        Ok(None)
     }
+
+    fn handle_sent(&mut self, _: u32, _: OneShotSender<Result<Vec<u8>, Error>>) {}
 }
 
 pub async fn handle_frame(
