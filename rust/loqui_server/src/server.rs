@@ -25,16 +25,12 @@ impl Server {
     }
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let (connection_tx, mut connection) = Connection::new(tcp_stream);
+        let (connection_tx, connection) = Connection::new(tcp_stream);
         let request_handler = self.request_handler.clone();
         let supported_encodings = self.supported_encodings.clone();
-        tokio::spawn_async(
-            async move {
-                let event_handler =
-                    ServerEventHandler::new(connection_tx, request_handler, supported_encodings);
-                await!(connection.run(Box::new(event_handler)));
-            },
-        );
+        let event_handler =
+            ServerEventHandler::new(connection_tx, request_handler, supported_encodings);
+        tokio::spawn_async(connection.run(Box::new(event_handler)));
     }
 
     // TODO
