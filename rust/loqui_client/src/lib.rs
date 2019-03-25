@@ -26,8 +26,7 @@ impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
-        let (connection_tx, connection_rx) = mpsc::unbounded::<Event>();
-        let mut connection = Connection::new(connection_rx, tcp_stream);
+        let (connection_tx, mut connection) = Connection::new(tcp_stream);
         let (ready_tx, ready_rx) = oneshot();
         let client_event_handler = ClientEventHandler::new(ready_tx);
         tokio::spawn_async(connection.run(Box::new(client_event_handler)));

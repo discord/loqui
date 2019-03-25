@@ -73,12 +73,16 @@ use loqui_protocol::Response;
 use std::fmt::Debug;
 
 impl Connection {
-    pub fn new(rx: UnboundedReceiver<Event>, tcp_stream: TcpStream) -> Self {
-        Self {
-            rx,
-            tcp_stream,
-            sequencer: Sequencer::new(),
-        }
+    pub fn new(tcp_stream: TcpStream) -> (UnboundedSender<Event>, Self) {
+        let (tx, rx) = mpsc::unbounded();
+        (
+            tx,
+            Self {
+                rx,
+                tcp_stream,
+                sequencer: Sequencer::new(),
+            },
+        )
     }
 
     pub async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
