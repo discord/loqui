@@ -85,6 +85,7 @@ impl ServerEventHandler {
                 let frame = self.handle_hello(hello);
                 if let LoquiFrame::HelloAck(hello_ack) = &frame {
                     self.encoding = Some(hello_ack.encoding.clone());
+                    self.connection_sender.ready(hello_ack.ping_interval_ms);
                 }
                 Ok(Some(frame))
             }

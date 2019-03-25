@@ -9,9 +9,9 @@ use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot::{Receiver as OneShotReceiver, Sender as OneShotSender};
 use futures_timer::Interval;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{Hello, Ping, Pong, Push, Request, Response};
+use loqui_protocol::frames::{GoAway, Hello, Ping, Pong, Push, Request, Response};
 use std::future::Future;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -40,6 +40,7 @@ impl Sequencer {
 #[derive(Debug)]
 pub enum Event {
     SocketReceive(LoquiFrame),
+    Ready { ping_interval: u32 },
     Ping,
     Forward(Forward),
 }
@@ -94,6 +95,12 @@ impl ConnectionSender {
             .map_err(Error::from)
     }
 
+    pub fn ready(&self, ping_interval: u32) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Ready { ping_interval })
+            .map_err(Error::from)
+    }
+
     fn ping(&self) -> Result<(), Error> {
         self.tx.unbounded_send(Event::Ping).map_err(Error::from)
     }
@@ -124,6 +131,8 @@ pub struct Connection {
     self_rx: UnboundedReceiver<Event>,
     self_sender: ConnectionSender,
     sequencer: Sequencer,
+    last_pong: Instant,
+    ping_interval: Duration,
 }
 
 impl Connection {
@@ -136,6 +145,9 @@ impl Connection {
                 self_rx,
                 tcp_stream,
                 sequencer: Sequencer::new(),
+                // TODO: these prob shouldn't be set??
+                last_pong: Instant::now(),
+                ping_interval: Duration::from_secs(5),
             },
         )
     }
@@ -144,14 +156,15 @@ impl Connection {
         tokio::spawn_async(self.run(event_handler));
     }
 
-    fn spawn_ping(connection_sender: ConnectionSender) {
+    fn spawn_ping(ping_interval: Duration, connection_sender: ConnectionSender) {
         tokio::spawn_async(
             async move {
-                // TODO: from hello ack
-                // TODO: need to timeout from pong
-                let mut interval = Interval::new(Duration::from_secs(3));
-                while let Some(Ok(())) = tokio_await!(interval.next()) {
-                    connection_sender.ping().expect("failed to ping");
+                let mut stream = Interval::new(ping_interval);
+                while let Some(Ok(())) = tokio_await!(stream.next()) {
+                    if let Err(e) = connection_sender.ping() {
+                        println!("Connection closed.");
+                        return;
+                    }
                 }
             },
         );
@@ -164,11 +177,10 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        Connection::spawn_ping(self.self_sender.clone());
-
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
             .map(|frame| Event::SocketReceive(frame))
+            // TODO: maybe buffer unordered so we don't have to spawn and send back?
             .select(self.self_rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
@@ -177,6 +189,14 @@ impl Connection {
             match event {
                 Ok(event) => {
                     match event {
+                        Event::Ready { ping_interval } => {
+                            self.last_pong = Instant::now();
+                            self.ping_interval = Duration::from_millis(ping_interval as u64);
+                            Connection::spawn_ping(
+                                self.ping_interval.clone(),
+                                self.self_sender.clone(),
+                            );
+                        }
                         Event::Ping => {
                             let sequence_id = self.sequencer.next();
                             let frame = LoquiFrame::Ping(Ping {
@@ -193,6 +213,16 @@ impl Connection {
                                     dbg!(e);
                                     return;
                                 }
+                            }
+                            if Instant::now().duration_since(self.last_pong) > self.ping_interval {
+                                // TODO: tell them it's due to ping timeout
+                                let frame = LoquiFrame::GoAway(GoAway {
+                                    flags: 0,
+                                    code: 0,
+                                    payload: vec![],
+                                });
+                                tokio_await!(writer.send(frame)).ok();
+                                return;
                             }
                         }
                         Event::SocketReceive(frame) => {
@@ -218,6 +248,12 @@ impl Connection {
                                 LoquiFrame::Pong(pong) => {
                                     // TODO
                                     dbg!(pong);
+                                }
+                                LoquiFrame::GoAway(goaway) => {
+                                    // TODO
+                                    // TODO: also clean up the pinger
+                                    println!("Told to go away! {:?}", goaway);
+                                    return;
                                 }
                                 frame => {
                                     match event_handler.handle_received(frame) {
