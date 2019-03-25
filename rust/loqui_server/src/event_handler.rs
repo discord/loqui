@@ -28,36 +28,24 @@ impl EventHandler for ServerEventHandler {
     fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult {
         let tx = self.tx.clone();
         let request_handler = self.request_handler.clone();
-        tokio::spawn_async(
-            async move {
-                // TODO: handle error
-                match await!(Box::pin(handle_frame(frame, request_handler))) {
-                    Ok(Some(frame)) => {
-                        tokio_await!(tx.send(Event::Forward(ForwardRequest::Frame(frame))));
-                    }
-                    Ok(None) => {
-                        dbg!("None");
-                    }
-                    Err(e) => {
-                        dbg!(e);
-                    }
-                }
-            },
-        );
-        Ok(None)
+        handle_frame(frame, request_handler, tx)
     }
 
     fn handle_sent(&mut self, _: u32, _: OneShotSender<Result<Vec<u8>, Error>>) {}
 }
 
-pub async fn handle_frame(
+pub fn handle_frame(
     frame: LoquiFrame,
     request_handler: Arc<dyn RequestHandler + 'static>,
+    tx: UnboundedSender<Event>,
     // TODO: should we just return LoquiFrame::Error if there is an error??
 ) -> Result<Option<LoquiFrame>, Error> {
     match frame {
-        LoquiFrame::Request(request) => await!(handle_request(request, request_handler)),
-        LoquiFrame::Hello(hello) => handle_hello(hello),
+        LoquiFrame::Request(request) => {
+            handle_request(request, request_handler, tx);
+            Ok(None)
+        }
+        LoquiFrame::Hello(hello) => Ok(Some(handle_hello(hello))),
         LoquiFrame::Ping(ping) => Ok(Some(handle_ping(ping))),
         frame => {
             println!("unhandled frame {:?}", frame);
@@ -71,55 +59,61 @@ fn handle_ping(ping: Ping) -> LoquiFrame {
     LoquiFrame::Pong(Pong { flags, sequence_id })
 }
 
-fn handle_hello(hello: Hello) -> Result<Option<LoquiFrame>, Error> {
+fn handle_hello(hello: Hello) -> LoquiFrame {
     let Hello {
         flags,
         version,
         encodings,
         compressions,
     } = hello;
-    Ok(Some(LoquiFrame::HelloAck(HelloAck {
+    LoquiFrame::HelloAck(HelloAck {
         flags,
         ping_interval_ms: 5000,
         encoding: encodings[0].clone(),
         compression: "".to_string(),
-    })))
+    })
 }
 
-async fn handle_request(
+fn handle_request(
     request: Request,
     request_handler: Arc<dyn RequestHandler + 'static>,
-) -> Result<Option<LoquiFrame>, Error> {
+    tx: UnboundedSender<Event>,
+) {
     let Request {
         payload,
         flags,
         sequence_id,
     } = request;
-
     let request_context = RequestContext {
         payload,
         flags,
         // TODO:
         encoding: "json".to_string(),
     };
-    let result = await!(Box::into_pin(
-        request_handler.handle_request(request_context)
-    ));
-    match result {
-        Ok(payload) => Ok(Some(LoquiFrame::Response(Response {
-            flags,
-            sequence_id,
-            payload,
-        }))),
-        Err(e) => {
-            dbg!(e);
-            // TODO:
-            Ok(Some(LoquiFrame::Error(ErrorFrame {
-                flags,
-                sequence_id,
-                code: 0,
-                payload: vec![],
-            })))
-        }
-    }
+    let request_handler = request_handler.clone();
+    let tx = tx.clone();
+    tokio::spawn_async(
+        async move {
+            let frame = match await!(Box::into_pin(
+                request_handler.handle_request(request_context)
+            )) {
+                Ok(payload) => LoquiFrame::Response(Response {
+                    flags,
+                    sequence_id,
+                    payload,
+                }),
+                Err(e) => {
+                    dbg!(e);
+                    // TODO:
+                    LoquiFrame::Error(ErrorFrame {
+                        flags,
+                        sequence_id,
+                        code: 0,
+                        payload: vec![],
+                    })
+                }
+            };
+            tokio_await!(tx.send(Event::Forward(ForwardRequest::Frame(frame))));
+        },
+    );
 }

@@ -43,7 +43,10 @@ impl Client {
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (waiter_tx, waiter_rx) = oneshot();
         self.sender
-            .unbounded_send(Event::Forward(ForwardRequest::Request { payload, waiter_tx }))?;
+            .unbounded_send(Event::Forward(ForwardRequest::Request {
+                payload,
+                waiter_tx,
+            }))?;
         // TODO: handle send error better
         await!(waiter_rx).map_err(|e| Error::from(e))?
     }
