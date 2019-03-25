@@ -90,8 +90,6 @@ fn handle_request(
         // TODO:
         encoding: "json".to_string(),
     };
-    let request_handler = request_handler.clone();
-    let tx = tx.clone();
     tokio::spawn_async(
         async move {
             let frame = match await!(Box::into_pin(
