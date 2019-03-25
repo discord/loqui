@@ -1,20 +1,21 @@
 #![feature(await_macro, async_await, futures_api)]
 
+use self::event_handler::ClientEventHandler;
 use failure::Error;
 use futures::oneshot;
 use futures::sync::mpsc;
 use futures::sync::mpsc::UnboundedSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::{Push, Request, Response};
+use loqui_server::connection::{
+    Connection, Event, EventHandler, ForwardRequest, HandleEventResult,
+};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-// TODO: can probably encapsulate the Message in SocketHandler
-use self::event_handler::{ClientEvent, ClientEventHandler};
-use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult, ForwardRequest};
 
 mod event_handler;
 
@@ -42,14 +43,14 @@ impl Client {
     pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot();
         self.sender
-            .unbounded_send(Event::Internal(Event::Forward(ForwardRequest::Request { payload, sender })))?;
+            .unbounded_send(Event::Forward(ForwardRequest::Request { payload, sender }))?;
         // TODO: handle send error better
         await!(receiver).map_err(|e| Error::from(e))?
     }
 
     pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
         self.sender
-            .unbounded_send(Event::Internal(Event::Forward(ForwardRequest::Push { payload })))?;
+            .unbounded_send(Event::Forward(ForwardRequest::Push { payload }))
             .map_err(|e| Error::from(e))
     }
 }

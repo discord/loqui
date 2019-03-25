@@ -6,18 +6,6 @@ use loqui_protocol::frames::{Push, Request, Response};
 use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult};
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub enum ClientEvent {
-    Request {
-        payload: Vec<u8>,
-        // TODO: probably need to handle error better?
-        sender: OneShotSender<Result<Vec<u8>, Error>>,
-    },
-    Push {
-        payload: Vec<u8>,
-    },
-}
-
 pub struct ClientEventHandler {
     waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>>,
 }
@@ -31,38 +19,26 @@ impl ClientEventHandler {
     }
 }
 
-impl EventHandler<ClientEvent> for ClientEventHandler {
-    fn handle_event(&mut self, event: Event<ClientEvent>) -> HandleEventResult {
-        match event {
-            Event::Internal(ClientEvent::Request { payload, sender }) => {
-                let sequence_id = self.next_seq();
-                self.waiters.insert(sequence_id, sender);
-                Ok(Some(LoquiFrame::Request(Request {
-                    sequence_id,
-                    flags: 0,
-                    payload,
-                })))
+impl EventHandler for ClientEventHandler {
+    fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult {
+        match frame {
+            LoquiFrame::Response(Response {
+                flags,
+                sequence_id,
+                payload,
+            }) => {
+                let sender = self.waiters.remove(&sequence_id).unwrap();
+                sender.send(Ok(payload)).unwrap();
             }
-            Event::Internal(ClientEvent::Push { payload }) => {
-                Ok(Some(LoquiFrame::Push(Push { flags: 0, payload })))
-            }
-            Event::SocketReceive(frame) => {
-                match frame {
-                    LoquiFrame::Response(Response {
-                        flags,
-                        sequence_id,
-                        payload,
-                    }) => {
-                        let sender = self.waiters.remove(&sequence_id).unwrap();
-                        sender.send(Ok(payload)).unwrap();
-                    }
-                    frame => {
-                        // TODO:
-                        dbg!(frame);
-                    }
-                }
-                Ok(None)
+            frame => {
+                // TODO:
+                dbg!(frame);
             }
         }
+        Ok(None)
+    }
+
+    fn handle_sent(&mut self, sequence_id: u32, sender: OneShotSender<Result<Vec<u8>, Error>>) {
+        self.waiters.insert(sequence_id, sender);
     }
 }
