@@ -6,7 +6,7 @@ use futures::oneshot;
 use futures::sync::mpsc;
 use futures::sync::mpsc::UnboundedSender;
 use loqui_protocol::codec::LoquiFrame;
-use loqui_protocol::frames::{Push, Request, Response};
+use loqui_protocol::frames::{Hello, Push, Request, Response};
 use loqui_server::connection::{Connection, Event, EventHandler, Forward, HandleEventResult};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -30,15 +30,26 @@ impl Client {
     pub async fn connect<A: AsRef<str>>(address: A) -> Result<Client, Error> {
         let addr: SocketAddr = address.as_ref().parse()?;
         let mut tcp_stream = await!(TcpStream::connect(&addr))?;
-        let (tx, rx) = mpsc::unbounded::<Event>();
-        let mut connection = Connection::new(rx, tcp_stream);
+        let (connection_tx, connection_rx) = mpsc::unbounded::<Event>();
+        let mut connection = Connection::new(connection_rx, tcp_stream);
         connection = await!(connection.upgrade());
         let (ready_tx, ready_rx) = oneshot();
         tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new(ready_tx))));
         // TODO; set encoding somewhere
+        connection_tx.send(Event::Forward(Forward::Frame(LoquiFrame::Hello(Hello {
+            // TODO
+            flags: 0,
+            // TODO
+            version: 0,
+            encodings: vec!["json", "msgpack"],
+            // TODO
+            compressions: vec![],
+        }))));
         println!("[loqui_client] Waiting for ready...");
         let ready = await!(ready_rx).map_err(|e| Error::from(e))?;
-        let client = Self { sender: tx };
+        let client = Self {
+            sender: connection_tx,
+        };
         Ok(client)
     }
 
