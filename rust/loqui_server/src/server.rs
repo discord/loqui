@@ -11,6 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
 pub struct Server {
+    // TODO: should be arc so we don't clone entire thing per connection
     supported_encodings: Vec<String>,
     request_handler: Arc<dyn RequestHandler>,
 }
@@ -27,10 +28,11 @@ impl Server {
         let (tx, rx) = mpsc::unbounded::<Event>();
         let mut connection = Connection::new(rx, tcp_stream);
         let request_handler = self.request_handler.clone();
+        let supported_encodings = self.supported_encodings.clone();
         tokio::spawn_async(
             async {
                 connection = await!(connection.await_upgrade());
-                let event_handler = ServerEventHandler::new(tx, request_handler);
+                let event_handler = ServerEventHandler::new(tx, request_handler, supported_encodings);
                 await!(connection.run(Box::new(event_handler)));
             },
         );
