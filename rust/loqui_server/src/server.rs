@@ -30,7 +30,7 @@ impl Server {
         let supported_encodings = self.supported_encodings.clone();
         let event_handler =
             ServerEventHandler::new(connection_tx, request_handler, supported_encodings);
-        tokio::spawn_async(connection.run(Box::new(event_handler)));
+        connection.spawn(Box::new(event_handler));
     }
 
     // TODO

@@ -85,7 +85,11 @@ impl Connection {
         )
     }
 
-    pub async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
+    pub fn spawn(mut self, event_handler: Box<dyn EventHandler + 'static>) {
+        tokio::spawn_async(self.run(event_handler));
+    }
+
+    async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
         self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
             .expect("Failed to upgrade");
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
