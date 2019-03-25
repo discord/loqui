@@ -56,8 +56,11 @@ impl ServerEventHandler {
                 Ok(None)
             }
             LoquiFrame::Hello(hello) => {
-                let hello_ack = self.handle_hello(hello);
-                Ok(Some(hello_ack))
+                let frame = self.handle_hello(hello);
+                if let LoquiFrame::HelloAck(hello_ack) = &frame {
+                    self.encoding = Some(hello_ack.encoding.clone());
+                }
+                Ok(Some(frame))
             }
             frame => {
                 dbg!(&frame);

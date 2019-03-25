@@ -36,17 +36,21 @@ impl Client {
         let (ready_tx, ready_rx) = oneshot();
         tokio::spawn_async(connection.run(Box::new(ClientEventHandler::new(ready_tx))));
         // TODO; set encoding somewhere
-        connection_tx.send(Event::Forward(Forward::Frame(LoquiFrame::Hello(Hello {
-            // TODO
-            flags: 0,
-            // TODO
-            version: 0,
-            encodings: vec!["json", "msgpack"],
-            // TODO
-            compressions: vec![],
-        }))));
+        await!(connection_tx
+            .clone()
+            .send(Event::Forward(Forward::Frame(LoquiFrame::Hello(Hello {
+                // TODO
+                flags: 0,
+                // TODO
+                version: 0,
+                encodings: vec!["json".to_string()],
+                // TODO
+                compressions: vec![],
+            })))))
+        .unwrap();
         println!("[loqui_client] Waiting for ready...");
         let ready = await!(ready_rx).map_err(|e| Error::from(e))?;
+        println!("[loqui_client] Ready.");
         let client = Self {
             sender: connection_tx,
         };

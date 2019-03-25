@@ -82,23 +82,13 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        /*
-        // TODO: this should only be sent from client
-        writer = tokio_await!(writer.send(LoquiFrame::Hello(Hello {
-            flags: 0,
-            version: 1,
-            encodings: vec!["json".to_string()],
-            compressions: vec![],
-        })))
-        .unwrap();
-        */
-
         let mut stream = reader
             .map(|frame| Event::SocketReceive(frame))
             .select(self.rx.map_err(|()| err_msg("rx error")));
 
         while let Some(event) = await!(stream.next()) {
             // TODO: handle error
+            //dbg!(&event);
             match event {
                 Ok(event) => {
                     match event {
