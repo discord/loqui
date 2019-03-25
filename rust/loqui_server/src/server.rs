@@ -25,11 +25,11 @@ impl Server {
     }
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        let (connection_tx, connection) = Connection::new(tcp_stream);
+        let (connection_sender, connection) = Connection::new(tcp_stream);
         let request_handler = self.request_handler.clone();
         let supported_encodings = self.supported_encodings.clone();
         let event_handler =
-            ServerEventHandler::new(connection_tx, request_handler, supported_encodings);
+            ServerEventHandler::new(connection_sender, request_handler, supported_encodings);
         connection.spawn(Box::new(event_handler));
     }
 

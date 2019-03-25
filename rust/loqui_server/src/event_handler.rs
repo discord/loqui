@@ -1,4 +1,4 @@
-use super::connection::{Connection, Event, EventHandler, Forward, HandleEventResult};
+use super::connection::{ConnectionSender, EventHandler, Forward, HandleEventResult};
 use super::error::LoquiError;
 use super::request_handler::RequestHandler;
 use super::RequestContext;
@@ -14,7 +14,7 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 pub struct ServerEventHandler {
-    connection_tx: UnboundedSender<Event>,
+    connection_sender: ConnectionSender,
     request_handler: Arc<dyn RequestHandler>,
     supported_encodings: Vec<String>,
     encoding: Option<String>,
@@ -22,12 +22,12 @@ pub struct ServerEventHandler {
 
 impl ServerEventHandler {
     pub fn new(
-        connection_tx: UnboundedSender<Event>,
+        connection_sender: ConnectionSender,
         request_handler: Arc<dyn RequestHandler>,
         supported_encodings: Vec<String>,
     ) -> Self {
         Self {
-            connection_tx,
+            connection_sender,
             request_handler,
             supported_encodings,
             encoding: None,
@@ -143,7 +143,7 @@ impl ServerEventHandler {
             encoding: "json".to_string(),
         };
         let request_handler = self.request_handler.clone();
-        let connection_tx = self.connection_tx.clone();
+        let connection_sender = self.connection_sender.clone();
         tokio::spawn_async(
             async move {
                 let frame = match await!(Box::into_pin(
@@ -165,7 +165,7 @@ impl ServerEventHandler {
                         })
                     }
                 };
-                tokio_await!(connection_tx.send(Event::Forward(Forward::Frame(frame))));
+                connection_sender.frame(frame);
             },
         );
     }

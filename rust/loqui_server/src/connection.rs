@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use failure::{err_msg, Error};
+use futures::oneshot;
 use futures::stream::SplitSink;
+use futures::sync::mpsc::unbounded;
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::mpsc::{self, UnboundedSender};
-use futures::oneshot;
-use futures::sync::oneshot::{Sender as OneShotSender, Receiver as OneShotReceiver};
+use futures::sync::oneshot::{Receiver as OneShotReceiver, Sender as OneShotSender};
 use futures_timer::Interval;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::{Hello, Ping, Pong, Push, Request, Response};
@@ -15,7 +16,6 @@ use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
-use futures::sync::mpsc::unbounded;
 
 // TODO: get right values
 const UPGRADE_REQUEST: &'static str =
@@ -78,15 +78,51 @@ impl ConnectionSender {
         (Self { tx }, rx)
     }
 
-    fn request(&self, payload: Vec<u8>) -> Result<OneShotReceiver<Result<Vec<u8>, Error>>, Error> {
+    pub fn request(
+        &self,
+        payload: Vec<u8>,
+    ) -> Result<OneShotReceiver<Result<Vec<u8>, Error>>, Error> {
         let (waiter_tx, waiter_rx) = oneshot();
-        self.tx.unbounded_send(Event::Forward(Forward::Request {
-            payload,
-            waiter_tx,
-        }))?;
+        self.tx
+            .unbounded_send(Event::Forward(Forward::Request { payload, waiter_tx }))?;
         Ok(waiter_rx)
     }
 
+    pub fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Forward(Forward::Push { payload }))
+            .map_err(Error::from)
+    }
+
+    fn ping(&self) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Forward(Forward::Frame(LoquiFrame::Ping(Ping {
+                // TODO
+                sequence_id: 0,
+                flags: 0,
+            }))))
+            .map_err(Error::from)
+    }
+
+    pub fn hello(&self) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Forward(Forward::Frame(LoquiFrame::Hello(Hello {
+                // TODO
+                flags: 0,
+                // TODO
+                version: 0,
+                encodings: vec!["json".to_string()],
+                // TODO
+                compressions: vec![],
+            }))))
+            .map_err(Error::from)
+    }
+
+    pub fn frame(&self, frame: LoquiFrame) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Forward(Forward::Frame(frame)))
+            .map_err(Error::from)
+    }
 }
 
 pub struct Connection {
@@ -114,22 +150,14 @@ impl Connection {
         tokio::spawn_async(self.run(event_handler));
     }
 
-    fn spawn_ping(self_tx: UnboundedSender<Event>) {
+    fn spawn_ping(connection_sender: ConnectionSender) {
         tokio::spawn_async(
             async move {
                 // TODO: from hello ack
                 // TODO: need to timeout from pong
                 let mut interval = Interval::new(Duration::from_secs(3));
                 while let Some(Ok(())) = tokio_await!(interval.next()) {
-                    let self_tx = self_tx.clone();
-                    tokio_await!(self_tx.send(Event::Forward(Forward::Frame(LoquiFrame::Ping(
-                        Ping {
-                            flags: 0,
-                            // TODO
-                            sequence_id: 1
-                        }
-                    )))))
-                    .expect("We need to handle this so we dont do this forever");
+                    connection_sender.ping().expect("failed to ping");
                 }
             },
         );
@@ -142,7 +170,7 @@ impl Connection {
         let (mut writer, mut reader) = framed_socket.split();
         // TODO: handle disconnect
 
-        Connection::spawn_ping(self.self_tx.clone());
+        Connection::spawn_ping(self.self_sender.clone());
 
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
