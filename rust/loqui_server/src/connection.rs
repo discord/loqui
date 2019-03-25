@@ -44,7 +44,7 @@ pub enum Event {
 pub enum ForwardRequest {
     Request {
         payload: Vec<u8>,
-        sender: OneShotSender<Result<Vec<u8>, Error>>,
+        waiter_tx: OneShotSender<Result<Vec<u8>, Error>>,
     },
     Push {
         payload: Vec<u8>,
@@ -56,7 +56,7 @@ pub type HandleEventResult = Result<Option<LoquiFrame>, Error>;
 
 pub trait EventHandler: Send + Sync {
     fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult;
-    fn handle_sent(&mut self, sequence_id: u32, sender: OneShotSender<Result<Vec<u8>, Error>>);
+    fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>);
 }
 
 pub struct Connection {
@@ -127,7 +127,7 @@ impl Connection {
                         }
                         Event::Forward(forward_request) => {
                             match forward_request {
-                                ForwardRequest::Request { payload, sender } => {
+                                ForwardRequest::Request { payload, waiter_tx } => {
                                     let sequence_id = self.sequencer.next_seq();
                                     let frame = LoquiFrame::Request(Request {
                                         payload,
@@ -138,7 +138,7 @@ impl Connection {
                                     match tokio_await!(writer.send(frame)) {
                                         Ok(new_writer) => {
                                             writer = new_writer;
-                                            event_handler.handle_sent(sequence_id, sender)
+                                            event_handler.handle_sent(sequence_id, waiter_tx)
                                         }
                                         // TODO: better handle this error
                                         Err(e) => {

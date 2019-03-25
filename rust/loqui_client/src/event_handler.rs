@@ -38,7 +38,7 @@ impl EventHandler for ClientEventHandler {
         Ok(None)
     }
 
-    fn handle_sent(&mut self, sequence_id: u32, sender: OneShotSender<Result<Vec<u8>, Error>>) {
-        self.waiters.insert(sequence_id, sender);
+    fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>) {
+        self.waiters.insert(sequence_id, waiter_tx);
     }
 }
