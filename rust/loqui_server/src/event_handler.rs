@@ -85,7 +85,7 @@ impl ServerEventHandler {
                 let frame = self.handle_hello(hello);
                 if let LoquiFrame::HelloAck(hello_ack) = &frame {
                     self.encoding = Some(hello_ack.encoding.clone());
-                    self.connection_sender.ready(hello_ack.ping_interval_ms);
+                    self.connection_sender.ready(hello_ack.ping_interval_ms)?;
                 }
                 Ok(Some(frame))
             }
@@ -105,11 +105,6 @@ impl ServerEventHandler {
             }
         }
         None
-    }
-
-    fn handle_ping(&self, ping: Ping) -> LoquiFrame {
-        let Ping { flags, sequence_id } = ping;
-        LoquiFrame::Pong(Pong { flags, sequence_id })
     }
 
     fn handle_hello(&self, hello: Hello) -> LoquiFrame {
@@ -166,7 +161,7 @@ impl ServerEventHandler {
                         })
                     }
                 };
-                connection_sender.frame(frame);
+                connection_sender.frame(frame).expect("conn dead");
             },
         );
     }

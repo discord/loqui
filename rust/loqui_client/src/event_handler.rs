@@ -1,10 +1,9 @@
 use failure::{err_msg, Error};
-use futures::sync::mpsc::UnboundedSender;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
-use loqui_protocol::frames::{Push, Request, Response};
+use loqui_protocol::frames::Response;
 use loqui_server::connection::ConnectionSender;
-use loqui_server::connection::{Connection, Event, EventHandler, HandleEventResult};
+use loqui_server::connection::{EventHandler, HandleEventResult};
 use loqui_server::error::LoquiError;
 use std::collections::HashMap;
 use std::future::Future;
@@ -91,8 +90,7 @@ impl EventHandler for ClientEventHandler {
                 let ready = Ready {
                     encoding: hello_ack.encoding,
                 };
-                let ready_tx = self
-                    .ready_tx
+                self.ready_tx
                     .take()
                     .expect("already sent ready")
                     .send(Ok(ready))

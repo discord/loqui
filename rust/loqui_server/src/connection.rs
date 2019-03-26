@@ -17,10 +17,6 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-// TODO: get right values
-const UPGRADE_REQUEST: &'static str =
-    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
-
 struct Sequencer {
     next: u32,
 }
@@ -150,7 +146,7 @@ impl Connection {
         )
     }
 
-    pub fn spawn(mut self, event_handler: Box<dyn EventHandler + 'static>) {
+    pub fn spawn(self, event_handler: Box<dyn EventHandler + 'static>) {
         tokio::spawn_async(
             async move {
                 let result = await!(self.run(event_handler));
@@ -180,7 +176,7 @@ impl Connection {
         self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
             .expect("Failed to upgrade");
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
-        let (mut writer, mut reader) = framed_socket.split();
+        let (mut writer, reader) = framed_socket.split();
         // TODO: handle disconnect
 
         let mut stream = reader
