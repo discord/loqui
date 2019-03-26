@@ -8,3 +8,22 @@ pub enum LoquiError {
     #[fail(display = "Invalid frame. frame={:?}", frame)]
     InvalidFrame { frame: LoquiFrame },
 }
+
+pub enum LoquiErrorCode {
+    // Normal is sent when the connection is closing cleanly.
+    Normal,
+    // InvalidOp is sent when the connection receives an opcode it cannot handle.
+    InvalidOp,
+    // UnsupportedVersion is sent when conn does not support a version.
+    UnsupportedVersion,
+    // NoCommonEncoding is sent when there are no common encodings.
+    NoCommonEncoding,
+    // InvalidEncoding is sent by the client if the server chooses and invalid encoding.
+    InvalidEncoding,
+    // InvalidCompression is sent by the client if the server chooses and invalid compression.
+    InvalidCompression,
+    // PingTimeout is sent when connection does not receive a pong within ping interval.
+    PingTimeout,
+    // InternalServerError is sent when a single request dies due to an error.
+    InternalServerError,
+}

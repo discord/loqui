@@ -1,3 +1,4 @@
+use crate::error::LoquiErrorCode;
 use crate::ping::Ping as PingStream;
 use failure::{err_msg, Error};
 use futures::oneshot;
@@ -173,6 +174,7 @@ impl Connection {
 
         let mut ping_stream = PingStream::new();
         let ping_handle = ping_stream.handle();
+
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
             .map(|frame| Event::SocketReceive(frame))
@@ -199,10 +201,9 @@ impl Connection {
                             });
                             writer = await!(writer.send(frame))?;
                             if !self.pong_received {
-                                // TODO: tell them it's due to ping timeout
                                 let frame = LoquiFrame::GoAway(GoAway {
                                     flags: 0,
-                                    code: 0,
+                                    code: LoquiErrorCode::PingTimeout as u16,
                                     payload: vec![],
                                 });
                                 // TODO
