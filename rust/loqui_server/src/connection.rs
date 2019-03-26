@@ -10,7 +10,9 @@ use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot::{Receiver as OneShotReceiver, Sender as OneShotSender};
 use futures_timer::Interval;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{GoAway, Hello, Ping, Pong, Push, Request, Response};
+use loqui_protocol::frames::{
+    Error as ErrorFrame, GoAway, Hello, Ping, Pong, Push, Request, Response,
+};
 use std::future::Future;
 use std::io;
 use std::sync::Arc;
@@ -62,6 +64,10 @@ pub trait FrameHandler: Send + Sync {
     ) -> Box<dyn Future<Output = Result<TcpStream, Error>> + Send>;
     fn handle_received(&mut self, frame: LoquiFrame) -> HandleEventResult;
     fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>);
+    fn handle_request(
+        &self,
+        request: Request,
+    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>;
 }
 
 #[derive(Clone)]
@@ -171,7 +177,11 @@ impl Connection {
 
         let mut ping_stream = PingStream::new();
 
-        let mut inner = EventHandler::new(ping_stream.handle(), frame_handler);
+        let mut inner = EventHandler::new(
+            self.self_sender.clone(),
+            ping_stream.handle(),
+            frame_handler,
+        );
 
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
@@ -203,17 +213,21 @@ impl Connection {
 }
 
 pub struct EventHandler {
+    connection_sender: ConnectionSender,
     frame_handler: Box<dyn FrameHandler>,
     ping_handle: Handle,
     pong_received: bool,
     sequencer: Sequencer,
 }
 
-type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
-
 impl EventHandler {
-    fn new(ping_handle: Handle, frame_handler: Box<dyn FrameHandler>) -> Self {
+    fn new(
+        connection_sender: ConnectionSender,
+        ping_handle: Handle,
+        frame_handler: Box<dyn FrameHandler>,
+    ) -> Self {
         Self {
+            connection_sender,
             frame_handler,
             ping_handle,
             pong_received: true,
@@ -221,12 +235,12 @@ impl EventHandler {
         }
     }
 
-    fn handle_ready(&mut self, ping_interval: u32) -> MaybeFrameResult {
+    fn handle_ready(&mut self, ping_interval: u32) -> HandleEventResult {
         self.ping_handle.start(ping_interval);
         Ok(None)
     }
 
-    fn handle_ping(&mut self) -> MaybeFrameResult {
+    fn handle_ping(&mut self) -> HandleEventResult {
         if self.pong_received {
             let sequence_id = self.sequencer.next();
             let frame = LoquiFrame::Ping(Ping {
@@ -240,7 +254,7 @@ impl EventHandler {
         }
     }
 
-    fn handle_ping_frame(&self, ping: Ping) -> MaybeFrameResult {
+    fn handle_ping_frame(&self, ping: Ping) -> HandleEventResult {
         let pong = Pong {
             flags: ping.flags,
             sequence_id: ping.sequence_id,
@@ -248,8 +262,38 @@ impl EventHandler {
         Ok(Some(LoquiFrame::Pong(pong)))
     }
 
-    fn handle_pong_frame(&mut self, pong: Pong) -> MaybeFrameResult {
+    fn handle_pong_frame(&mut self, pong: Pong) -> HandleEventResult {
         self.pong_received = true;
+        Ok(None)
+    }
+
+    fn handle_request_frame(&mut self, request: Request) -> HandleEventResult {
+        let connection_sender = self.connection_sender.clone();
+        let flags = request.flags;
+        let sequence_id = request.sequence_id;
+        let fut = self.frame_handler.handle_request(request);
+        tokio::spawn_async(
+            async move {
+                let frame = match await!(Box::into_pin(fut)) {
+                    Ok(payload) => LoquiFrame::Response(Response {
+                        flags,
+                        sequence_id,
+                        payload,
+                    }),
+                    Err(e) => {
+                        dbg!(e);
+                        // TODO:
+                        LoquiFrame::Error(ErrorFrame {
+                            flags,
+                            sequence_id,
+                            code: 0,
+                            payload: vec![],
+                        })
+                    }
+                };
+                connection_sender.frame(frame).expect("conn dead");
+            },
+        );
         Ok(None)
     }
 
@@ -257,7 +301,7 @@ impl EventHandler {
         &mut self,
         payload: Vec<u8>,
         waiter_tx: OneShotSender<Result<Vec<u8>, Error>>,
-    ) -> MaybeFrameResult {
+    ) -> HandleEventResult {
         let sequence_id = self.sequencer.next();
         let frame = LoquiFrame::Request(Request {
             payload,
@@ -269,12 +313,12 @@ impl EventHandler {
         Ok(Some(frame))
     }
 
-    fn handle_push(&self, payload: Vec<u8>) -> MaybeFrameResult {
+    fn handle_push(&self, payload: Vec<u8>) -> HandleEventResult {
         let frame = LoquiFrame::Push(Push { payload, flags: 0 });
         Ok(Some(frame))
     }
 
-    fn handle_event(&mut self, event: Event) -> Result<Option<LoquiFrame>, Error> {
+    fn handle_event(&mut self, event: Event) -> HandleEventResult {
         match event {
             Event::Ready { ping_interval } => self.handle_ready(ping_interval),
             Event::Ping => self.handle_ping(),
@@ -282,6 +326,7 @@ impl EventHandler {
                 LoquiFrame::Ping(ping) => self.handle_ping_frame(ping),
                 LoquiFrame::Pong(pong) => self.handle_pong_frame(pong),
                 LoquiFrame::GoAway(goaway) => Err(LoquiError::GoAway.into()),
+                LoquiFrame::Request(request) => self.handle_request_frame(request),
                 frame => self.frame_handler.handle_received(frame),
             },
             Event::Request { payload, waiter_tx } => self.handle_request(payload, waiter_tx),

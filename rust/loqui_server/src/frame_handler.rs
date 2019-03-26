@@ -65,6 +65,27 @@ impl FrameHandler for ServerFrameHandler {
     }
 
     fn handle_sent(&mut self, _: u32, _: OneShotSender<Result<Vec<u8>, Error>>) {}
+
+    fn handle_request(
+        &self,
+        request: Request,
+    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send> {
+        if self.encoding.is_none() {
+            return Box::new(async { Err(LoquiError::NotReady.into()) });
+        }
+        let Request {
+            payload,
+            flags,
+            sequence_id,
+        } = request;
+        let request_context = RequestContext {
+            payload,
+            flags,
+            // TODO:
+            encoding: "json".to_string(),
+        };
+        self.request_handler.handle_request(request_context)
+    }
 }
 
 impl ServerFrameHandler {
@@ -74,13 +95,6 @@ impl ServerFrameHandler {
         // TODO: should we just return LoquiFrame::Error if there is an error??
     ) -> Result<Option<LoquiFrame>, Error> {
         match frame {
-            LoquiFrame::Request(request) => {
-                if self.encoding.is_none() {
-                    return Err(LoquiError::NotReady.into());
-                }
-                self.handle_request(request);
-                Ok(None)
-            }
             LoquiFrame::Hello(hello) => {
                 let frame = self.handle_hello(hello);
                 if let LoquiFrame::HelloAck(hello_ack) = &frame {
@@ -124,45 +138,5 @@ impl ServerFrameHandler {
             encoding,
             compression: "".to_string(),
         })
-    }
-
-    fn handle_request(&mut self, request: Request) {
-        let Request {
-            payload,
-            flags,
-            sequence_id,
-        } = request;
-        let request_context = RequestContext {
-            payload,
-            flags,
-            // TODO:
-            encoding: "json".to_string(),
-        };
-        let request_handler = self.request_handler.clone();
-        let connection_sender = self.connection_sender.clone();
-        tokio::spawn_async(
-            async move {
-                let frame = match await!(Box::into_pin(
-                    request_handler.handle_request(request_context)
-                )) {
-                    Ok(payload) => LoquiFrame::Response(Response {
-                        flags,
-                        sequence_id,
-                        payload,
-                    }),
-                    Err(e) => {
-                        dbg!(e);
-                        // TODO:
-                        LoquiFrame::Error(ErrorFrame {
-                            flags,
-                            sequence_id,
-                            code: 0,
-                            payload: vec![],
-                        })
-                    }
-                };
-                connection_sender.frame(frame).expect("conn dead");
-            },
-        );
     }
 }
