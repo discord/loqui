@@ -36,13 +36,10 @@ impl Sequencer {
 #[derive(Debug)]
 pub enum Event {
     SocketReceive(LoquiFrame),
-    Ready { ping_interval: u32 },
+    Ready {
+        ping_interval: u32,
+    },
     Ping,
-    Forward(Forward),
-}
-
-#[derive(Debug)]
-pub enum Forward {
     Request {
         payload: Vec<u8>,
         waiter_tx: OneShotSender<Result<Vec<u8>, Error>>,
@@ -50,7 +47,7 @@ pub enum Forward {
     Push {
         payload: Vec<u8>,
     },
-    Frame(LoquiFrame),
+    SendFrame(LoquiFrame),
 }
 
 pub type HandleEventResult = Result<Option<LoquiFrame>, Error>;
@@ -81,13 +78,13 @@ impl ConnectionSender {
     ) -> Result<OneShotReceiver<Result<Vec<u8>, Error>>, Error> {
         let (waiter_tx, waiter_rx) = oneshot();
         self.tx
-            .unbounded_send(Event::Forward(Forward::Request { payload, waiter_tx }))?;
+            .unbounded_send(Event::Request { payload, waiter_tx })?;
         Ok(waiter_rx)
     }
 
     pub fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
         self.tx
-            .unbounded_send(Event::Forward(Forward::Push { payload }))
+            .unbounded_send(Event::Push { payload })
             .map_err(Error::from)
     }
 
@@ -103,7 +100,7 @@ impl ConnectionSender {
 
     pub fn hello(&self) -> Result<(), Error> {
         self.tx
-            .unbounded_send(Event::Forward(Forward::Frame(LoquiFrame::Hello(Hello {
+            .unbounded_send(Event::SendFrame(LoquiFrame::Hello(Hello {
                 // TODO
                 flags: 0,
                 // TODO
@@ -111,13 +108,13 @@ impl ConnectionSender {
                 encodings: vec!["json".to_string()],
                 // TODO
                 compressions: vec![],
-            }))))
+            })))
             .map_err(Error::from)
     }
 
     pub fn frame(&self, frame: LoquiFrame) -> Result<(), Error> {
         self.tx
-            .unbounded_send(Event::Forward(Forward::Frame(frame)))
+            .unbounded_send(Event::SendFrame(frame))
             .map_err(Error::from)
     }
 }
@@ -257,28 +254,24 @@ impl Connection {
                                 },
                             }
                         }
-                        Event::Forward(forward_request) => {
-                            match forward_request {
-                                Forward::Request { payload, waiter_tx } => {
-                                    let sequence_id = self.sequencer.next();
-                                    let frame = LoquiFrame::Request(Request {
-                                        payload,
-                                        sequence_id,
-                                        // TODO
-                                        flags: 0,
-                                    });
-                                    writer = await!(writer.send(frame))?;
-                                    event_handler.handle_sent(sequence_id, waiter_tx);
-                                }
-                                Forward::Push { payload } => {
-                                    let sequence_id = self.sequencer.next();
-                                    let frame = LoquiFrame::Push(Push { payload, flags: 0 });
-                                    writer = await!(writer.send(frame))?;
-                                }
-                                Forward::Frame(frame) => {
-                                    writer = await!(writer.send(frame))?;
-                                }
-                            }
+                        Event::Request { payload, waiter_tx } => {
+                            let sequence_id = self.sequencer.next();
+                            let frame = LoquiFrame::Request(Request {
+                                payload,
+                                sequence_id,
+                                // TODO
+                                flags: 0,
+                            });
+                            writer = await!(writer.send(frame))?;
+                            event_handler.handle_sent(sequence_id, waiter_tx);
+                        }
+                        Event::Push { payload } => {
+                            let sequence_id = self.sequencer.next();
+                            let frame = LoquiFrame::Push(Push { payload, flags: 0 });
+                            writer = await!(writer.send(frame))?;
+                        }
+                        Event::SendFrame(frame) => {
+                            writer = await!(writer.send(frame))?;
                         }
                     }
                 }

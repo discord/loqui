@@ -1,4 +1,4 @@
-use super::connection::{ConnectionSender, EventHandler, Forward, HandleEventResult};
+use super::connection::{ConnectionSender, EventHandler, HandleEventResult};
 use super::error::LoquiError;
 use super::request_handler::RequestHandler;
 use super::RequestContext;
