@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::ping::Ping as PingStream;
 use failure::{err_msg, Error};
 use futures::oneshot;
 use futures::stream::SplitSink;
@@ -152,20 +153,6 @@ impl Connection {
         );
     }
 
-    fn spawn_ping(ping_interval: Duration, connection_sender: ConnectionSender) {
-        tokio::spawn_async(
-            async move {
-                let mut stream = Interval::new(ping_interval);
-                while let Some(Ok(())) = await!(stream.next()) {
-                    if let Err(e) = connection_sender.ping() {
-                        println!("Connection closed.");
-                        return;
-                    }
-                }
-            },
-        );
-    }
-
     async fn run(
         mut self,
         mut event_handler: Box<dyn EventHandler + 'static>,
@@ -176,11 +163,14 @@ impl Connection {
         let (mut writer, reader) = framed_socket.split();
         // TODO: handle disconnect
 
+        let mut ping_stream = PingStream::new();
+        let ping_handle = ping_stream.handle();
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
             .map(|frame| Event::SocketReceive(frame))
             // TODO: maybe buffer unordered so we don't have to spawn and send back?
-            .select(self.self_rx.map_err(|()| err_msg("rx error")));
+            .select(self.self_rx.map_err(|()| err_msg("rx error")))
+            .select(ping_stream);
 
         while let Some(event) = await!(stream.next()) {
             // TODO: handle error
@@ -197,12 +187,11 @@ impl Connection {
                             });
                             writer = await!(writer.send(frame))?;
                             self.pong_received = false;
-                            Connection::spawn_ping(
-                                Duration::from_millis(ping_interval as u64),
-                                self.self_sender.clone(),
-                            );
+                            println!("setting ready");
+                            ping_handle.start(ping_interval);
                         }
                         Event::Ping => {
+                            println!("ping");
                             let sequence_id = self.sequencer.next();
                             let frame = LoquiFrame::Ping(Ping {
                                 sequence_id,
