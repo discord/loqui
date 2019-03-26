@@ -171,7 +171,7 @@ impl Connection {
 
         let mut ping_stream = PingStream::new();
 
-        let mut inner = Inner::new(ping_stream.handle(), frame_handler);
+        let mut inner = EventHandler::new(ping_stream.handle(), frame_handler);
 
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
@@ -202,14 +202,16 @@ impl Connection {
     }
 }
 
-pub struct Inner {
+pub struct EventHandler {
     frame_handler: Box<dyn FrameHandler>,
     ping_handle: Handle,
     pong_received: bool,
     sequencer: Sequencer,
 }
 
-impl Inner {
+type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
+
+impl EventHandler {
     fn new(ping_handle: Handle, frame_handler: Box<dyn FrameHandler>) -> Self {
         Self {
             frame_handler,
@@ -219,61 +221,71 @@ impl Inner {
         }
     }
 
+    fn handle_ready(&mut self, ping_interval: u32) -> MaybeFrameResult {
+        self.ping_handle.start(ping_interval);
+        Ok(None)
+    }
+
+    fn handle_ping(&mut self) -> MaybeFrameResult {
+        if self.pong_received {
+            let sequence_id = self.sequencer.next();
+            let frame = LoquiFrame::Ping(Ping {
+                sequence_id,
+                flags: 0,
+            });
+            self.pong_received = false;
+            Ok(Some(frame))
+        } else {
+            Err(LoquiError::PingTimeout.into())
+        }
+    }
+
+    fn handle_ping_frame(&self, ping: Ping) -> MaybeFrameResult {
+        let pong = Pong {
+            flags: ping.flags,
+            sequence_id: ping.sequence_id,
+        };
+        Ok(Some(LoquiFrame::Pong(pong)))
+    }
+
+    fn handle_pong_frame(&mut self, pong: Pong) -> MaybeFrameResult {
+        self.pong_received = true;
+        Ok(None)
+    }
+
+    fn handle_request(
+        &mut self,
+        payload: Vec<u8>,
+        waiter_tx: OneShotSender<Result<Vec<u8>, Error>>,
+    ) -> MaybeFrameResult {
+        let sequence_id = self.sequencer.next();
+        let frame = LoquiFrame::Request(Request {
+            payload,
+            sequence_id,
+            // TODO
+            flags: 0,
+        });
+        self.frame_handler.handle_sent(sequence_id, waiter_tx);
+        Ok(Some(frame))
+    }
+
+    fn handle_push(&self, payload: Vec<u8>) -> MaybeFrameResult {
+        let frame = LoquiFrame::Push(Push { payload, flags: 0 });
+        Ok(Some(frame))
+    }
+
     fn handle_event(&mut self, event: Event) -> Result<Option<LoquiFrame>, Error> {
         match event {
-            Event::Ready { ping_interval } => {
-                self.ping_handle.start(ping_interval);
-                Ok(None)
-            }
-            Event::Ping => {
-                if self.pong_received {
-                    let sequence_id = self.sequencer.next();
-                    let frame = LoquiFrame::Ping(Ping {
-                        sequence_id,
-                        flags: 0,
-                    });
-                    self.pong_received = false;
-                    Ok(Some(frame))
-                } else {
-                    Err(LoquiError::PingTimeout.into())
-                }
-            }
-            Event::SocketReceive(frame) => {
-                match frame {
-                    LoquiFrame::Ping(ping) => {
-                        let pong = Pong {
-                            flags: ping.flags,
-                            sequence_id: ping.sequence_id,
-                        };
-                        Ok(Some(LoquiFrame::Pong(pong)))
-                    }
-                    LoquiFrame::Pong(pong) => {
-                        self.pong_received = true;
-                        Ok(None)
-                    }
-                    LoquiFrame::GoAway(goaway) => {
-                        println!("Told to go away! {:?}", goaway);
-                        // TODO: also clean up the pinger
-                        Err(LoquiError::GoAway.into())
-                    }
-                    frame => self.frame_handler.handle_received(frame),
-                }
-            }
-            Event::Request { payload, waiter_tx } => {
-                let sequence_id = self.sequencer.next();
-                let frame = LoquiFrame::Request(Request {
-                    payload,
-                    sequence_id,
-                    // TODO
-                    flags: 0,
-                });
-                self.frame_handler.handle_sent(sequence_id, waiter_tx);
-                Ok(Some(frame))
-            }
-            Event::Push { payload } => {
-                let frame = LoquiFrame::Push(Push { payload, flags: 0 });
-                Ok(Some(frame))
-            }
+            Event::Ready { ping_interval } => self.handle_ready(ping_interval),
+            Event::Ping => self.handle_ping(),
+            Event::SocketReceive(frame) => match frame {
+                LoquiFrame::Ping(ping) => self.handle_ping_frame(ping),
+                LoquiFrame::Pong(pong) => self.handle_pong_frame(pong),
+                LoquiFrame::GoAway(goaway) => Err(LoquiError::GoAway.into()),
+                frame => self.frame_handler.handle_received(frame),
+            },
+            Event::Request { payload, waiter_tx } => self.handle_request(payload, waiter_tx),
+            Event::Push { payload } => self.handle_push(payload),
             Event::SendFrame(frame) => Ok(Some(frame)),
         }
     }
