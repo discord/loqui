@@ -3,7 +3,7 @@ use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
 use loqui_protocol::frames::Response;
 use loqui_server::connection::ConnectionSender;
-use loqui_server::connection::{EventHandler, HandleEventResult};
+use loqui_server::connection::{FrameHandler, HandleEventResult};
 use loqui_server::error::LoquiError;
 use std::collections::HashMap;
 use std::future::Future;
@@ -19,13 +19,13 @@ pub struct Ready {
     encoding: String,
 }
 
-pub struct ClientEventHandler {
+pub struct ClientFrameHandler {
     connection_sender: ConnectionSender,
     ready_tx: Option<OneShotSender<Result<Ready, Error>>>,
     waiters: HashMap<u32, OneShotSender<Result<Vec<u8>, Error>>>,
 }
 
-impl ClientEventHandler {
+impl ClientFrameHandler {
     pub fn new(
         connection_sender: ConnectionSender,
         ready_tx: OneShotSender<Result<Ready, Error>>,
@@ -39,7 +39,7 @@ impl ClientEventHandler {
     }
 }
 
-impl EventHandler for ClientEventHandler {
+impl FrameHandler for ClientFrameHandler {
     fn upgrade(
         &self,
         mut tcp_stream: TcpStream,

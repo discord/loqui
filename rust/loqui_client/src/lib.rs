@@ -1,6 +1,6 @@
 #![feature(await_macro, async_await, futures_api)]
 
-use self::event_handler::ClientEventHandler;
+use self::frame_handler::ClientFrameHandler;
 use failure::Error;
 use futures::oneshot;
 use loqui_server::connection::{Connection, ConnectionSender};
@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use tokio::await;
 use tokio::net::TcpStream;
 
-mod event_handler;
+mod frame_handler;
 
 #[derive(Clone)]
 pub struct Client {
@@ -21,7 +21,7 @@ impl Client {
         let tcp_stream = await!(TcpStream::connect(&addr))?;
         let (connection_sender, connection) = Connection::new(tcp_stream);
         let (ready_tx, ready_rx) = oneshot();
-        let client_event_handler = ClientEventHandler::new(connection_sender.clone(), ready_tx);
+        let client_event_handler = ClientFrameHandler::new(connection_sender.clone(), ready_tx);
         connection.spawn(Box::new(client_event_handler));
         // TODO; set encoding somewhere
         connection_sender.hello()?;

@@ -1,5 +1,5 @@
-use super::connection::{Connection, Event, EventHandler, HandleEventResult};
-use super::event_handler::ServerEventHandler;
+use super::connection::{Connection, Event, FrameHandler, HandleEventResult};
+use super::frame_handler::ServerFrameHandler;
 use super::request_handler::RequestHandler;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
@@ -29,7 +29,7 @@ impl Server {
         let request_handler = self.request_handler.clone();
         let supported_encodings = self.supported_encodings.clone();
         let event_handler =
-            ServerEventHandler::new(connection_sender, request_handler, supported_encodings);
+            ServerFrameHandler::new(connection_sender, request_handler, supported_encodings);
         connection.spawn(Box::new(event_handler));
     }
 

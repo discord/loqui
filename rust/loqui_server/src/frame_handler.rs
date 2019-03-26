@@ -1,4 +1,4 @@
-use super::connection::{ConnectionSender, EventHandler, HandleEventResult};
+use super::connection::{ConnectionSender, FrameHandler, HandleEventResult};
 use super::error::LoquiError;
 use super::request_handler::RequestHandler;
 use super::RequestContext;
@@ -13,14 +13,14 @@ use tokio::await as tokio_await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-pub struct ServerEventHandler {
+pub struct ServerFrameHandler {
     connection_sender: ConnectionSender,
     request_handler: Arc<dyn RequestHandler>,
     supported_encodings: Vec<String>,
     encoding: Option<String>,
 }
 
-impl ServerEventHandler {
+impl ServerFrameHandler {
     pub fn new(
         connection_sender: ConnectionSender,
         request_handler: Arc<dyn RequestHandler>,
@@ -35,7 +35,7 @@ impl ServerEventHandler {
     }
 }
 
-impl EventHandler for ServerEventHandler {
+impl FrameHandler for ServerFrameHandler {
     fn upgrade(
         &self,
         mut tcp_stream: TcpStream,
@@ -67,7 +67,7 @@ impl EventHandler for ServerEventHandler {
     fn handle_sent(&mut self, _: u32, _: OneShotSender<Result<Vec<u8>, Error>>) {}
 }
 
-impl ServerEventHandler {
+impl ServerFrameHandler {
     pub fn handle_frame(
         &mut self,
         frame: LoquiFrame,

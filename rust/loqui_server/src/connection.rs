@@ -55,7 +55,7 @@ pub enum Event {
 
 pub type HandleEventResult = Result<Option<LoquiFrame>, Error>;
 
-pub trait EventHandler: Send + Sync {
+pub trait FrameHandler: Send + Sync {
     fn upgrade(
         &self,
         tcp_stream: TcpStream,
@@ -126,7 +126,6 @@ pub struct Connection {
     tcp_stream: TcpStream,
     self_rx: UnboundedReceiver<Event>,
     self_sender: ConnectionSender,
-    sequencer: Sequencer,
 }
 
 impl Connection {
@@ -138,16 +137,15 @@ impl Connection {
                 self_sender,
                 self_rx,
                 tcp_stream,
-                sequencer: Sequencer::new(),
                 // TODO: these prob shouldn't be set??
             },
         )
     }
 
-    pub fn spawn(self, event_handler: Box<dyn EventHandler + 'static>) {
+    pub fn spawn(self, frame_handler: Box<dyn FrameHandler + 'static>) {
         tokio::spawn_async(
             async move {
-                match await!(self.run(event_handler)) {
+                match await!(self.run(frame_handler)) {
                     Ok(()) => {}
                     Err(e) => {
                         if let Some(e) = e.downcast_ref::<io::Error>() {
@@ -163,9 +161,9 @@ impl Connection {
 
     async fn run(
         mut self,
-        mut event_handler: Box<dyn EventHandler + 'static>,
+        mut frame_handler: Box<dyn FrameHandler + 'static>,
     ) -> Result<(), Error> {
-        self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
+        self.tcp_stream = await!(Box::into_pin(frame_handler.upgrade(self.tcp_stream)))
             .expect("Failed to upgrade");
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
         let (mut writer, reader) = framed_socket.split();
@@ -173,11 +171,7 @@ impl Connection {
 
         let mut ping_stream = PingStream::new();
 
-        let mut inner = Inner {
-            ping_handle: ping_stream.handle(),
-            pong_received: true,
-            event_handler,
-        };
+        let mut inner = Inner::new(ping_stream.handle(), frame_handler);
 
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
@@ -190,18 +184,15 @@ impl Connection {
             // TODO: handle error
             //dbg!(&event);
             match event {
-                Ok(event) => {
-                    let sequence_id = self.sequencer.next();
-                    match inner.handle_event(event, sequence_id) {
-                        Ok(Some(frame)) => {
-                            writer = await!(writer.send(frame))?;
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            dbg!(e);
-                        }
+                Ok(event) => match inner.handle_event(event) {
+                    Ok(Some(frame)) => {
+                        writer = await!(writer.send(frame))?;
                     }
-                }
+                    Ok(None) => {}
+                    Err(e) => {
+                        dbg!(e);
+                    }
+                },
                 Err(e) => {
                     dbg!(e);
                 }
@@ -212,17 +203,23 @@ impl Connection {
 }
 
 pub struct Inner {
-    pub ping_handle: Handle,
-    pub pong_received: bool,
-    pub event_handler: Box<dyn EventHandler>,
+    frame_handler: Box<dyn FrameHandler>,
+    ping_handle: Handle,
+    pong_received: bool,
+    sequencer: Sequencer,
 }
 
 impl Inner {
-    fn handle_event(
-        &mut self,
-        event: Event,
-        sequence_id: u32,
-    ) -> Result<Option<LoquiFrame>, Error> {
+    fn new(ping_handle: Handle, frame_handler: Box<dyn FrameHandler>) -> Self {
+        Self {
+            frame_handler,
+            ping_handle,
+            pong_received: true,
+            sequencer: Sequencer::new(),
+        }
+    }
+
+    fn handle_event(&mut self, event: Event) -> Result<Option<LoquiFrame>, Error> {
         match event {
             Event::Ready { ping_interval } => {
                 self.ping_handle.start(ping_interval);
@@ -230,6 +227,7 @@ impl Inner {
             }
             Event::Ping => {
                 if self.pong_received {
+                    let sequence_id = self.sequencer.next();
                     let frame = LoquiFrame::Ping(Ping {
                         sequence_id,
                         flags: 0,
@@ -258,17 +256,18 @@ impl Inner {
                         // TODO: also clean up the pinger
                         Err(LoquiError::GoAway.into())
                     }
-                    frame => self.event_handler.handle_received(frame),
+                    frame => self.frame_handler.handle_received(frame),
                 }
             }
             Event::Request { payload, waiter_tx } => {
+                let sequence_id = self.sequencer.next();
                 let frame = LoquiFrame::Request(Request {
                     payload,
                     sequence_id,
                     // TODO
                     flags: 0,
                 });
-                self.event_handler.handle_sent(sequence_id, waiter_tx);
+                self.frame_handler.handle_sent(sequence_id, waiter_tx);
                 Ok(Some(frame))
             }
             Event::Push { payload } => {
