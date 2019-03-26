@@ -1,5 +1,6 @@
+use crate::error::LoquiError;
 use crate::error::LoquiErrorCode;
-use crate::ping::Ping as PingStream;
+use crate::ping::{Handle, Ping as PingStream};
 use failure::{err_msg, Error};
 use futures::oneshot;
 use futures::stream::SplitSink;
@@ -126,7 +127,6 @@ pub struct Connection {
     self_rx: UnboundedReceiver<Event>,
     self_sender: ConnectionSender,
     sequencer: Sequencer,
-    pong_received: bool,
 }
 
 impl Connection {
@@ -140,7 +140,6 @@ impl Connection {
                 tcp_stream,
                 sequencer: Sequencer::new(),
                 // TODO: these prob shouldn't be set??
-                pong_received: true,
             },
         )
     }
@@ -173,7 +172,12 @@ impl Connection {
         // TODO: handle disconnect
 
         let mut ping_stream = PingStream::new();
-        let ping_handle = ping_stream.handle();
+
+        let mut inner = Inner {
+            ping_handle: ping_stream.handle(),
+            pong_received: true,
+            event_handler,
+        };
 
         let mut stream = reader
             // TODO: we might want to separate out the ping channel so it doesn't get backed up
@@ -187,81 +191,14 @@ impl Connection {
             //dbg!(&event);
             match event {
                 Ok(event) => {
-                    match event {
-                        Event::Ready { ping_interval } => {
-                            // TODO: code cleanup
-                            let sequence_id = self.sequencer.next();
-                            ping_handle.start(ping_interval);
-                        }
-                        Event::Ping => {
-                            let sequence_id = self.sequencer.next();
-                            let frame = LoquiFrame::Ping(Ping {
-                                sequence_id,
-                                flags: 0,
-                            });
-                            writer = await!(writer.send(frame))?;
-                            if !self.pong_received {
-                                let frame = LoquiFrame::GoAway(GoAway {
-                                    flags: 0,
-                                    code: LoquiErrorCode::PingTimeout as u16,
-                                    payload: vec![],
-                                });
-                                // TODO
-                                writer = await!(writer.send(frame))?;
-                                // TODO
-                                return Ok(());
-                            }
-                            self.pong_received = false;
-                        }
-                        Event::SocketReceive(frame) => {
-                            match frame {
-                                LoquiFrame::Ping(ping) => {
-                                    let pong = Pong {
-                                        flags: ping.flags,
-                                        sequence_id: ping.sequence_id,
-                                    };
-                                    let frame = LoquiFrame::Pong(pong);
-                                    writer = await!(writer.send(frame))?;
-                                }
-                                LoquiFrame::Pong(pong) => {
-                                    self.pong_received = true;
-                                }
-                                LoquiFrame::GoAway(goaway) => {
-                                    // TODO
-                                    // TODO: also clean up the pinger
-                                    println!("Told to go away! {:?}", goaway);
-                                    // TODO
-                                    return Ok(());
-                                }
-                                frame => match event_handler.handle_received(frame) {
-                                    Ok(Some(frame)) => {
-                                        writer = await!(writer.send(frame))?;
-                                    }
-                                    Ok(None) => {}
-                                    Err(e) => {
-                                        return Err(Error::from(e));
-                                    }
-                                },
-                            }
-                        }
-                        Event::Request { payload, waiter_tx } => {
-                            let sequence_id = self.sequencer.next();
-                            let frame = LoquiFrame::Request(Request {
-                                payload,
-                                sequence_id,
-                                // TODO
-                                flags: 0,
-                            });
-                            writer = await!(writer.send(frame))?;
-                            event_handler.handle_sent(sequence_id, waiter_tx);
-                        }
-                        Event::Push { payload } => {
-                            let sequence_id = self.sequencer.next();
-                            let frame = LoquiFrame::Push(Push { payload, flags: 0 });
+                    let sequence_id = self.sequencer.next();
+                    match inner.handle_event(event, sequence_id) {
+                        Ok(Some(frame)) => {
                             writer = await!(writer.send(frame))?;
                         }
-                        Event::SendFrame(frame) => {
-                            writer = await!(writer.send(frame))?;
+                        Ok(None) => {}
+                        Err(e) => {
+                            dbg!(e);
                         }
                     }
                 }
@@ -271,5 +208,74 @@ impl Connection {
             }
         }
         Err(err_msg("Unreachable"))
+    }
+}
+
+pub struct Inner {
+    pub ping_handle: Handle,
+    pub pong_received: bool,
+    pub event_handler: Box<dyn EventHandler>,
+}
+
+impl Inner {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        sequence_id: u32,
+    ) -> Result<Option<LoquiFrame>, Error> {
+        match event {
+            Event::Ready { ping_interval } => {
+                self.ping_handle.start(ping_interval);
+                Ok(None)
+            }
+            Event::Ping => {
+                if self.pong_received {
+                    let frame = LoquiFrame::Ping(Ping {
+                        sequence_id,
+                        flags: 0,
+                    });
+                    self.pong_received = false;
+                    Ok(Some(frame))
+                } else {
+                    Err(LoquiError::PingTimeout.into())
+                }
+            }
+            Event::SocketReceive(frame) => {
+                match frame {
+                    LoquiFrame::Ping(ping) => {
+                        let pong = Pong {
+                            flags: ping.flags,
+                            sequence_id: ping.sequence_id,
+                        };
+                        Ok(Some(LoquiFrame::Pong(pong)))
+                    }
+                    LoquiFrame::Pong(pong) => {
+                        self.pong_received = true;
+                        Ok(None)
+                    }
+                    LoquiFrame::GoAway(goaway) => {
+                        println!("Told to go away! {:?}", goaway);
+                        // TODO: also clean up the pinger
+                        Err(LoquiError::GoAway.into())
+                    }
+                    frame => self.event_handler.handle_received(frame),
+                }
+            }
+            Event::Request { payload, waiter_tx } => {
+                let frame = LoquiFrame::Request(Request {
+                    payload,
+                    sequence_id,
+                    // TODO
+                    flags: 0,
+                });
+                self.event_handler.handle_sent(sequence_id, waiter_tx);
+                Ok(Some(frame))
+            }
+            Event::Push { payload } => {
+                let frame = LoquiFrame::Push(Push { payload, flags: 0 });
+                Ok(Some(frame))
+            }
+            Event::SendFrame(frame) => Ok(Some(frame)),
+        }
     }
 }

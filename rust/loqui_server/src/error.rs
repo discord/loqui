@@ -7,6 +7,11 @@ pub enum LoquiError {
     NotReady,
     #[fail(display = "Invalid frame. frame={:?}", frame)]
     InvalidFrame { frame: LoquiFrame },
+    #[fail(display = "Ping Timeout")]
+    PingTimeout,
+    // TODO: reason
+    #[fail(display = "Go Away")]
+    GoAway,
 }
 
 pub enum LoquiErrorCode {
