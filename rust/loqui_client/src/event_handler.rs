@@ -1,4 +1,4 @@
-use failure::Error;
+use failure::{err_msg, Error};
 use futures::sync::mpsc::UnboundedSender;
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
@@ -70,9 +70,21 @@ impl EventHandler for ClientEventHandler {
                 sequence_id,
                 payload,
             }) => {
-                let sender = self.waiters.remove(&sequence_id).unwrap();
-                sender.send(Ok(payload)).unwrap();
-                Ok(None)
+                match self.waiters.remove(&sequence_id) {
+                    Some(waiter_tx) => {
+                        waiter_tx
+                            .send(Ok(payload))
+                            .expect("Failed to send to waiter");
+                        Ok(None)
+                    }
+                    None => {
+                        // TODO: maybe should debug and move on?
+                        Err(err_msg(format!(
+                            "No waiter for sequence_id. sequence_id={:?}",
+                            sequence_id
+                        )))
+                    }
+                }
             }
             LoquiFrame::HelloAck(hello_ack) => {
                 // TODO: compression

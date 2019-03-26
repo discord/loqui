@@ -12,7 +12,7 @@ use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::{GoAway, Hello, Ping, Pong, Push, Request, Response};
 use std::future::Future;
 use std::time::{Duration, Instant};
-use tokio::await as tokio_await;
+use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
@@ -151,14 +151,19 @@ impl Connection {
     }
 
     pub fn spawn(mut self, event_handler: Box<dyn EventHandler + 'static>) {
-        tokio::spawn_async(self.run(event_handler));
+        tokio::spawn_async(
+            async move {
+                let result = await!(self.run(event_handler));
+                println!("Connection exit. result={:?}", result);
+            },
+        );
     }
 
     fn spawn_ping(ping_interval: Duration, connection_sender: ConnectionSender) {
         tokio::spawn_async(
             async move {
                 let mut stream = Interval::new(ping_interval);
-                while let Some(Ok(())) = tokio_await!(stream.next()) {
+                while let Some(Ok(())) = await!(stream.next()) {
                     if let Err(e) = connection_sender.ping() {
                         println!("Connection closed.");
                         return;
@@ -168,7 +173,10 @@ impl Connection {
         );
     }
 
-    async fn run(mut self, mut event_handler: Box<dyn EventHandler + 'static>) {
+    async fn run(
+        mut self,
+        mut event_handler: Box<dyn EventHandler + 'static>,
+    ) -> Result<(), Error> {
         self.tcp_stream = await!(Box::into_pin(event_handler.upgrade(self.tcp_stream)))
             .expect("Failed to upgrade");
         let framed_socket = Framed::new(self.tcp_stream, LoquiCodec::new(50000 * 1000));
@@ -194,17 +202,7 @@ impl Connection {
                                 sequence_id,
                                 flags: 0,
                             });
-                            match tokio_await!(writer.send(frame)) {
-                                Ok(new_writer) => {
-                                    writer = new_writer;
-                                }
-                                // TODO: better handle this error
-                                Err(e) => {
-                                    // TODO
-                                    dbg!(e);
-                                    return;
-                                }
-                            }
+                            writer = await!(writer.send(frame))?;
                             self.pong_received = false;
                             Connection::spawn_ping(
                                 Duration::from_millis(ping_interval as u64),
@@ -217,17 +215,7 @@ impl Connection {
                                 sequence_id,
                                 flags: 0,
                             });
-                            match tokio_await!(writer.send(frame)) {
-                                Ok(new_writer) => {
-                                    writer = new_writer;
-                                }
-                                // TODO: better handle this error
-                                Err(e) => {
-                                    // TODO
-                                    dbg!(e);
-                                    return;
-                                }
-                            }
+                            writer = await!(writer.send(frame))?;
                             if dbg!(!self.pong_received) {
                                 // TODO: tell them it's due to ping timeout
                                 let frame = LoquiFrame::GoAway(GoAway {
@@ -235,8 +223,10 @@ impl Connection {
                                     code: 0,
                                     payload: vec![],
                                 });
-                                tokio_await!(writer.send(frame)).ok();
-                                return;
+                                // TODO
+                                writer = await!(writer.send(frame))?;
+                                // TODO
+                                return Ok(());
                             }
                             self.pong_received = false;
                         }
@@ -248,17 +238,7 @@ impl Connection {
                                         sequence_id: ping.sequence_id,
                                     };
                                     let frame = LoquiFrame::Pong(pong);
-                                    match tokio_await!(writer.send(frame)) {
-                                        Ok(new_writer) => {
-                                            writer = new_writer;
-                                        }
-                                        // TODO: better handle this error
-                                        Err(e) => {
-                                            // TODO
-                                            dbg!(e);
-                                            return;
-                                        }
-                                    }
+                                    writer = await!(writer.send(frame))?;
                                 }
                                 LoquiFrame::Pong(pong) => {
                                     self.pong_received = true;
@@ -267,30 +247,18 @@ impl Connection {
                                     // TODO
                                     // TODO: also clean up the pinger
                                     println!("Told to go away! {:?}", goaway);
-                                    return;
+                                    // TODO
+                                    return Ok(());
                                 }
-                                frame => {
-                                    match event_handler.handle_received(frame) {
-                                        Ok(Some(frame)) => {
-                                            match tokio_await!(writer.send(frame)) {
-                                                Ok(new_writer) => {
-                                                    writer = new_writer;
-                                                }
-                                                // TODO: better handle this error
-                                                Err(e) => {
-                                                    // TODO
-                                                    dbg!(e);
-                                                    return;
-                                                }
-                                            }
-                                        }
-                                        Ok(None) => {}
-                                        Err(e) => {
-                                            dbg!(e);
-                                            return;
-                                        }
+                                frame => match event_handler.handle_received(frame) {
+                                    Ok(Some(frame)) => {
+                                        writer = await!(writer.send(frame))?;
                                     }
-                                }
+                                    Ok(None) => {}
+                                    Err(e) => {
+                                        return Err(Error::from(e));
+                                    }
+                                },
                             }
                         }
                         Event::Forward(forward_request) => {
@@ -303,46 +271,16 @@ impl Connection {
                                         // TODO
                                         flags: 0,
                                     });
-                                    match tokio_await!(writer.send(frame)) {
-                                        Ok(new_writer) => {
-                                            writer = new_writer;
-                                            event_handler.handle_sent(sequence_id, waiter_tx)
-                                        }
-                                        // TODO: better handle this error
-                                        Err(e) => {
-                                            // TODO
-                                            dbg!(e);
-                                            return;
-                                        }
-                                    }
+                                    writer = await!(writer.send(frame))?;
+                                    event_handler.handle_sent(sequence_id, waiter_tx);
                                 }
                                 Forward::Push { payload } => {
                                     let sequence_id = self.sequencer.next();
                                     let frame = LoquiFrame::Push(Push { payload, flags: 0 });
-                                    match tokio_await!(writer.send(frame)) {
-                                        Ok(new_writer) => {
-                                            writer = new_writer;
-                                        }
-                                        // TODO: better handle this error
-                                        Err(e) => {
-                                            // TODO
-                                            dbg!(e);
-                                            return;
-                                        }
-                                    }
+                                    writer = await!(writer.send(frame))?;
                                 }
                                 Forward::Frame(frame) => {
-                                    match tokio_await!(writer.send(frame)) {
-                                        Ok(new_writer) => {
-                                            writer = new_writer;
-                                        }
-                                        // TODO: better handle this error
-                                        Err(e) => {
-                                            // TODO
-                                            dbg!(e);
-                                            return;
-                                        }
-                                    }
+                                    writer = await!(writer.send(frame))?;
                                 }
                             }
                         }
@@ -353,6 +291,6 @@ impl Connection {
                 }
             }
         }
-        println!("connection closed");
+        Err(err_msg("Unreachable"))
     }
 }
