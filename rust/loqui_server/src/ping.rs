@@ -58,8 +58,10 @@ impl Stream for Ping {
                     let duration = Duration::from_millis(5000);
                     let stream = Interval::new(duration);
                     self.stream = Some(stream);
+                    Ok(Async::Ready(Some(Event::Ping)))
+                } else {
+                    Ok(Async::NotReady)
                 }
-                Ok(Async::NotReady)
             }
         }
     }

@@ -181,12 +181,14 @@ impl Connection {
                         Event::Ready { ping_interval } => {
                             // TODO: code cleanup
                             let sequence_id = self.sequencer.next();
+                            /*
                             let frame = LoquiFrame::Ping(Ping {
                                 sequence_id,
                                 flags: 0,
                             });
                             writer = await!(writer.send(frame))?;
                             self.pong_received = false;
+                            */
                             println!("setting ready");
                             ping_handle.start(ping_interval);
                         }
