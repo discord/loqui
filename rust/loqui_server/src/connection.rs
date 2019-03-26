@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::ping::Ping as PingStream;
 use failure::{err_msg, Error};
 use futures::oneshot;
@@ -12,6 +10,8 @@ use futures_timer::Interval;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
 use loqui_protocol::frames::{GoAway, Hello, Ping, Pong, Push, Request, Response};
 use std::future::Future;
+use std::io;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::await;
 use tokio::net::TcpStream;
@@ -147,8 +147,16 @@ impl Connection {
     pub fn spawn(self, event_handler: Box<dyn EventHandler + 'static>) {
         tokio::spawn_async(
             async move {
-                let result = await!(self.run(event_handler));
-                println!("Connection exit. result={:?}", result);
+                match await!(self.run(event_handler)) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        if let Some(e) = e.downcast_ref::<io::Error>() {
+                            println!("Connection closed. error_kind={:?}", e.kind())
+                        } else {
+                            println!("Connection closed. error={:?}", e)
+                        }
+                    }
+                }
             },
         );
     }
