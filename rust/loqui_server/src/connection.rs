@@ -216,7 +216,7 @@ impl Connection {
                                 flags: 0,
                             });
                             writer = await!(writer.send(frame))?;
-                            if dbg!(!self.pong_received) {
+                            if !self.pong_received {
                                 // TODO: tell them it's due to ping timeout
                                 let frame = LoquiFrame::GoAway(GoAway {
                                     flags: 0,
