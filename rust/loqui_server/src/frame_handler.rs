@@ -2,6 +2,7 @@ use super::connection::{ConnectionSender, FrameHandler, HandleEventResult};
 use super::error::LoquiError;
 use super::request_handler::RequestHandler;
 use super::RequestContext;
+use crate::error::LoquiErrorCode;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot::Sender as OneShotSender;
@@ -127,24 +128,27 @@ impl ServerFrameHandler {
     }
 
     fn handle_request(&mut self, request: Request) {
-        let Request {
-            payload,
-            flags,
-            sequence_id,
-        } = request;
-        let request_context = RequestContext {
-            payload,
-            flags,
-            // TODO:
-            encoding: "json".to_string(),
-        };
         let request_handler = self.request_handler.clone();
         let connection_sender = self.connection_sender.clone();
         tokio::spawn_async(
             async move {
-                let frame = match await!(Box::into_pin(
+                let Request {
+                    payload,
+                    flags,
+                    sequence_id,
+                } = request;
+
+                let request_context = RequestContext {
+                    payload,
+                    flags,
+                    // TODO: and make sure this is not cloning shit
+                    encoding: "json".to_string(),
+                };
+
+                let result = await!(Box::into_pin(
                     request_handler.handle_request(request_context)
-                )) {
+                ));
+                let frame = match result {
                     Ok(payload) => LoquiFrame::Response(Response {
                         flags,
                         sequence_id,
@@ -152,11 +156,11 @@ impl ServerFrameHandler {
                     }),
                     Err(e) => {
                         dbg!(e);
-                        // TODO:
                         LoquiFrame::Error(ErrorFrame {
                             flags,
                             sequence_id,
-                            code: 0,
+                            code: LoquiErrorCode::InternalServerError as u16,
+                            // TODO:
                             payload: vec![],
                         })
                     }
