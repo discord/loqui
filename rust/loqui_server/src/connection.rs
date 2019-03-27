@@ -146,7 +146,6 @@ impl ConnectionSender {
 pub struct Connection {
     tcp_stream: TcpStream,
     self_rx: UnboundedReceiver<Event>,
-    self_sender: ConnectionSender,
 }
 
 impl Connection {
@@ -155,7 +154,6 @@ impl Connection {
         (
             self_sender.clone(),
             Self {
-                self_sender,
                 self_rx,
                 tcp_stream,
                 // TODO: these prob shouldn't be set??
