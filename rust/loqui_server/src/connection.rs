@@ -10,7 +10,9 @@ use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot::{Receiver as OneShotReceiver, Sender as OneShotSender};
 use futures_timer::Interval;
 use loqui_protocol::codec::{LoquiCodec, LoquiFrame};
-use loqui_protocol::frames::{GoAway, Hello, Ping, Pong, Push, Request, Response};
+use loqui_protocol::frames::{
+    Error as ErrorFrame, GoAway, Hello, Ping, Pong, Push, Request, Response,
+};
 use std::future::Future;
 use std::io;
 use std::sync::Arc;
@@ -115,7 +117,30 @@ impl ConnectionSender {
             .map_err(Error::from)
     }
 
-    pub fn frame(&self, frame: LoquiFrame) -> Result<(), Error> {
+    pub fn response(&self, payload: Vec<u8>, sequence_id: u32, flags: u8) -> Result<(), Error> {
+        self.frame(LoquiFrame::Response(Response {
+            flags,
+            sequence_id,
+            payload,
+        }))
+    }
+
+    pub fn error(
+        &self,
+        sequence_id: u32,
+        code: u16,
+        flags: u8,
+        payload: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.frame(LoquiFrame::Error(ErrorFrame {
+            flags,
+            sequence_id,
+            code,
+            payload,
+        }))
+    }
+
+    fn frame(&self, frame: LoquiFrame) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::SendFrame(frame))
             .map_err(Error::from)

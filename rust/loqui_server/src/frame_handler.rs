@@ -148,24 +148,22 @@ impl ServerFrameHandler {
                 let result = await!(Box::into_pin(
                     request_handler.handle_request(request_context)
                 ));
-                let frame = match result {
-                    Ok(payload) => LoquiFrame::Response(Response {
-                        flags,
-                        sequence_id,
-                        payload,
-                    }),
+                match result {
+                    Ok(payload) => connection_sender
+                        .response(payload, sequence_id, flags)
+                        .expect("conn dead"),
                     Err(e) => {
                         dbg!(e);
-                        LoquiFrame::Error(ErrorFrame {
-                            flags,
-                            sequence_id,
-                            code: LoquiErrorCode::InternalServerError as u16,
-                            // TODO:
-                            payload: vec![],
-                        })
+                        connection_sender
+                            .error(
+                                sequence_id,
+                                LoquiErrorCode::InternalServerError as u16,
+                                flags,
+                                vec![],
+                            )
+                            .expect("conn dead");
                     }
-                };
-                connection_sender.frame(frame).expect("conn dead");
+                }
             },
         );
     }
