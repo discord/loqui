@@ -1,7 +1,7 @@
 use failure::{err_msg, Error};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_protocol::codec::LoquiFrame;
-use loqui_protocol::frames::{Request, Response};
+use loqui_protocol::frames::Response;
 use loqui_server::connection::ConnectionSender;
 use loqui_server::connection::{FrameHandler, HandleEventResult};
 use loqui_server::error::LoquiError;
@@ -111,12 +111,5 @@ impl FrameHandler for ClientFrameHandler {
 
     fn handle_sent(&mut self, sequence_id: u32, waiter_tx: OneShotSender<Result<Vec<u8>, Error>>) {
         self.waiters.insert(sequence_id, waiter_tx);
-    }
-
-    fn handle_request(
-        &self,
-        request: Request,
-    ) -> Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send> {
-        Box::new(async { Ok(vec![]) })
     }
 }
