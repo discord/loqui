@@ -99,10 +99,6 @@ impl ConnectionSender {
             .map_err(Error::from)
     }
 
-    fn ping(&self) -> Result<(), Error> {
-        self.tx.unbounded_send(Event::Ping).map_err(Error::from)
-    }
-
     pub fn hello(&self) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::SendFrame(LoquiFrame::Hello(Hello {
