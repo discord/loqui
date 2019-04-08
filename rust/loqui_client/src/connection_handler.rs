@@ -165,6 +165,7 @@ impl<E: Encoder> ClientConnectionHandler<E> {
             }
         }
     }
+
     fn handle_request(
         &mut self,
         payload: E::Encoded,

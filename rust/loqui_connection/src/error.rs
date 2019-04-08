@@ -15,9 +15,6 @@ pub enum LoquiError {
     ConnectionSupervisorDead,
     #[fail(display = "Connection not ready.")]
     NotReady,
-    // TODO: combine
-    #[fail(display = "Invalid frame. frame={:?}", frame)]
-    InvalidFrame { frame: LoquiFrame },
     #[fail(display = "Go away. go_away={:?}", go_away)]
     GoAway { go_away: GoAway },
     #[fail(display = "Told to go away. go_away={:?}", go_away)]

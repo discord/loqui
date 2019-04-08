@@ -18,6 +18,14 @@ pub struct Connection<C: ConnectionHandler> {
 }
 
 impl<C: ConnectionHandler> Connection<C> {
+    /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
+    /// the `Connection`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tcp_stream` - the tcp socket
+    /// * `connection_handler` - implements logic for the client or server specific things
+    /// * `ready_tx` - a sender used to notify that the connection is ready for requests
     pub fn spawn(
         tcp_stream: TcpStream,
         connection_handler: C,
@@ -29,13 +37,14 @@ impl<C: ConnectionHandler> Connection<C> {
         };
         tokio::spawn_async(
             async move {
-                if let Err(e) = await!(run(
+                let result = await!(run(
                     tcp_stream,
                     self_sender,
                     self_rx,
                     connection_handler,
                     ready_tx
-                )) {
+                ));
+                if let Err(e) = result {
                     error!("Connection closed. error={:?}", e)
                 }
             },
@@ -116,7 +125,6 @@ async fn run<C: ConnectionHandler>(
     let mut event_handler =
         EventHandler::new(self_sender, connection_handler, ready.transport_options);
     while let Some(event) = await!(stream.next()) {
-        // TODO: handle error
         let event = event?;
         if let Some(frame) = event_handler.handle_event(event)? {
             writer = await!(writer.write(frame))?;

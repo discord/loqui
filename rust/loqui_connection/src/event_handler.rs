@@ -12,7 +12,7 @@ pub struct EventHandler<C: ConnectionHandler> {
     connection_handler: C,
     pong_received: bool,
     id_sequence: IdSequence,
-    connection_sender: ConnectionSender<C::InternalEvent>,
+    self_sender: ConnectionSender<C::InternalEvent>,
     transport_options: TransportOptions,
 }
 
@@ -24,7 +24,7 @@ type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
 impl<C: ConnectionHandler> EventHandler<C> {
     pub fn new(
-        connection_sender: ConnectionSender<C::InternalEvent>,
+        self_sender: ConnectionSender<C::InternalEvent>,
         connection_handler: C,
         transport_options: TransportOptions,
     ) -> Self {
@@ -32,7 +32,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
             connection_handler,
             pong_received: true,
             id_sequence: IdSequence::new(),
-            connection_sender,
+            self_sender,
             transport_options,
         }
     }
@@ -104,7 +104,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
-            let connection_sender = self.connection_sender.clone();
+            let connection_sender = self.self_sender.clone();
             tokio::spawn_async(
                 async move {
                     let response = await!(future);
