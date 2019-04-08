@@ -1,4 +1,4 @@
-use failure::Fail;
+use failure::{Fail, Error};
 use loqui_protocol::frames::{GoAway, LoquiFrame};
 
 #[derive(Debug, Fail)]
@@ -22,7 +22,6 @@ pub enum LoquiError {
     GoAway { go_away: GoAway },
     #[fail(display = "Told to go away. go_away={:?}", go_away)]
     ToldToGoAway { go_away: GoAway },
-    // TODO
     #[fail(
         display = "Invalid Opcode. actual={:?} expected={:?}",
         actual, expected
@@ -33,26 +32,23 @@ pub enum LoquiError {
         expected, actual
     )]
     UnsupportedVersion { expected: u8, actual: u8 },
-    // TODO
-    #[fail(display = "")]
+    #[fail(display = "No common encoding.")]
     NoCommonEncoding,
-    #[fail(display = "")]
+    #[fail(display = "No common compression.")]
     NoCommonCompression,
-    // TODO
-    #[fail(display = "")]
+    #[fail(display = "Invalid encoding.")]
     InvalidEncoding,
-    // TODO
-    #[fail(display = "")]
+    #[fail(display = "Invalid compression.")]
     InvalidCompression,
-    // TODO
-    #[fail(display = "")]
+    #[fail(display = "Ping timeout.")]
     PingTimeout,
-    // TODO
-    #[fail(display = "")]
-    InternalServerError,
-    #[fail(display = "")]
+    #[fail(display = "Internal server error. error={:?}", error)]
+    InternalServerError {
+        error: Error,
+    },
+    #[fail(display = "Event receive error.")]
     EventReceiveError,
-    #[fail(display = "")]
+    #[fail(display = "Ready send failed.")]
     ReadySendFailed,
 }
 
