@@ -101,6 +101,7 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
                     handle_request(self.config.clone(), request, transport_options.encoding);
                 Some(response_future)
             }
+            DelegatedFrame::Error(_) => None,
             DelegatedFrame::Response(_) => None,
         }
     }

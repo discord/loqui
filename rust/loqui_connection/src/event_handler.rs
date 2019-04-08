@@ -75,7 +75,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
             LoquiFrame::Response(response) => self.delegate_frame(response),
             LoquiFrame::Push(push) => self.delegate_frame(push),
             LoquiFrame::GoAway(go_away) => Err(LoquiError::GoAway { go_away }.into()),
-            LoquiFrame::Error(error) => self.handle_error_frame(error),
+            LoquiFrame::Error(error) => self.delegate_frame(error),
         }
     }
 
@@ -86,13 +86,6 @@ impl<C: ConnectionHandler> EventHandler<C> {
             expected: None,
         }
         .into())
-    }
-
-    /// There was an error. Shutdown.
-    fn handle_error_frame(&mut self, error: ErrorFrame) -> MaybeFrameResult {
-        // TODO
-        println!("Error. error={:?}", error);
-        Ok(None)
     }
 
     /// Delegates a frame to the connection handler.

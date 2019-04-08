@@ -2,7 +2,7 @@ use crate::framed_io::FramedReaderWriter;
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
 use failure::Error;
-use loqui_protocol::frames::{LoquiFrame, Push, Request, Response};
+use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
 use std::future::Future;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -21,6 +21,7 @@ pub enum DelegatedFrame {
     Push(Push),
     Request(Request),
     Response(Response),
+    Error(ErrorFrame),
 }
 
 /// Settings negotiated from handshake.
@@ -67,7 +68,6 @@ pub trait ConnectionHandler: Send + Sync + 'static {
         id_sequence: &mut IdSequence,
         transport_options: &TransportOptions,
     ) -> Option<LoquiFrame>;
-    // TODO: handle_closed()
 }
 
 impl From<Push> for DelegatedFrame {
@@ -85,5 +85,11 @@ impl From<Request> for DelegatedFrame {
 impl From<Response> for DelegatedFrame {
     fn from(response: Response) -> DelegatedFrame {
         DelegatedFrame::Response(response)
+    }
+}
+
+impl From<ErrorFrame> for DelegatedFrame {
+    fn from(error: ErrorFrame) -> DelegatedFrame {
+        DelegatedFrame::Error(error)
     }
 }

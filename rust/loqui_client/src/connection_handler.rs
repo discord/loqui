@@ -1,12 +1,14 @@
 use crate::Config;
 use bytesize::ByteSize;
-use failure::Error;
+use failure::{err_msg, Error};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::{
     ConnectionHandler, DelegatedFrame, Encoder, FramedReaderWriter, IdSequence, LoquiError, Ready,
     TransportOptions,
 };
-use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
+use loqui_protocol::frames::{
+    Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
+};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
 use loqui_protocol::{is_compressed, make_flags};
@@ -109,6 +111,10 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
                 self.handle_response(response, transport_options);
                 None
             }
+            DelegatedFrame::Error(error) => {
+                self.handle_error(error);
+                None
+            }
             DelegatedFrame::Push(_) => None,
             // XXX: hack for existential types :ablobgrimace:
             //
@@ -206,6 +212,39 @@ impl<E: Encoder> ClientConnectionHandler<E> {
                 );
                 if let Err(_e) = waiter_tx.send(response) {
                     error!("Waiter is no longer listening.")
+                }
+            }
+            None => {
+                error!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+            }
+        }
+    }
+
+    fn handle_error(&mut self, error: ErrorFrame) {
+        let ErrorFrame {
+            sequence_id,
+            payload,
+            ..
+        } = error;
+        match self.waiters.remove(&sequence_id) {
+            Some(waiter_tx) => {
+                // payload is always a string
+                match String::from_utf8(payload) {
+                    Ok(reason) => {
+                        if let Err(_e) = waiter_tx.send(Err(LoquiError::InternalServerError {
+                            error: err_msg(reason),
+                        }
+                        .into()))
+                        {
+                            error!("Waiter is no longer listening.")
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "There was an error but we failed to parse it. parsing_error={:?}",
+                            e
+                        );
+                    }
                 }
             }
             None => {

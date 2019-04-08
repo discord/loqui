@@ -10,8 +10,7 @@ impl IdSequence {
 
     pub fn next(&mut self) -> u32 {
         let next = self.next;
-        // TODO; overflow
-        self.next += 1;
+        self.next = self.next.wrapping_add(self.next);
         next
     }
 }
