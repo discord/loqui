@@ -32,12 +32,12 @@ impl FramedWriter {
                 self.inner = new_inner;
                 Ok(self)
             }
-            Err(error) => Err(LoquiError::TcpStreamClosed.into()),
+            Err(_error) => Err(LoquiError::TcpStreamClosed.into()),
         }
     }
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
-    pub async fn close(mut self, reader: FramedReader, error: Option<Error>) {
+    pub async fn close(self, reader: FramedReader, error: Option<Error>) {
         let go_away = GoAway {
             flags: 0,
             code: go_away_code(error) as u16,
@@ -105,7 +105,7 @@ impl FramedReaderWriter {
                 self.writer = new_writer;
                 Ok(self)
             }
-            Err(error) => Err(LoquiError::TcpStreamClosed.into()),
+            Err(_error) => Err(LoquiError::TcpStreamClosed.into()),
         }
     }
 

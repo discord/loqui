@@ -1,4 +1,4 @@
-use crate::connection_handler::{ConnectionHandler, Ready};
+use crate::connection_handler::ConnectionHandler;
 use crate::event_handler::EventHandler;
 use crate::framed_io::FramedReaderWriter;
 use crate::sender::ConnectionSender;
@@ -9,7 +9,6 @@ use futures::sync::oneshot;
 use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
 use tokio::await;
-use tokio::codec::Framed;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
@@ -74,7 +73,7 @@ pub enum Event<T: Send + 'static> {
 /// * `connection_handler` - implements logic for the client or server specific things
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
 async fn run<C: ConnectionHandler>(
-    mut tcp_stream: TcpStream,
+    tcp_stream: TcpStream,
     self_sender: ConnectionSender<C::InternalEvent>,
     self_rx: UnboundedReceiver<Event<C::InternalEvent>>,
     mut connection_handler: C,
@@ -89,7 +88,7 @@ async fn run<C: ConnectionHandler>(
         Err((error, reader_writer)) => {
             debug!("Not ready. e={:?}", error);
             if let Some(reader_writer) = reader_writer {
-                let (reader, mut writer) = reader_writer.split();
+                let (reader, writer) = reader_writer.split();
                 await!(writer.close(reader, Some(error)));
             }
             // TODO:

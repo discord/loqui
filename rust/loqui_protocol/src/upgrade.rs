@@ -1,5 +1,5 @@
 use crate::errors::ProtocolError;
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use bytesize::ByteSize;
 use failure::Error;
 use tokio_codec::{Decoder, Encoder};

@@ -100,7 +100,6 @@ func randBytes(n int) []byte {
 func main() {
 	d := loqui.Dialer{
 		SupportedEncodings: []string{"msgpack"},
-		SupportedEncodings: []string{""},
 	}
 	client, err := d.Dial("http://127.0.0.1:8080/_rpc")
 	if err != nil {

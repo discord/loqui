@@ -1,5 +1,4 @@
 use crate::framed_io::FramedReaderWriter;
-use crate::framed_io::{FramedReader, FramedWriter};
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
 use failure::Error;

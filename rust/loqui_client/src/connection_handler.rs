@@ -1,7 +1,6 @@
 use crate::Config;
 use bytesize::ByteSize;
 use failure::Error;
-use futures::stream::{SplitSink, SplitStream};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::{
     ConnectionHandler, DelegatedFrame, Encoder, FramedReaderWriter, IdSequence, LoquiError, Ready,
@@ -20,9 +19,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
-
-const UPGRADE_REQUEST: &'static str =
-    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 #[derive(Debug)]
 pub enum InternalEvent<Encoded: Serialize + Send + Sync, Decoded: DeserializeOwned + Send + Sync> {
@@ -64,14 +60,14 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
         self.config.max_payload_size
     }
 
-    fn upgrade(&self, mut tcp_stream: TcpStream) -> Self::UpgradeFuture {
+    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture {
         let max_payload_size = self.max_payload_size();
         async move {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
             writer = match await!(writer.send(UpgradeFrame::Request)) {
                 Ok(writer) => writer,
-                Err(e) => return Err(LoquiError::TcpStreamClosed.into()),
+                Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
             };
             if let Some(result) = await!(reader.next()) {
                 match result {
