@@ -49,14 +49,16 @@ impl<C: ConnectionHandler> Supervisor<C> {
                             let (ready_tx, ready_rx) = oneshot::channel();
                             let connection =
                                 Connection::spawn(tcp_stream, connection_handler, Some(ready_tx));
-                            // TODO: this is probably because the tx was dropped.
+
+                            // Wait for the connection to upgrade and handshake.
                             if let Err(e) = await!(ready_rx) {
+                                // Connection dropped the sender.
                                 debug!("Ready failed.");
                                 await!(backoff.snooze());
                                 break;
                             }
 
-                            // TODO: does this exit with the connection task still running?
+                            // TODO: does this exit with the connection task still running? Probably since the connection has a sender to itself!
                             // TODO: handle Some(Err())
                             while let Some(Ok(internal_event)) = await!(sup_rx.next()) {
                                 if let Err(e) = connection.send_event(internal_event) {
