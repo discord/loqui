@@ -108,8 +108,8 @@ impl<C: ConnectionHandler> EventHandler<C> {
             tokio::spawn_async(
                 async move {
                     let response = await!(future);
-                    // TODO: handle this result
-                    let result = connection_sender.response_complete(response);
+                    // It's okay to ignore this result. The connection closed.
+                    let _result = connection_sender.response_complete(response);
                 },
             );
         }
@@ -137,7 +137,6 @@ impl<C: ConnectionHandler> EventHandler<C> {
                 let error = ErrorFrame {
                     flags: 0,
                     sequence_id,
-                    // TODO:
                     code: LoquiErrorCode::InternalServerError as u16,
                     payload: format!("{:?}", error.to_string()).as_bytes().to_vec(),
                 };

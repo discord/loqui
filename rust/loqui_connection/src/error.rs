@@ -1,5 +1,5 @@
 use failure::{Error, Fail};
-use loqui_protocol::frames::{GoAway, LoquiFrame};
+use loqui_protocol::frames::GoAway;
 
 #[derive(Debug, Fail)]
 pub enum LoquiError {

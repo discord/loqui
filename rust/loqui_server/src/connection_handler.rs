@@ -65,9 +65,8 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
     fn handshake(&mut self, mut reader_writer: FramedReaderWriter) -> Self::HandshakeFuture {
         let ping_interval = self.config.ping_interval.clone();
         async move {
-            // TODO: this error could be something for real?
-            if let Some(Ok(frame)) = await!(reader_writer.reader.next()) {
-                match Self::handle_handshake_frame(frame, ping_interval) {
+            match await!(reader_writer.reader.next()) {
+                Some(Ok(frame)) => match Self::handle_handshake_frame(frame, ping_interval) {
                     Ok((ready, hello_ack)) => {
                         reader_writer = match await!(reader_writer.write(hello_ack)) {
                             Ok(reader_writer) => reader_writer,
@@ -76,9 +75,9 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
                         Ok((ready, reader_writer))
                     }
                     Err(e) => Err((e.into(), Some(reader_writer))),
-                }
-            } else {
-                Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer)))
+                },
+                Some(Err(e)) => Err((e.into(), Some(reader_writer))),
+                None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
         }
     }
