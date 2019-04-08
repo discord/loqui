@@ -10,7 +10,7 @@ impl IdSequence {
 
     pub fn next(&mut self) -> u32 {
         let next = self.next;
-        self.next = self.next.wrapping_add(self.next);
+        self.next = self.next.wrapping_add(1);
         next
     }
 }
