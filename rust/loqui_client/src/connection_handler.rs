@@ -41,7 +41,6 @@ impl<E: Encoder> ClientConnectionHandler<E> {
         Self {
             // TODO: should probably sweep these, probably request timeout
             waiters: HashMap::new(),
-            // TODO:
             config,
         }
     }
@@ -69,17 +68,14 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
                 Ok(writer) => writer,
                 Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
             };
-            if let Some(result) = await!(reader.next()) {
-                match result {
-                    Ok(UpgradeFrame::Response) => Ok(writer.reunite(reader)?.into_inner()),
-                    Ok(UpgradeFrame::Request) => Err(LoquiError::UpgradeFailed.into()),
-                    Err(e) => {
-                        error!("Upgrade failed. error={:?}", e);
-                        Err(LoquiError::UpgradeFailed.into())
-                    }
+            match await!(reader.next()) {
+                Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
+                Some(Ok(UpgradeFrame::Request)) => Err(LoquiError::UpgradeFailed.into()),
+                Some(Err(e)) => {
+                    error!("Upgrade failed. error={:?}", e);
+                    Err(LoquiError::UpgradeFailed.into())
                 }
-            } else {
-                Err(LoquiError::UpgradeFailed.into())
+                None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }
     }
@@ -92,14 +88,13 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
                 Err(e) => return Err((e.into(), None)),
             };
 
-            // TODO: this error could be something for real?
-            if let Some(Ok(frame)) = await!(reader_writer.reader.next()) {
-                match Self::handle_handshake_frame(frame) {
+            match await!(reader_writer.reader.next()) {
+                Some(Ok(frame)) => match Self::handle_handshake_frame(frame) {
                     Ok(ready) => Ok((ready, reader_writer)),
                     Err(e) => Err((e.into(), Some(reader_writer))),
-                }
-            } else {
-                Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer)))
+                },
+                Some(Err(e)) => Err((e.into(), Some(reader_writer))),
+                None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
         }
     }
@@ -111,26 +106,7 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Response(response) => {
-                let Response {
-                    flags,
-                    sequence_id,
-                    payload,
-                } = response;
-                match self.waiters.remove(&sequence_id) {
-                    Some(waiter_tx) => {
-                        let response = self.config.encoder.decode(
-                            transport_options.encoding,
-                            is_compressed(&flags),
-                            payload,
-                        );
-                        if let Err(_e) = waiter_tx.send(response) {
-                            error!("Waiter is no longer listening.")
-                        }
-                    }
-                    None => {
-                        error!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
-                    }
-                }
+                self.handle_response(response, transport_options);
                 None
             }
             DelegatedFrame::Push(_) => None,
@@ -166,43 +142,77 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
         match event {
             InternalEvent::Request { payload, waiter_tx } => {
                 let sequence_id = id_sequence.next();
-                match self.config.encoder.encode(encoding, payload) {
-                    Ok((payload, compressed)) => {
-                        // Store the waiter so we can notify it when we get a response.
-                        self.waiters.insert(sequence_id, waiter_tx);
-                        let request = Request {
-                            payload,
-                            sequence_id,
-                            flags: make_flags(compressed),
-                        };
-                        Some(request.into())
-                    }
-                    Err(e) => {
-                        error!("Failed to encode payload. error={:?}", e);
-                        None
-                    }
-                }
+                self.handle_request(payload, encoding, sequence_id, waiter_tx)
             }
-            InternalEvent::Push { payload } => {
-                match self.config.encoder.encode(encoding, payload) {
-                    Ok((payload, compressed)) => {
-                        let push = Push {
-                            payload,
-                            flags: make_flags(compressed),
-                        };
-                        Some(push.into())
-                    }
-                    Err(e) => {
-                        error!("Failed to encode payload. error={:?}", e);
-                        None
-                    }
-                }
-            }
+            InternalEvent::Push { payload } => self.handle_push(payload, encoding),
         }
     }
 }
 
 impl<E: Encoder> ClientConnectionHandler<E> {
+    fn handle_push(&mut self, payload: E::Encoded, encoding: &'static str) -> Option<LoquiFrame> {
+        match self.config.encoder.encode(encoding, payload) {
+            Ok((payload, compressed)) => {
+                let push = Push {
+                    payload,
+                    flags: make_flags(compressed),
+                };
+                Some(push.into())
+            }
+            Err(e) => {
+                error!("Failed to encode payload. error={:?}", e);
+                None
+            }
+        }
+    }
+    fn handle_request(
+        &mut self,
+        payload: E::Encoded,
+        encoding: &'static str,
+        sequence_id: u32,
+        waiter_tx: OneShotSender<Result<E::Decoded, Error>>,
+    ) -> Option<LoquiFrame> {
+        match self.config.encoder.encode(encoding, payload) {
+            Ok((payload, compressed)) => {
+                // Store the waiter so we can notify it when we get a response.
+                self.waiters.insert(sequence_id, waiter_tx);
+                let request = Request {
+                    payload,
+                    sequence_id,
+                    flags: make_flags(compressed),
+                };
+                Some(request.into())
+            }
+            Err(e) => {
+                error!("Failed to encode payload. error={:?}", e);
+                None
+            }
+        }
+    }
+
+    fn handle_response(&mut self, response: Response, transport_options: &TransportOptions) {
+        let Response {
+            flags,
+            sequence_id,
+            payload,
+        } = response;
+        match self.waiters.remove(&sequence_id) {
+            Some(waiter_tx) => {
+                let response = self.config.encoder.decode(
+                    transport_options.encoding,
+                    is_compressed(&flags),
+                    payload,
+                );
+                if let Err(_e) = waiter_tx.send(response) {
+                    error!("Waiter is no longer listening.")
+                }
+            }
+            None => {
+                error!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+            }
+        }
+    }
+
     fn make_hello() -> Hello {
         Hello {
             flags: 0,
