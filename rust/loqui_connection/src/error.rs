@@ -1,4 +1,4 @@
-use failure::{Fail, Error};
+use failure::{Error, Fail};
 use loqui_protocol::frames::{GoAway, LoquiFrame};
 
 #[derive(Debug, Fail)]
@@ -43,9 +43,7 @@ pub enum LoquiError {
     #[fail(display = "Ping timeout.")]
     PingTimeout,
     #[fail(display = "Internal server error. error={:?}", error)]
-    InternalServerError {
-        error: Error,
-    },
+    InternalServerError { error: Error },
     #[fail(display = "Event receive error.")]
     EventReceiveError,
     #[fail(display = "Ready send failed.")]

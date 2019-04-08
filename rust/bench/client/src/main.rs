@@ -13,20 +13,20 @@ use std::time::{Duration, Instant};
 
 const ADDRESS: &'static str = "127.0.0.1:8080";
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct State {
-    request_count: Arc<AtomicUsize>,
-    failed_requests: Arc<AtomicUsize>,
-    in_flight: Arc<AtomicUsize>,
-    max_age: Arc<AtomicUsize>,
-    request_time: Arc<AtomicUsize>,
+    request_count: AtomicUsize,
+    failed_requests: AtomicUsize,
+    in_flight: AtomicUsize,
+    max_age: AtomicUsize,
+    request_time: AtomicUsize,
 }
 
 fn make_message() -> Vec<u8> {
     "hello world".as_bytes().to_vec()
 }
 
-async fn do_work(client: Client<BytesEncoder>, state: State) {
+async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
     let message = make_message();
     let start = Instant::now();
     state.in_flight.fetch_add(1, Ordering::SeqCst);
@@ -55,13 +55,13 @@ async fn do_work(client: Client<BytesEncoder>, state: State) {
     state.in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
-async fn work_loop(client: Client<BytesEncoder>, state: State) {
+async fn work_loop(client: Client<BytesEncoder>, state: Arc<State>) {
     loop {
         await!(do_work(client.clone(), state.clone()));
     }
 }
 
-fn log_loop(state: State) {
+fn log_loop(state: Arc<State>) {
     let mut last_request_count = 0;
     let mut last = Instant::now();
     loop {
@@ -96,7 +96,7 @@ impl Encoder for BytesEncoder {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
 
-    const ENCODINGS: &'static [&'static str] = &["string"];
+    const ENCODINGS: &'static [&'static str] = &["bytes"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn decode(
@@ -110,7 +110,7 @@ impl Encoder for BytesEncoder {
 
     fn encode(
         &self,
-        encoding: &'static str,
+        _encoding: &'static str,
         payload: Self::Encoded,
     ) -> Result<(Vec<u8>, bool), Error> {
         Ok((payload, false))
@@ -118,7 +118,7 @@ impl Encoder for BytesEncoder {
 }
 
 fn main() -> Result<(), Error> {
-    let state = State::default();
+    let state = Arc::new(State::default());
     let log_state = state.clone();
     fern::Dispatch::new()
         .format(|out, message, record| {

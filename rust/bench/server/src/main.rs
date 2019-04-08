@@ -4,17 +4,15 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_server::{Config, Encoder, RequestHandler, Server};
 use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 
-const SUPPORTED_ENCODINGS: &'static [&'static str] = &["json"];
 const ADDRESS: &'static str = "127.0.0.1:8080";
 
 struct EchoHandler {}
-#[derive(Clone)]
-struct StringEncoder {}
 
-impl RequestHandler<StringEncoder> for EchoHandler {
+struct BytesEncoder {}
+
+impl RequestHandler<BytesEncoder> for EchoHandler {
     existential type RequestFuture: Future<Output = String>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -27,11 +25,11 @@ impl RequestHandler<StringEncoder> for EchoHandler {
     }
 }
 
-impl Encoder for StringEncoder {
+impl Encoder for BytesEncoder {
     type Decoded = String;
     type Encoded = String;
 
-    const ENCODINGS: &'static [&'static str] = &["string"];
+    const ENCODINGS: &'static [&'static str] = &["bytes"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn decode(
@@ -59,7 +57,7 @@ fn main() {
                 request_handler: EchoHandler {},
                 max_payload_size: ByteSize::kb(5000),
                 ping_interval: Duration::from_secs(5),
-                encoder: StringEncoder {},
+                encoder: BytesEncoder {},
             };
             let server = Server::new(config);
             let result = await!(server.listen_and_serve(ADDRESS.to_string()));

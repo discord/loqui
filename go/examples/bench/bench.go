@@ -25,7 +25,6 @@ func doWork(client *loqui.Conn) {
 	v := state.values[rand.Intn(len(state.values))]
 	_, err := client.Request(v, false)
 	if err != nil {
-	  panic(fmt.Sprintf("err %v", err));
 		atomic.AddInt32(&state.failedRequests, 1)
 	} else {
 		atomic.AddInt32(&state.i, 1)
@@ -101,7 +100,7 @@ func randBytes(n int) []byte {
 func main() {
 	d := loqui.Dialer{
 		SupportedEncodings: []string{"msgpack"},
-		//SupportedEncodings: []string{""},
+		SupportedEncodings: []string{""},
 	}
 	client, err := d.Dial("http://127.0.0.1:8080/_rpc")
 	if err != nil {
