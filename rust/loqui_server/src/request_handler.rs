@@ -1,5 +1,4 @@
 use loqui_connection::Encoder;
-use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
 /// Trait implemented by servers for handling individual `Request`s and `Push`es.

@@ -2,21 +2,20 @@ use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::FramedReaderWriter;
-use loqui_connection::LoquiErrorCode;
 use loqui_connection::{
     ConnectionHandler, DelegatedFrame, Encoder, IdSequence, LoquiError, Ready, TransportOptions,
 };
-use loqui_protocol::errors::ProtocolError;
-use loqui_protocol::frames::{Frame, GoAway, Hello, HelloAck, LoquiFrame, Push, Request, Response};
+use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
+use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::Flags;
 use loqui_protocol::{is_compressed, VERSION};
-use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
+use tokio_codec::Framed;
 
 pub struct ServerConnectionHandler<R: RequestHandler<E>, E: Encoder> {
     config: Arc<Config<R, E>>,
@@ -41,22 +40,25 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
         self.config.max_payload_size
     }
 
-    fn upgrade(&self, mut tcp_stream: TcpStream) -> Self::UpgradeFuture {
-        async {
-            let mut payload = [0; 1024];
-            // TODO: handle disconnect, bytes_read=0
-            while let Ok(_bytes_read) = await!(tcp_stream.read_async(&mut payload)) {
-                let request = String::from_utf8(payload.to_vec())?;
-                // TODO: better
-                if request.contains(&"upgrade") || request.contains(&"Upgrade") {
-                    let response =
-                        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
-                    await!(tcp_stream.write_all_async(&response.as_bytes()[..]))?;
-                    await!(tcp_stream.flush_async())?;
-                    break;
+    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture {
+        let max_payload_size = self.max_payload_size();
+        async move {
+            let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
+            let (mut writer, mut reader) = framed_socket.split();
+
+            match await!(reader.next()) {
+                Some(Ok(UpgradeFrame::Request)) => {
+                    writer = match await!(writer.send(UpgradeFrame::Response)) {
+                        Ok(writer) => writer,
+                        Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
+                    };
+                    Ok(writer.reunite(reader)?.into_inner())
+                }
+                other => {
+                    error!("Read a bad result. result={:?}", other);
+                    Err(LoquiError::UpgradeFailed.into())
                 }
             }
-            Ok(tcp_stream)
         }
     }
 

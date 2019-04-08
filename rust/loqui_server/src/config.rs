@@ -1,7 +1,6 @@
 use super::request_handler::RequestHandler;
 use bytesize::ByteSize;
 use loqui_connection::Encoder;
-use std::sync::Arc;
 use std::time::Duration;
 
 pub struct Config<R: RequestHandler<E>, E: Encoder> {

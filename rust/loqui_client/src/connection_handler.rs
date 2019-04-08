@@ -1,12 +1,14 @@
 use crate::Config;
 use bytesize::ByteSize;
 use failure::Error;
+use futures::stream::{SplitSink, SplitStream};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::{
     ConnectionHandler, DelegatedFrame, Encoder, FramedReaderWriter, IdSequence, LoquiError, Ready,
     TransportOptions,
 };
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
+use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
 use loqui_protocol::{is_compressed, make_flags};
 use serde::{de::DeserializeOwned, Serialize};
@@ -17,6 +19,7 @@ use std::time::Duration;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
+use tokio_codec::Framed;
 
 const UPGRADE_REQUEST: &'static str =
     "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
@@ -62,22 +65,26 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
     }
 
     fn upgrade(&self, mut tcp_stream: TcpStream) -> Self::UpgradeFuture {
-        async {
-            await!(tcp_stream.write_all_async(&UPGRADE_REQUEST.as_bytes()))?;
-            await!(tcp_stream.flush_async())?;
-            let mut payload = [0; 1024];
-            // TODO: this is just wrong
-            // TODO: handle disconnect, bytes_read=0
-            while let Ok(_bytes_read) = await!(tcp_stream.read_async(&mut payload)) {
-                let response = String::from_utf8(payload.to_vec()).expect("Failed to make string");
-                // TODO: case insensitive
-                if response.contains(&"Upgrade") || response.contains(&"upgrade") {
-                    return Ok(tcp_stream);
-                } else {
-                    return Err(LoquiError::UpgradeFailed.into());
+        let max_payload_size = self.max_payload_size();
+        async move {
+            let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
+            let (mut writer, mut reader) = framed_socket.split();
+            writer = match await!(writer.send(UpgradeFrame::Request)) {
+                Ok(writer) => writer,
+                Err(e) => return Err(LoquiError::TcpStreamClosed.into()),
+            };
+            if let Some(result) = await!(reader.next()) {
+                match result {
+                    Ok(UpgradeFrame::Response) => Ok(writer.reunite(reader)?.into_inner()),
+                    Ok(UpgradeFrame::Request) => Err(LoquiError::UpgradeFailed.into()),
+                    Err(e) => {
+                        error!("Upgrade failed. error={:?}", e);
+                        Err(LoquiError::UpgradeFailed.into())
+                    }
                 }
+            } else {
+                Err(LoquiError::UpgradeFailed.into())
             }
-            Err(LoquiError::UpgradeFailed.into())
         }
     }
 
