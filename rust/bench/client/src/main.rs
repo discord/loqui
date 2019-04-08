@@ -98,7 +98,8 @@ impl Encoder for BytesEncoder {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
 
-    const ENCODINGS: &'static [&'static str] = &["bytes"];
+    // msgpack required to bench against go server
+    const ENCODINGS: &'static [&'static str] = &["bytes", "msgpack"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn decode(
