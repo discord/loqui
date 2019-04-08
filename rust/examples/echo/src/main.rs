@@ -4,15 +4,13 @@
 #[macro_use]
 extern crate log;
 
+use bytesize::ByteSize;
 use chrono;
 use failure::Error;
 use fern;
 use loqui_client::{Client, Config as ClientConfig};
-// TODO: where to export encoder?
-use bytesize::ByteSize;
 use loqui_server::{Config as ServerConfig, Encoder, RequestHandler, Server};
 use std::future::Future;
-use std::sync::Arc;
 use std::{thread, time::Duration};
 
 const CLIENT_ADDRESS: &'static str = "127.0.0.1:8080";
@@ -28,12 +26,12 @@ impl RequestHandler<StringEncoder> for EchoHandler {
     existential type PushFuture: Send + Future<Output = ()>;
 
     fn handle_request(&self, request: String) -> Self::RequestFuture {
-        debug!("Handling request: {:}", request);
+        debug!("Handling request: {}", request);
         async { request }
     }
 
     fn handle_push(&self, push: String) -> Self::PushFuture {
-        debug!("Handling push: {:}", push);
+        debug!("Handling push: {}", push);
         async {}
     }
 }
@@ -42,7 +40,7 @@ impl Encoder for StringEncoder {
     type Decoded = String;
     type Encoded = String;
 
-    const ENCODINGS: &'static [&'static str] = &["json"];
+    const ENCODINGS: &'static [&'static str] = &["string"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn decode(

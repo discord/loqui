@@ -8,7 +8,7 @@ use loqui_connection::{
 };
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::VERSION;
-use loqui_protocol::{is_compressed, make_flags, Flags};
+use loqui_protocol::{is_compressed, make_flags};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -18,18 +18,17 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-// TODO: get right values
 const UPGRADE_REQUEST: &'static str =
     "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
 
 #[derive(Debug)]
-pub enum InternalEvent<I: Serialize + Send + Sync, O: DeserializeOwned + Send + Sync> {
+pub enum InternalEvent<Encoded: Serialize + Send + Sync, Decoded: DeserializeOwned + Send + Sync> {
     Request {
-        payload: I,
-        waiter_tx: OneShotSender<Result<O, Error>>,
+        payload: Encoded,
+        waiter_tx: OneShotSender<Result<Decoded, Error>>,
     },
     Push {
-        payload: I,
+        payload: Encoded,
     },
 }
 

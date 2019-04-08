@@ -4,7 +4,8 @@ use bytesize::ByteSize;
 use chrono;
 use failure::Error;
 use fern;
-use log;
+#[macro_use]
+extern crate log;
 use loqui_client::{Client, Config, Encoder};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -79,7 +80,7 @@ fn log_loop(state: Arc<State>) {
         let failed_requests = state.failed_requests.load(Ordering::SeqCst);
         let in_flight = state.in_flight.load(Ordering::SeqCst);
         let max_age = state.max_age.load(Ordering::SeqCst);
-        println!(
+        info!(
             "{} total requests ({}/sec). last log {} sec ago. {} failed, {} in flight, {} µs max, {} µs avg response time",
             request_count, req_sec, elapsed, failed_requests, in_flight, max_age, avg_time
         );
@@ -92,6 +93,7 @@ fn log_loop(state: Arc<State>) {
 
 #[derive(Clone)]
 struct BytesEncoder {}
+
 impl Encoder for BytesEncoder {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
