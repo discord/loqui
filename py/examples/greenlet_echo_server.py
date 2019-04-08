@@ -18,5 +18,5 @@ class Server(LoquiServer):
         return
 
 if __name__ == '__main__':
-    s = Server(('localhost', 4001))
+    s = Server(('localhost', 8080))
     s.serve_forever()

@@ -4,5 +4,5 @@ patch_all()
 
 from loqui.client import LoquiClient
 
-client = LoquiClient(('localhost', 4001))
+client = LoquiClient(('localhost', 8080))
 run_client_bench(client, concurrency=100)

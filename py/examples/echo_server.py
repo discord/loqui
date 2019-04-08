@@ -39,6 +39,6 @@ class Server(LoquiServer):
 
 
 if __name__ == '__main__':
-    s = Server(('localhost', 4001))
+    s = Server(('localhost', 8080))
     gevent.spawn(log_loop)
     s.serve_forever()
