@@ -10,6 +10,7 @@ loqui_connection = { path = "../loqui_connection" }
 failure = "0.1.1"
 log = "0.4"
 futures = "0.1.25"
+futures-timer = "0.1"
 tokio = { version = "0.1.16", features = ["async-await-preview"] }
 tokio-codec = "0.1"
 tokio-io = { version = "0.1.12" }

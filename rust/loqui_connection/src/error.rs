@@ -42,6 +42,8 @@ pub enum LoquiError {
     EventReceiveError,
     #[fail(display = "Ready send failed.")]
     ReadySendFailed,
+    #[fail(display = "Request timeout.")]
+    RequestTimeout,
 }
 
 pub enum LoquiErrorCode {

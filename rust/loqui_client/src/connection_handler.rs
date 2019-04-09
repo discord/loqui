@@ -14,11 +14,32 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
+
+#[derive(Debug)]
+pub struct Waiter<Decoded: DeserializeOwned + Send + Sync> {
+    tx: OneShotSender<Result<Decoded, Error>>,
+    deadline: Instant,
+}
+
+impl<Decoded: DeserializeOwned + Send + Sync> Waiter<Decoded> {
+    pub fn new(tx: OneShotSender<Result<Decoded, Error>>, timeout: Duration) -> Self {
+        Self {
+            tx,
+            deadline: Instant::now() + timeout,
+        }
+    }
+
+    fn notify(self, result: Result<Decoded, Error>) {
+        if let Err(_e) = self.tx.send(result) {
+            warn!("Waiter is no longer listening.")
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum InternalEvent<Encoded, Decoded>
@@ -28,7 +49,7 @@ where
 {
     Request {
         payload: Encoded,
-        waiter_tx: OneShotSender<Result<Decoded, Error>>,
+        waiter: Waiter<Decoded>,
     },
     Push {
         payload: Encoded,
@@ -36,7 +57,7 @@ where
 }
 
 pub struct ConnectionHandler<E: Encoder> {
-    waiters: HashMap<u32, OneShotSender<Result<E::Decoded, Error>>>,
+    waiters: HashMap<u32, Waiter<E::Decoded>>,
     config: Arc<Config<E>>,
 }
 
@@ -140,9 +161,9 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
         let TransportOptions { encoding, .. } = transport_options;
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
-            InternalEvent::Request { payload, waiter_tx } => {
+            InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, encoding, sequence_id, waiter_tx)
+                self.handle_request(payload, encoding, sequence_id, waiter)
             }
             InternalEvent::Push { payload } => self.handle_push(payload, encoding),
         }
@@ -171,12 +192,18 @@ impl<E: Encoder> ConnectionHandler<E> {
         payload: E::Encoded,
         encoding: &'static str,
         sequence_id: u32,
-        waiter_tx: OneShotSender<Result<E::Decoded, Error>>,
+        waiter: Waiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
+        use std::thread;
+        if waiter.deadline < Instant::now() {
+            debug!("Timeout.");
+            return None;
+        }
+
         match self.config.encoder.encode(encoding, payload) {
             Ok((payload, compressed)) => {
                 // Store the waiter so we can notify it when we get a response.
-                self.waiters.insert(sequence_id, waiter_tx);
+                self.waiters.insert(sequence_id, waiter);
                 let request = Request {
                     payload,
                     sequence_id,
@@ -185,7 +212,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 Some(request.into())
             }
             Err(error) => {
-                notify_waiter(waiter_tx, Err(error.into()));
+                waiter.notify(Err(error.into()));
                 None
             }
         }
@@ -198,13 +225,13 @@ impl<E: Encoder> ConnectionHandler<E> {
             payload,
         } = response;
         match self.waiters.remove(&sequence_id) {
-            Some(waiter_tx) => {
+            Some(waiter) => {
                 let response = self.config.encoder.decode(
                     transport_options.encoding,
                     is_compressed(flags),
                     payload,
                 );
-                notify_waiter(waiter_tx, response);
+                waiter.notify(response);
             }
             None => {
                 warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -219,12 +246,12 @@ impl<E: Encoder> ConnectionHandler<E> {
             ..
         } = error;
         match self.waiters.remove(&sequence_id) {
-            Some(waiter_tx) => {
+            Some(waiter) => {
                 // payload is always a string
                 let result = String::from_utf8(payload)
                     .map_err(Error::from)
                     .and_then(|reason| Err(err_msg(reason)));
-                notify_waiter(waiter_tx, result);
+                waiter.notify(result);
             }
             None => {
                 warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -283,14 +310,5 @@ impl<E: Encoder> ConnectionHandler<E> {
             ping_interval,
             transport_options,
         })
-    }
-}
-
-fn notify_waiter<Decoded: DeserializeOwned + Send + Sync>(
-    waiter_tx: OneShotSender<Result<Decoded, Error>>,
-    result: Result<Decoded, Error>,
-) {
-    if let Err(_e) = waiter_tx.send(result) {
-        warn!("Waiter is no longer listening.")
     }
 }
