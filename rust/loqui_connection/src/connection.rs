@@ -1,7 +1,7 @@
 use crate::event_handler::EventHandler;
 use crate::framed_io::FramedReaderWriter;
 use crate::handler::Handler;
-use crate::sender::ConnectionSender;
+use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
 use futures::sync::mpsc::UnboundedReceiver;
@@ -14,7 +14,7 @@ use tokio::prelude::*;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
-    self_sender: ConnectionSender<H::InternalEvent>,
+    self_sender: Sender<H::InternalEvent>,
 }
 
 impl<H: Handler> Connection<H> {
@@ -27,7 +27,7 @@ impl<H: Handler> Connection<H> {
     /// * `handler` - implements logic for the client or server specific things
     /// * `ready_tx` - a sender used to notify that the connection is ready for requests
     pub fn spawn(tcp_stream: TcpStream, handler: H, ready_tx: Option<oneshot::Sender<()>>) -> Self {
-        let (self_sender, self_rx) = ConnectionSender::new();
+        let (self_sender, self_rx) = Sender::new();
         let connection = Self {
             self_sender: self_sender.clone(),
         };
@@ -42,7 +42,7 @@ impl<H: Handler> Connection<H> {
         connection
     }
 
-    pub fn send_event(&self, event: H::InternalEvent) -> Result<(), Error> {
+    pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
         self.self_sender.internal(event)
     }
 }
@@ -73,7 +73,7 @@ pub enum Event<InternalEvent: Send + 'static> {
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
 async fn run<H: Handler>(
     tcp_stream: TcpStream,
-    self_sender: ConnectionSender<H::InternalEvent>,
+    self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
     mut handler: H,
     ready_tx: Option<oneshot::Sender<()>>,

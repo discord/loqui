@@ -5,17 +5,17 @@ use futures::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use loqui_protocol::frames::Response;
 
 #[derive(Debug)]
-pub struct ConnectionSender<T: Send + 'static> {
+pub struct Sender<T: Send + 'static> {
     tx: UnboundedSender<Event<T>>,
 }
 
-impl<T: Send + 'static> ConnectionSender<T> {
+impl<T: Send + 'static> Sender<T> {
     pub(crate) fn new() -> (Self, UnboundedReceiver<Event<T>>) {
         let (tx, rx) = mpsc::unbounded();
         (Self { tx }, rx)
     }
 
-    pub fn internal(&self, event: T) -> Result<(), Error> {
+    pub(crate) fn internal(&self, event: T) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::InternalEvent(event))
             .map_err(|_e| LoquiError::TcpStreamClosed.into())
@@ -31,8 +31,8 @@ impl<T: Send + 'static> ConnectionSender<T> {
     }
 }
 
-impl<T: Send> Clone for ConnectionSender<T> {
-    fn clone(&self) -> ConnectionSender<T> {
+impl<T: Send> Clone for Sender<T> {
+    fn clone(&self) -> Sender<T> {
         Self {
             tx: self.tx.clone(),
         }

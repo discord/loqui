@@ -58,7 +58,7 @@ impl<H: Handler> Supervisor<H> {
                             // TODO: does this exit with the connection task still running? Probably since the connection has a sender to itself!
                             // TODO: handle Some(Err())
                             while let Some(Ok(internal_event)) = await!(sup_rx.next()) {
-                                if let Err(e) = connection.send_event(internal_event) {
+                                if let Err(e) = connection.send(internal_event) {
                                     debug!("Connection no longer running. error={:?}", e);
                                     await!(backoff.snooze());
                                     break;

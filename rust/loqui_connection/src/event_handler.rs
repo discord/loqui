@@ -2,7 +2,7 @@ use super::connection::Event;
 use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler, TransportOptions};
 use super::id_sequence::IdSequence;
-use super::sender::ConnectionSender;
+use super::sender::Sender;
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
@@ -12,7 +12,7 @@ pub struct EventHandler<H: Handler> {
     handler: H,
     pong_received: bool,
     id_sequence: IdSequence,
-    self_sender: ConnectionSender<H::InternalEvent>,
+    self_sender: Sender<H::InternalEvent>,
     transport_options: TransportOptions,
 }
 
@@ -24,7 +24,7 @@ type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
 impl<H: Handler> EventHandler<H> {
     pub fn new(
-        self_sender: ConnectionSender<H::InternalEvent>,
+        self_sender: Sender<H::InternalEvent>,
         handler: H,
         transport_options: TransportOptions,
     ) -> Self {
