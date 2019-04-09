@@ -79,7 +79,7 @@ impl<H: Handler> EventHandler<H> {
             LoquiFrame::Request(request) => self.delegate_frame(request),
             LoquiFrame::Response(response) => self.delegate_frame(response),
             LoquiFrame::Push(push) => self.delegate_frame(push),
-            LoquiFrame::GoAway(go_away) => Err(LoquiError::GoAway { go_away }.into()),
+            LoquiFrame::GoAway(go_away) => Err(LoquiError::ToldToGoAway { go_away }.into()),
             LoquiFrame::Error(error) => self.delegate_frame(error),
         }
     }

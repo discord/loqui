@@ -14,8 +14,6 @@ pub enum LoquiError {
     InvalidUpgradeFrame { frame: UpgradeFrame },
     #[fail(display = "Connection not ready.")]
     NotReady,
-    #[fail(display = "Go away. go_away={:?}", go_away)]
-    GoAway { go_away: GoAway },
     #[fail(display = "Told to go away. go_away={:?}", go_away)]
     ToldToGoAway { go_away: GoAway },
     #[fail(

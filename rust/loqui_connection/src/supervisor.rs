@@ -67,6 +67,7 @@ impl<H: Handler> Supervisor<H> {
                             if let Some(ready_tx) = ready_tx.take() {
                                 if let Err(e) = ready_tx.send(()) {
                                     warn!("No one listening for ready anymore. error={:?}", e);
+                                    return;
                                 }
                             }
 
