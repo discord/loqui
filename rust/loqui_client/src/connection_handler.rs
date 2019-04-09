@@ -201,11 +201,11 @@ impl<E: Encoder> ConnectionHandler<E> {
                     payload,
                 );
                 if let Err(_e) = waiter_tx.send(response) {
-                    error!("Waiter is no longer listening.")
+                    warn!("Waiter is no longer listening.")
                 }
             }
             None => {
-                error!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+                warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
             }
         }
     }
@@ -219,26 +219,15 @@ impl<E: Encoder> ConnectionHandler<E> {
         match self.waiters.remove(&sequence_id) {
             Some(waiter_tx) => {
                 // payload is always a string
-                match String::from_utf8(payload) {
-                    Ok(reason) => {
-                        if let Err(_e) = waiter_tx.send(Err(LoquiError::InternalServerError {
-                            error: err_msg(reason),
-                        }
-                        .into()))
-                        {
-                            error!("Waiter is no longer listening.")
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                            "There was an error but we failed to parse it. parsing_error={:?}",
-                            e
-                        );
-                    }
+                let result = String::from_utf8(payload)
+                    .map_err(Error::from)
+                    .and_then(|reason| Err(err_msg(reason)));
+                if let Err(_e) = waiter_tx.send(result) {
+                    warn!("Waiter is no longer listening.")
                 }
             }
             None => {
-                error!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+                warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
             }
         }
     }
