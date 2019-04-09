@@ -113,15 +113,8 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
                 self.handle_error(error);
                 None
             }
-            DelegatedFrame::Push(_) => None,
-            // XXX: hack for existential types :ablobgrimace:
-            //
-            // The type system needs a concrete impl Future, otherwise it can't infer the `T` of
-            // `Option<T>`. Using None::<Self::HandleFrameFuture> results in a cycle.
-            //
-            // This code path should never be hit if the server implements loqui properly.
-            DelegatedFrame::Request(_) => Some(
-                async {
+            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(
+                async move {
                     Err((
                         LoquiError::InvalidOpcode {
                             actual: Request::OPCODE,
