@@ -23,9 +23,9 @@ pub enum UpgradeFrame {
     Response,
 }
 
-const REQUEST: &'static str =
+const REQUEST: &str =
     "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
-const RESPONSE: &'static str =
+const RESPONSE: &str =
     "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
 
 impl Encoder for Codec {

@@ -31,7 +31,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
         Self {
             connection_handler,
             pong_received: true,
-            id_sequence: IdSequence::new(),
+            id_sequence: IdSequence::default(),
             self_sender,
             transport_options,
         }

@@ -32,7 +32,7 @@ impl FramedWriter {
                 self.inner = new_inner;
                 Ok(self)
             }
-            Err(_error) => Err(LoquiError::TcpStreamClosed.into()),
+            Err(_error) => Err(LoquiError::TcpStreamClosed),
         }
     }
 
@@ -105,7 +105,7 @@ impl FramedReaderWriter {
                 self.writer = new_writer;
                 Ok(self)
             }
-            Err(_error) => Err(LoquiError::TcpStreamClosed.into()),
+            Err(_error) => Err(LoquiError::TcpStreamClosed),
         }
     }
 

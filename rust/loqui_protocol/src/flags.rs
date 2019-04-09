@@ -1,9 +1,9 @@
 pub enum Flags {
     None = 0,
-    Compressed = 1 << 0,
+    Compressed = 1,
 }
 
-pub fn is_compressed(flags: &u8) -> bool {
+pub fn is_compressed(flags: u8) -> bool {
     let as_u8 = Flags::Compressed as u8;
     flags & as_u8 == as_u8
 }

@@ -63,7 +63,7 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
     }
 
     fn handshake(&mut self, mut reader_writer: FramedReaderWriter) -> Self::HandshakeFuture {
-        let ping_interval = self.config.ping_interval.clone();
+        let ping_interval = self.config.ping_interval;
         async move {
             match await!(reader_writer.reader.next()) {
                 Some(Ok(frame)) => match Self::handle_handshake_frame(frame, ping_interval) {
@@ -74,9 +74,9 @@ impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHan
                         };
                         Ok((ready, reader_writer))
                     }
-                    Err(e) => Err((e.into(), Some(reader_writer))),
+                    Err(e) => Err((e, Some(reader_writer))),
                 },
-                Some(Err(e)) => Err((e.into(), Some(reader_writer))),
+                Some(Err(e)) => Err((e, Some(reader_writer))),
                 None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
         }
@@ -124,7 +124,7 @@ async fn handle_push<E: Encoder, R: RequestHandler<E>>(
     let Push { payload, flags } = push;
     match config
         .encoder
-        .decode(encoding, is_compressed(&flags), payload)
+        .decode(encoding, is_compressed(flags), payload)
     {
         Ok(request) => {
             config.request_handler.handle_push(request);
@@ -147,7 +147,7 @@ async fn handle_request<E: Encoder, R: RequestHandler<E>>(
     } = request;
     let request = config
         .encoder
-        .decode(encoding, is_compressed(&flags), payload)
+        .decode(encoding, is_compressed(flags), payload)
         .map_err(|e| (e, sequence_id))?;
 
     let response = await!(config.request_handler.handle_request(request));
@@ -207,7 +207,7 @@ impl<E: Encoder, R: RequestHandler<E>> ServerConnectionHandler<R, E> {
             flags,
             ping_interval_ms: ping_interval.as_millis() as u32,
             encoding: encoding.to_string(),
-            compression: compression.map(|compression| compression.to_string()),
+            compression: compression.map(String::from),
         };
         let ready = Ready {
             ping_interval,
@@ -219,7 +219,7 @@ impl<E: Encoder, R: RequestHandler<E>> ServerConnectionHandler<R, E> {
         Ok((ready, hello_ack))
     }
 
-    fn negotiate_encoding(client_encodings: &Vec<String>) -> Result<&'static str, Error> {
+    fn negotiate_encoding(client_encodings: &[String]) -> Result<&'static str, Error> {
         for client_encoding in client_encodings {
             if let Some(encoding) = E::find_encoding(client_encoding) {
                 return Ok(encoding);
@@ -229,9 +229,9 @@ impl<E: Encoder, R: RequestHandler<E>> ServerConnectionHandler<R, E> {
     }
 
     fn negotiate_compression(
-        client_compressions: &Vec<String>,
+        client_compressions: &[String],
     ) -> Result<Option<&'static str>, Error> {
-        if client_compressions.len() == 0 {
+        if client_compressions.is_empty() {
             return Ok(None);
         }
 

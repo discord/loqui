@@ -93,9 +93,9 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
             match await!(reader_writer.reader.next()) {
                 Some(Ok(frame)) => match Self::handle_handshake_frame(frame) {
                     Ok(ready) => Ok((ready, reader_writer)),
-                    Err(e) => Err((e.into(), Some(reader_writer))),
+                    Err(e) => Err((e, Some(reader_writer))),
                 },
-                Some(Err(e)) => Err((e.into(), Some(reader_writer))),
+                Some(Err(e)) => Err((e, Some(reader_writer))),
                 None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
         }
@@ -207,7 +207,7 @@ impl<E: Encoder> ClientConnectionHandler<E> {
             Some(waiter_tx) => {
                 let response = self.config.encoder.decode(
                     transport_options.encoding,
-                    is_compressed(&flags),
+                    is_compressed(flags),
                     payload,
                 );
                 if let Err(_e) = waiter_tx.send(response) {

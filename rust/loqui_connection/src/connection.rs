@@ -117,7 +117,7 @@ async fn run<C: ConnectionHandler>(
     let ping_stream = Interval::new(ready.ping_interval)
         .map(|()| Event::Ping)
         .map_err(Error::from);
-    let framed_reader = reader.map(|frame| Event::SocketReceive(frame));
+    let framed_reader = reader.map(Event::SocketReceive);
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
     let mut stream = framed_reader.select(self_rx).select(ping_stream);

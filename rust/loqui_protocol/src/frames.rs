@@ -94,7 +94,7 @@ impl Frame for Hello {
         let payload = ::std::str::from_utf8(&buf[7..])
             .map_err(|_| ProtocolError::InvalidPayload("Failed to decode as string".into()))?;
 
-        let settings: Vec<&str> = payload.split("|").collect();
+        let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {
             return Err(ProtocolError::InvalidPayload(
                 "Expected exactly two settings.".into(),
@@ -102,13 +102,13 @@ impl Frame for Hello {
         }
 
         let encodings = settings[0]
-            .split_terminator(",")
-            .map(|s| String::from(s))
+            .split_terminator(',')
+            .map(String::from)
             .collect::<Vec<String>>();
 
         let compressions = settings[1]
-            .split_terminator(",")
-            .map(|s| String::from(s))
+            .split_terminator(',')
+            .map(String::from)
             .collect::<Vec<String>>();
 
         Ok(Some(Self {
@@ -166,7 +166,7 @@ impl Frame for HelloAck {
         let payload = ::std::str::from_utf8(&buf[10..])
             .map_err(|_| ProtocolError::InvalidPayload("Failed to decode as string".into()))?;
 
-        let settings: Vec<&str> = payload.split("|").collect();
+        let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {
             return Err(ProtocolError::InvalidPayload(
                 "Expected exactly two settings.".into(),
