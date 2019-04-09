@@ -55,10 +55,9 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
                     };
                     Ok(writer.reunite(reader)?.into_inner())
                 }
-                other => {
-                    error!("Read a bad result. result={:?}", other);
-                    Err(LoquiError::UpgradeFailed.into())
-                }
+                Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
+                Some(Err(e)) => Err(e.into()),
+                None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }
     }

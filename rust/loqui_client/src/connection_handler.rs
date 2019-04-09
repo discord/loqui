@@ -72,11 +72,8 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
             };
             match await!(reader.next()) {
                 Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
-                Some(Ok(UpgradeFrame::Request)) => Err(LoquiError::UpgradeFailed.into()),
-                Some(Err(e)) => {
-                    error!("Upgrade failed. error={:?}", e);
-                    Err(LoquiError::UpgradeFailed.into())
-                }
+                Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
+                Some(Err(e)) => Err(e.into()),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }

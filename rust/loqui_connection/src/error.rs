@@ -1,5 +1,6 @@
 use failure::{Error, Fail};
 use loqui_protocol::frames::GoAway;
+use loqui_protocol::upgrade::UpgradeFrame;
 
 #[derive(Debug, Fail)]
 pub enum LoquiError {
@@ -9,8 +10,8 @@ pub enum LoquiError {
     ConnectionCloseRequested,
     #[fail(display = "Connection closed.")]
     ConnectionClosed,
-    #[fail(display = "Upgrade failed.")]
-    UpgradeFailed,
+    #[fail(display = "Invalid upgrade frame. frame={:?}", frame)]
+    InvalidUpgradeFrame { frame: UpgradeFrame },
     #[fail(display = "Connection not ready.")]
     NotReady,
     #[fail(display = "Go away. go_away={:?}", go_away)]
