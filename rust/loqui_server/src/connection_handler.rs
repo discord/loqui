@@ -114,6 +114,8 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     ) -> Option<LoquiFrame> {
         None
     }
+
+    fn handle_ping(&mut self) {}
 }
 
 async fn handle_push<E: Encoder, R: RequestHandler<E>>(

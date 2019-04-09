@@ -114,11 +114,12 @@ impl<H: Handler> EventHandler<H> {
         Ok(None)
     }
 
-    fn handle_ping_frame(&self, ping: Ping) -> MaybeFrameResult {
+    fn handle_ping_frame(&mut self, ping: Ping) -> MaybeFrameResult {
         let pong = Pong {
             flags: ping.flags,
             sequence_id: ping.sequence_id,
         };
+        self.handler.handle_ping();
         Ok(Some(pong.into()))
     }
 

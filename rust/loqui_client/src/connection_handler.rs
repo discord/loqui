@@ -64,7 +64,6 @@ pub struct ConnectionHandler<E: Encoder> {
 impl<E: Encoder> ConnectionHandler<E> {
     pub fn new(config: Arc<Config<E>>) -> Self {
         Self {
-            // TODO: should probably sweep these, probably request timeout
             waiters: HashMap::new(),
             config,
         }
@@ -168,6 +167,12 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
             InternalEvent::Push { payload } => self.handle_push(payload, encoding),
         }
     }
+
+    fn handle_ping(&mut self) {
+        // Use to sweep dead waiters.
+        self.waiters
+            .retain(|_sequence_id, waiter| waiter.deadline > Instant::now());
+    }
 }
 
 impl<E: Encoder> ConnectionHandler<E> {
@@ -194,7 +199,6 @@ impl<E: Encoder> ConnectionHandler<E> {
         sequence_id: u32,
         waiter: Waiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
-        use std::thread;
         if waiter.deadline < Instant::now() {
             debug!("Timeout.");
             return None;
