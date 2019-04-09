@@ -18,11 +18,15 @@ pub type FramedReader = SplitStream<Framed<TcpStream, Codec>>;
 /// Used to write frames to the tcp socket.
 pub struct FramedWriter {
     inner: SplitSink<Framed<TcpStream, Codec>>,
+    send_go_away: bool,
 }
 
 impl FramedWriter {
-    pub fn new(writer: SplitSink<Framed<TcpStream, Codec>>) -> Self {
-        Self { inner: writer }
+    pub fn new(writer: SplitSink<Framed<TcpStream, Codec>>, send_go_away: bool) -> Self {
+        Self {
+            inner: writer,
+            send_go_away,
+        }
     }
 
     /// Tries to write a `LoquiFrame` to the socket. Returns an error if the socket has closed.
@@ -38,25 +42,26 @@ impl FramedWriter {
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
     pub async fn close(self, error: Option<Error>) {
-        if let Some(go_away_code) = go_away_code(&error) {
-            let go_away = GoAway {
-                flags: 0,
-                code: go_away_code as u16,
-                payload: vec![],
-            };
-            debug!("Closing. Sending GoAway. go_away={:?}", go_away);
-            if let Err(error) = await!(self.write(go_away)) {
-                error!("Error when writing close frame. error={:?}", error);
-            }
-        } else {
-            debug!("Closing. Not sending GoAway. error={:?}", error)
+        if !self.send_go_away {
+            debug!("Closing. Not sending GoAway. error={:?}", error);
+            return;
+        }
+
+        let go_away = GoAway {
+            flags: 0,
+            code: go_away_code(&error) as u16,
+            payload: vec![],
+        };
+        debug!("Closing. Sending GoAway. go_away={:?}", go_away);
+        if let Err(error) = await!(self.write(go_away)) {
+            error!("Error when writing close frame. error={:?}", error);
         }
     }
 }
 
-fn go_away_code(error: &Option<Error>) -> Option<LoquiErrorCode> {
+fn go_away_code(error: &Option<Error>) -> LoquiErrorCode {
     match error {
-        None => Some(LoquiErrorCode::Normal),
+        None => LoquiErrorCode::Normal,
         Some(error) => {
             if let Some(protocol_error) = error.downcast_ref::<ProtocolError>() {
                 let error_code = match protocol_error {
@@ -66,17 +71,9 @@ fn go_away_code(error: &Option<Error>) -> Option<LoquiErrorCode> {
                     // TODO
                     ProtocolError::InvalidPayload(_reason) => LoquiErrorCode::InternalServerError,
                 };
-                return Some(error_code);
+                return error_code;
             }
-
-            if let Some(loqui_error) = error.downcast_ref::<LoquiError>() {
-                match loqui_error {
-                    // We should not send back a go away if we were told to go away.
-                    LoquiError::ToldToGoAway { .. } => return None,
-                    _ => {}
-                }
-            }
-            Some(LoquiErrorCode::InternalServerError)
+            LoquiErrorCode::InternalServerError
         }
     }
 }
@@ -87,10 +84,10 @@ pub struct FramedReaderWriter {
 }
 
 impl FramedReaderWriter {
-    pub fn new(tcp_stream: TcpStream, max_payload_size: ByteSize) -> Self {
+    pub fn new(tcp_stream: TcpStream, max_payload_size: ByteSize, send_go_away: bool) -> Self {
         let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
         let (writer, reader) = framed_socket.split();
-        let writer = FramedWriter::new(writer);
+        let writer = FramedWriter::new(writer, send_go_away);
         Self { reader, writer }
     }
 

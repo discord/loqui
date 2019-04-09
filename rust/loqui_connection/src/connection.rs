@@ -46,8 +46,8 @@ impl<H: Handler> Connection<H> {
         self.self_sender.internal(event)
     }
 
-    pub fn close(&self, go_away: bool) -> Result<(), Error> {
-        self.self_sender.close(go_away)
+    pub fn close(&self) -> Result<(), Error> {
+        self.self_sender.close()
     }
 }
 
@@ -63,7 +63,7 @@ pub enum Event<InternalEvent: Send + 'static> {
     /// A response for a request was computed and should be sent back over the socket.
     ResponseComplete(Result<Response, (Error, u32)>),
     /// Close the connection gracefully.
-    Close { go_away: bool },
+    Close,
 }
 
 /// The core run loop for a connection.
@@ -86,7 +86,7 @@ async fn run<H: Handler>(
 ) -> Result<(), Error> {
     let tcp_stream = await!(handler.upgrade(tcp_stream))?;
     let max_payload_size = handler.max_payload_size();
-    let reader_writer = FramedReaderWriter::new(tcp_stream, max_payload_size);
+    let reader_writer = FramedReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
     let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
         Ok((ready, reader_writer)) => (ready, reader_writer),
@@ -120,20 +120,17 @@ async fn run<H: Handler>(
     let mut stream = framed_reader.select(self_rx).select(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
-    let mut closing = false;
     while let Some(event) = await!(stream.next()) {
         let event = event?;
 
-        if let Event::Close { .. } = event {
-            closing = true;
-        }
-
-        if let Some(frame) = event_handler.handle_event(event)? {
-            writer = await!(writer.write(frame))?
-        }
-
-        if closing {
-            return Ok(());
+        match event_handler.handle_event(event) {
+            Ok(Some(frame)) => writer = await!(writer.write(frame))?,
+            Ok(None) => {}
+            Err(error) => {
+                await!(writer.close(Some(error)));
+                // TODO: should we return okay?
+                return Ok(());
+            }
         }
     }
 

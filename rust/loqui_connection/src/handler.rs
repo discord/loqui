@@ -47,6 +47,9 @@ pub trait Handler: Send + Sync + 'static {
     /// Result of handling a frame. Needs to be a type so we don't have to box the future.
     type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
+    // Whether or not the connection should send a GoAway frame on close.
+    const SEND_GO_AWAY: bool;
+
     /// The maximum payload size this connection can handle.
     fn max_payload_size(&self) -> ByteSize;
     /// Takes a tcp stream and completes an HTTP upgrade.

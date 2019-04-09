@@ -5,7 +5,7 @@ use super::id_sequence::IdSequence;
 use super::sender::Sender;
 use crate::LoquiErrorCode;
 use failure::Error;
-use loqui_protocol::frames::{Error as ErrorFrame, GoAway, LoquiFrame, Ping, Pong, Response};
+use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
 
 /// Main handler of connection `Event`s.
 pub struct EventHandler<H: Handler> {
@@ -45,23 +45,12 @@ impl<H: Handler> EventHandler<H> {
             Event::SocketReceive(frame) => self.handle_frame(frame),
             Event::InternalEvent(internal_event) => self.handle_internal_event(internal_event),
             Event::ResponseComplete(response) => self.handle_response_complete(response),
-            Event::Close { go_away } => self.handle_close(go_away),
+            Event::Close => self.handle_close(),
         }
     }
 
-    fn handle_close(&mut self, go_away: bool) -> MaybeFrameResult {
-        if go_away {
-            Ok(Some(
-                GoAway {
-                    flags: 0,
-                    code: LoquiErrorCode::Normal as u16,
-                    payload: vec![],
-                }
-                .into(),
-            ))
-        } else {
-            Ok(None)
-        }
+    fn handle_close(&mut self) -> MaybeFrameResult {
+        Err(LoquiError::ConnectionCloseRequested.into())
     }
 
     /// Handles a request to ping the other side. Returns an `Error` if a `Pong` hasn't been

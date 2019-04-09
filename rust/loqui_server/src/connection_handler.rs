@@ -35,6 +35,8 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
         >;
     existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
+    const SEND_GO_AWAY: bool = false;
+
     fn max_payload_size(&self) -> ByteSize {
         self.config.max_payload_size
     }

@@ -7,6 +7,8 @@ pub enum LoquiError {
     TcpStreamClosed,
     #[fail(display = "TCP Connection closed by us.")]
     TcpStreamIntentionalClose,
+    #[fail(display = "Connection close requested.")]
+    ConnectionCloseRequested,
     #[fail(display = "Connection closed.")]
     ConnectionClosed,
     #[fail(display = "Upgrade failed.")]
