@@ -51,7 +51,7 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
                 Some(Ok(UpgradeFrame::Request)) => {
                     writer = match await!(writer.send(UpgradeFrame::Response)) {
                         Ok(writer) => writer,
-                        Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
+                        Err(e) => return Err(e.into()),
                     };
                     Ok(writer.reunite(reader)?.into_inner())
                 }

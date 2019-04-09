@@ -5,16 +5,12 @@ use loqui_protocol::frames::GoAway;
 pub enum LoquiError {
     #[fail(display = "TCP Connection closed.")]
     TcpStreamClosed,
-    #[fail(display = "TCP Connection closed by us.")]
-    TcpStreamIntentionalClose,
     #[fail(display = "Connection close requested.")]
     ConnectionCloseRequested,
     #[fail(display = "Connection closed.")]
     ConnectionClosed,
     #[fail(display = "Upgrade failed.")]
     UpgradeFailed,
-    #[fail(display = "The connection supervisor died.")]
-    ConnectionSupervisorDead,
     #[fail(display = "Connection not ready.")]
     NotReady,
     #[fail(display = "Go away. go_away={:?}", go_away)]

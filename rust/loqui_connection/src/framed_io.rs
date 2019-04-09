@@ -41,7 +41,7 @@ impl Writer {
     }
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
-    pub async fn close(self, error: Option<Error>) {
+    pub async fn close(self, error: Option<&Error>) {
         if !self.send_go_away {
             debug!("Closing. Not sending GoAway. error={:?}", error);
             return;
@@ -59,7 +59,7 @@ impl Writer {
     }
 }
 
-fn go_away_code(error: &Option<Error>) -> LoquiErrorCode {
+fn go_away_code(error: &Option<&Error>) -> LoquiErrorCode {
     match error {
         None => LoquiErrorCode::Normal,
         Some(error) => {

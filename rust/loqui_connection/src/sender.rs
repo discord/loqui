@@ -18,7 +18,7 @@ impl<T: Send + 'static> Sender<T> {
     pub(crate) fn internal(&self, event: T) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::InternalEvent(event))
-            .map_err(|_e| LoquiError::TcpStreamClosed.into())
+            .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
 
     pub(crate) fn response_complete(
@@ -27,13 +27,13 @@ impl<T: Send + 'static> Sender<T> {
     ) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::ResponseComplete(result))
-            .map_err(|_e| LoquiError::TcpStreamClosed.into())
+            .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
 
     pub(crate) fn close(&self) -> Result<(), Error> {
         self.tx
             .unbounded_send(Event::Close)
-            .map_err(|_e| LoquiError::TcpStreamClosed.into())
+            .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
 }
 

@@ -93,12 +93,12 @@ impl<H: Handler> Supervisor<H> {
     pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
         self.self_sender
             .unbounded_send(Event::Internal(event))
-            .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
+            .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
 
     pub fn close(&self) -> Result<(), Error> {
         self.self_sender
             .unbounded_send(Event::Close)
-            .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
+            .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
 }

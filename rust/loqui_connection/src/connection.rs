@@ -95,10 +95,9 @@ async fn run<H: Handler>(
             debug!("Not ready. e={:?}", error);
             if let Some(reader_writer) = reader_writer {
                 let (_reader, writer) = reader_writer.split();
-                await!(writer.close(Some(error)));
+                await!(writer.close(Some(&error)));
             }
-            // TODO:
-            return Err(LoquiError::TcpStreamIntentionalClose.into());
+            return Err(error);
         }
     };
 
@@ -127,7 +126,7 @@ async fn run<H: Handler>(
             Ok(Some(frame)) => writer = await!(writer.write(frame))?,
             Ok(None) => {}
             Err(error) => {
-                await!(writer.close(Some(error)));
+                await!(writer.close(Some(&error)));
                 // TODO: should we return okay?
                 return Ok(());
             }
