@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const ADDRESS: &'static str = "127.0.0.1:8080";
+const ADDRESS: &str = "127.0.0.1:8080";
 
 #[derive(Default)]
 struct State {
@@ -24,7 +24,7 @@ struct State {
 }
 
 fn make_message() -> Vec<u8> {
-    "hello world".as_bytes().to_vec()
+    b"hello world".to_vec()
 }
 
 async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
@@ -34,7 +34,7 @@ async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
 
     match await!(client.request(message)) {
         Ok(payload) => {
-            if &payload[..] != "hello world".as_bytes() {
+            if &payload[..] != b"hello world" {
                 state.failed_requests.fetch_add(1, Ordering::SeqCst);
             } else {
                 state.request_count.fetch_add(1, Ordering::SeqCst);

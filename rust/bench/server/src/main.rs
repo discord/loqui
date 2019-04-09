@@ -6,7 +6,7 @@ use loqui_server::{Config, Encoder, RequestHandler, Server};
 use std::future::Future;
 use std::time::Duration;
 
-const ADDRESS: &'static str = "127.0.0.1:8080";
+const ADDRESS: &str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
