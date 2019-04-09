@@ -122,9 +122,11 @@ async fn run<H: Handler>(
     let mut closing = false;
     while let Some(event) = await!(stream.next()) {
         let event = event?;
+
         if let Event::Close { .. } = event {
             closing = true;
         }
+
         if let Some(frame) = event_handler.handle_event(event)? {
             writer = await!(writer.write(frame))?
         }
