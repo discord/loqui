@@ -49,19 +49,19 @@ pub enum LoquiError {
 
 pub enum LoquiErrorCode {
     // Normal is sent when the connection is closing cleanly.
-    Normal,
+    Normal = 0,
     // InvalidOp is sent when the connection receives an opcode it cannot handle.
-    InvalidOpcode,
+    InvalidOpcode = 1,
     // UnsupportedVersion is sent when conn does not support a version.
-    UnsupportedVersion,
+    UnsupportedVersion = 2,
     // NoCommonEncoding is sent when there are no common encodings.
-    NoCommonEncoding,
+    NoCommonEncoding = 3,
     // InvalidEncoding is sent by the client if the server chooses an invalid encoding.
-    InvalidEncoding,
+    InvalidEncoding = 4,
     // InvalidCompression is sent by the client if the server chooses an invalid compression.
-    InvalidCompression,
+    InvalidCompression = 5,
     // PingTimeout is sent when connection does not receive a pong within ping interval.
-    PingTimeout,
+    PingTimeout = 6,
     // InternalServerError is sent when a single request dies due to an error.
-    InternalServerError,
+    InternalServerError = 7,
 }

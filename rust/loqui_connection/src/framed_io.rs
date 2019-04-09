@@ -38,37 +38,25 @@ impl FramedWriter {
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
     pub async fn close(self, error: Option<Error>) {
-        let go_away = GoAway {
-            flags: 0,
-            code: go_away_code(error) as u16,
-            payload: vec![],
-        };
-        debug!("Closing. goaway={:#?}", go_away);
-        if let Err(error) = await!(self.write(go_away)) {
-            error!("Error when writing close frame. error={:?}", error);
-        }
-        // TODO: is this needed?
-        /*
-        self = match
-            Ok(writer) => writer,
-            Err(error) => {
+        if let Some(go_away_code) = go_away_code(&error) {
+            let go_away = GoAway {
+                flags: 0,
+                code: go_away_code as u16,
+                payload: vec![],
+            };
+            debug!("Closing. Sending GoAway. go_away={:?}", go_away);
+            if let Err(error) = await!(self.write(go_away)) {
+                error!("Error when writing close frame. error={:?}", error);
             }
-        };
-        let mut tcp_stream = self
-            .inner
-            .reunite(reader)
-            .expect("failed to reunite")
-            .into_inner();
-        if let Err(error) = await!(tcp_stream.flush_async()) {
-            error!("Failed to flush when closing. error={:?}", error);
+        } else {
+            debug!("Closing. Not sending GoAway. error={:?}", error)
         }
-        */
     }
 }
 
-fn go_away_code(error: Option<Error>) -> LoquiErrorCode {
+fn go_away_code(error: &Option<Error>) -> Option<LoquiErrorCode> {
     match error {
-        None => LoquiErrorCode::Normal,
+        None => Some(LoquiErrorCode::Normal),
         Some(error) => {
             if let Some(protocol_error) = error.downcast_ref::<ProtocolError>() {
                 let error_code = match protocol_error {
@@ -78,9 +66,17 @@ fn go_away_code(error: Option<Error>) -> LoquiErrorCode {
                     // TODO
                     ProtocolError::InvalidPayload(_reason) => LoquiErrorCode::InternalServerError,
                 };
-                return error_code;
+                return Some(error_code);
             }
-            LoquiErrorCode::InternalServerError
+
+            if let Some(loqui_error) = error.downcast_ref::<LoquiError>() {
+                match loqui_error {
+                    // We should not send back a go away if we were told to go away.
+                    LoquiError::ToldToGoAway { .. } => return None,
+                    _ => {}
+                }
+            }
+            Some(LoquiErrorCode::InternalServerError)
         }
     }
 }

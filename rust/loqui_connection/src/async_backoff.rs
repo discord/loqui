@@ -5,7 +5,7 @@ use tokio::await;
 
 const BACKOFF_INITIAL_INTERVAL: Duration = Duration::from_secs(2);
 const BACKOFF_MULTIPLIER: f64 = 2.0;
-const BACKOFF_MAX_INTERVAL: Duration = Duration::from_secs(5);
+const BACKOFF_MAX_INTERVAL: Duration = Duration::from_secs(15);
 
 /// A futures safe backoff.
 pub struct AsyncBackoff {

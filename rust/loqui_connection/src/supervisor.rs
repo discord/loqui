@@ -47,7 +47,6 @@ impl<H: Handler> Supervisor<H> {
                     match await!(TcpStream::connect(&address)) {
                         Ok(tcp_stream) => {
                             info!("Connected to {}", address);
-                            backoff.reset();
 
                             let (ready_tx, ready_rx) = oneshot::channel();
                             let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
@@ -57,8 +56,10 @@ impl<H: Handler> Supervisor<H> {
                                 // Connection dropped the sender.
                                 debug!("Ready failed.");
                                 await!(backoff.snooze());
-                                break;
+                                continue;
                             }
+
+                            backoff.reset();
 
                             // TODO: handle Some(Err())
                             while let Some(Ok(event)) = await!(self_rx.next()) {
