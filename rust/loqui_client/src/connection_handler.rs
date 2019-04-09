@@ -2,10 +2,8 @@ use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use futures::sync::oneshot::Sender as OneShotSender;
-use loqui_connection::{
-    DelegatedFrame, Encoder, FramedReaderWriter, Handler, IdSequence, LoquiError, Ready,
-    TransportOptions,
-};
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
+use loqui_connection::{Encoder, FramedReaderWriter, IdSequence, LoquiError};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };

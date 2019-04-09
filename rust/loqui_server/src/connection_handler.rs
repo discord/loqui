@@ -1,10 +1,9 @@
 use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
 use loqui_connection::FramedReaderWriter;
-use loqui_connection::{
-    DelegatedFrame, Encoder, Handler, IdSequence, LoquiError, Ready, TransportOptions,
-};
+use loqui_connection::{Encoder, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::Flags;
