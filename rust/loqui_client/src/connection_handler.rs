@@ -180,8 +180,8 @@ impl<E: Encoder> ConnectionHandler<E> {
                 };
                 Some(request.into())
             }
-            Err(e) => {
-                error!("Failed to encode payload. error={:?}", e);
+            Err(error) => {
+                waiter_tx.send(Err(error.into()));
                 None
             }
         }
