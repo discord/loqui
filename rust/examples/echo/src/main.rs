@@ -11,6 +11,7 @@ use fern;
 use loqui_client::{Client, Config as ClientConfig};
 use loqui_server::{Config as ServerConfig, Encoder, RequestHandler, Server};
 use std::future::Future;
+use std::net::SocketAddr;
 use std::{thread, time::Duration};
 
 const CLIENT_ADDRESS: &str = "127.0.0.1:8080";
@@ -79,7 +80,9 @@ async fn client_send_loop() {
         max_payload_size: ByteSize::kb(5000),
         encoder: StringEncoder {},
     };
-    let client = await!(Client::connect(CLIENT_ADDRESS, config)).expect("Failed to connect");
+
+    let address: SocketAddr = CLIENT_ADDRESS.parse().expect("Failed to parse address.");
+    let client = await!(Client::connect(address, config)).expect("Failed to connect");
 
     let messages = &["test", "test2", "test3"];
     loop {

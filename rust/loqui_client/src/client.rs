@@ -13,11 +13,7 @@ pub struct Client<E: Encoder> {
 }
 
 impl<E: Encoder> Client<E> {
-    pub async fn connect<A: AsRef<str>>(
-        address_str: A,
-        config: Config<E>,
-    ) -> Result<Client<E>, Error> {
-        let address: SocketAddr = address_str.as_ref().parse()?;
+    pub async fn connect(address: SocketAddr, config: Config<E>) -> Result<Client<E>, Error> {
         let config = Arc::new(config);
         let handler_creator = move || ConnectionHandler::new(config.clone());
         let connection = await!(SupervisedConnection::spawn(address, handler_creator));
