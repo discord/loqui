@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use tokio_codec::{Decoder, Encoder};
 
-use crate::errors::ProtocolError;
+use crate::error::ProtocolError;
 use crate::frames::{
     Error as ErrorFrame, Frame, GoAway, Hello, HelloAck, LoquiFrame, Ping, Pong, Push, Request,
     Response,

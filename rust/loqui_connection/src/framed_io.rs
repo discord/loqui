@@ -4,7 +4,7 @@ use failure::Error;
 use futures::stream::{SplitSink, SplitStream};
 use loqui_protocol::{
     codec::Codec,
-    errors::ProtocolError,
+    error::ProtocolError,
     frames::{GoAway, LoquiFrame},
 };
 use tokio::await;

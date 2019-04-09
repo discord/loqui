@@ -1,4 +1,4 @@
-use crate::errors::ProtocolError;
+use crate::error::ProtocolError;
 use bytes::BytesMut;
 use bytesize::ByteSize;
 use failure::Error;

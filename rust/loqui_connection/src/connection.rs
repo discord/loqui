@@ -24,7 +24,7 @@ impl<H: Handler> Connection<H> {
     /// # Arguments
     ///
     /// * `tcp_stream` - the tcp socket
-    /// * `handler` - implements logic for the client or server specific things
+    /// * `handler` - implements client or server specific logic
     /// * `ready_tx` - a sender used to notify that the connection is ready for requests
     pub fn spawn(tcp_stream: TcpStream, handler: H, ready_tx: Option<oneshot::Sender<()>>) -> Self {
         let (self_sender, self_rx) = Sender::new();

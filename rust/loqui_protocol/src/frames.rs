@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, BytesMut};
 
-use crate::errors::ProtocolError;
+use crate::error::ProtocolError;
 
 type DecodeResult<T> = Result<Option<T>, ProtocolError>;
 

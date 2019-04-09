@@ -1,5 +1,5 @@
 pub mod codec;
-pub mod errors;
+pub mod error;
 mod flags;
 pub mod frames;
 pub mod upgrade;
