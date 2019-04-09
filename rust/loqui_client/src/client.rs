@@ -31,11 +31,11 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let (waiter_tx, waiter_rx) = oneshot::channel();
-        let waiter = Waiter::new(waiter_tx, self.config.request_timeout);
+        let (tx, rx) = oneshot::channel();
+        let waiter = Waiter::new(tx, self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
-        let receive_future = waiter_rx
+        let receive_future = rx
             .map_err(|oneshot::Canceled| Error::from(LoquiError::ConnectionClosed))
             .timeout(self.config.request_timeout);
         match await!(receive_future) {
