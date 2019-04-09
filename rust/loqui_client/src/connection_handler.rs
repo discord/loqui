@@ -288,7 +288,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 None => return Err(LoquiError::InvalidCompression.into()),
             },
         };
-        let ping_interval = Duration::from_millis(hello_ack.ping_interval_ms as u64);
+        let ping_interval = Duration::from_millis(u64::from(hello_ack.ping_interval_ms));
         let transport_options = TransportOptions {
             encoding,
             compression,
