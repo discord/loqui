@@ -52,28 +52,28 @@ impl Decoder for Codec {
 
         let payload_size = buf.len() as u32;
         if payload_size > self.max_payload_size_in_bytes {
-            return Err(ProtocolError::PayloadTooLarge(
-                payload_size,
-                self.max_payload_size_in_bytes,
-            )
+            return Err(ProtocolError::PayloadTooLarge {
+                actual: payload_size,
+                max: self.max_payload_size_in_bytes,
+            }
             .into());
         }
 
         match String::from_utf8(buf[..].to_vec()) {
-            Ok(message) => {
-                if !message.ends_with("\r\n\r\n") {
+            Ok(payload) => {
+                if !payload.ends_with("\r\n\r\n") {
                     return Ok(None);
                 }
 
-                let message = message.to_lowercase();
-                if message.contains("upgrade") {
-                    if message.starts_with("get") {
+                let payload = payload.to_lowercase();
+                if payload.contains("upgrade") {
+                    if payload.starts_with("get") {
                         Ok(Some(UpgradeFrame::Request))
                     } else {
                         Ok(Some(UpgradeFrame::Response))
                     }
                 } else {
-                    Err(ProtocolError::InvalidPayload(message).into())
+                    Err(ProtocolError::InvalidPayload { reason: payload }.into())
                 }
             }
 

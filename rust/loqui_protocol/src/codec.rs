@@ -61,7 +61,7 @@ impl Decoder for Codec {
             Push::OPCODE => decode::<Push>(self, buf),
             GoAway::OPCODE => decode::<GoAway>(self, buf),
             ErrorFrame::OPCODE => decode::<ErrorFrame>(self, buf),
-            _ => Err(ProtocolError::InvalidOpcode(opcode).into()),
+            _ => Err(ProtocolError::InvalidOpcode { opcode }.into()),
         }
     }
 }
@@ -86,9 +86,11 @@ fn decode<F: Frame + Into<LoquiFrame>>(
 
     let payload_size = F::read_payload_size(buf);
     if payload_size > codec.max_payload_size_in_bytes {
-        return Err(
-            ProtocolError::PayloadTooLarge(payload_size, codec.max_payload_size_in_bytes).into(),
-        );
+        return Err(ProtocolError::PayloadTooLarge {
+            actual: payload_size,
+            max: codec.max_payload_size_in_bytes,
+        }
+        .into());
     }
 
     let required_len = F::HEADER_SIZE_IN_BYTES + payload_size as usize;

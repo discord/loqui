@@ -82,14 +82,16 @@ impl Frame for Hello {
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let version = buf[2];
-        let payload = ::std::str::from_utf8(&buf[7..])
-            .map_err(|_| ProtocolError::InvalidPayload("Failed to decode as string".into()))?;
+        let payload =
+            ::std::str::from_utf8(&buf[7..]).map_err(|_| ProtocolError::InvalidPayload {
+                reason: "Failed to decode as string".into(),
+            })?;
 
         let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {
-            return Err(ProtocolError::InvalidPayload(
-                "Expected exactly two settings.".into(),
-            ));
+            return Err(ProtocolError::InvalidPayload {
+                reason: "Expected exactly two settings.".into(),
+            });
         }
 
         let encodings = settings[0]
@@ -154,14 +156,16 @@ impl Frame for HelloAck {
         let flags = buf[1];
         let ping_interval_ms = BigEndian::read_u32(&buf[2..6]);
 
-        let payload = ::std::str::from_utf8(&buf[10..])
-            .map_err(|_| ProtocolError::InvalidPayload("Failed to decode as string".into()))?;
+        let payload =
+            ::std::str::from_utf8(&buf[10..]).map_err(|_| ProtocolError::InvalidPayload {
+                reason: "Failed to decode as string".into(),
+            })?;
 
         let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {
-            return Err(ProtocolError::InvalidPayload(
-                "Expected exactly two settings.".into(),
-            ));
+            return Err(ProtocolError::InvalidPayload {
+                reason: "Expected exactly two settings.".into(),
+            });
         }
         let encoding = settings[0].to_string();
         let compression = settings[1];
