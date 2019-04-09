@@ -71,7 +71,6 @@ impl<H: Handler> Supervisor<H> {
                                 }
                             }
 
-                            // TODO: handle Some(Err())
                             while let Some(Ok(event)) = await!(self_rx.next()) {
                                 match event {
                                     Event::Internal(internal_event) => {
