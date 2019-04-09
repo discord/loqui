@@ -48,15 +48,6 @@ pub trait Frame: Sized + 'static {
     fn from_buf(buf: &BytesMut) -> DecodeResult<Self>;
 }
 
-impl LoquiFrame {
-    pub fn opcode(&self) -> u8 {
-        match self {
-            LoquiFrame::Hello(_) => Hello::OPCODE,
-            _ => 0,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Hello {
     pub flags: u8,
@@ -492,5 +483,21 @@ impl From<GoAway> for LoquiFrame {
 impl From<Error> for LoquiFrame {
     fn from(error: Error) -> LoquiFrame {
         LoquiFrame::Error(error)
+    }
+}
+
+impl LoquiFrame {
+    pub fn opcode(&self) -> u8 {
+        match self {
+            LoquiFrame::Hello(_) => Hello::OPCODE,
+            LoquiFrame::HelloAck(_) => HelloAck::OPCODE,
+            LoquiFrame::Ping(_) => Ping::OPCODE,
+            LoquiFrame::Pong(_) => Pong::OPCODE,
+            LoquiFrame::Request(_) => Request::OPCODE,
+            LoquiFrame::Response(_) => Response::OPCODE,
+            LoquiFrame::Push(_) => Push::OPCODE,
+            LoquiFrame::GoAway(_) => GoAway::OPCODE,
+            LoquiFrame::Error(_) => Error::OPCODE,
+        }
     }
 }
