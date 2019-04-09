@@ -18,7 +18,6 @@ pub struct Supervisor<H: Handler> {
 }
 
 impl<H: Handler> Supervisor<H> {
-    ///
     /// Spawns a new supervisor.
     ///
     /// # Arguments
