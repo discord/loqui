@@ -7,6 +7,7 @@ use fern;
 #[macro_use]
 extern crate log;
 use loqui_client::{Client, Config, Encoder};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -152,7 +153,8 @@ fn main() -> Result<(), Error> {
                 max_payload_size: ByteSize::kb(5000),
                 encoder: BytesEncoder {},
             };
-            let client = await!(Client::connect(ADDRESS, config)).unwrap();
+            let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
+            let client = await!(Client::connect(address, config)).expect("Failed to connect");
             for _ in 0..100 {
                 tokio::spawn_async(work_loop(client.clone(), state.clone()));
             }

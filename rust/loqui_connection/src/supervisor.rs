@@ -23,13 +23,13 @@ pub struct Supervisor<H: Handler> {
 }
 
 impl<H: Handler> Supervisor<H> {
-    /// Spawns a new supervisor.
+    /// Spawns a new supervisor. Waits until the connection is ready before returning.
     ///
     /// # Arguments
     ///
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
-    pub async fn spawn<F>(address: SocketAddr, handler_creator: F) -> Self
+    pub async fn connect<F>(address: SocketAddr, handler_creator: F) -> Result<Self, Error>
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
@@ -37,9 +37,12 @@ impl<H: Handler> Supervisor<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
+        let (ready_tx, ready_rx) = oneshot::channel();
         tokio::spawn_async(
             async move {
                 let mut backoff = AsyncBackoff::new();
+                // Make it an option so we only send once.
+                let mut ready_tx = Some(ready_tx);
                 loop {
                     let handler = handler_creator();
                     debug!("Connecting to {}", address);
@@ -48,11 +51,12 @@ impl<H: Handler> Supervisor<H> {
                         Ok(tcp_stream) => {
                             info!("Connected to {}", address);
 
-                            let (ready_tx, ready_rx) = oneshot::channel();
-                            let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
+                            let (connection_ready_tx, connection_ready_rx) = oneshot::channel();
+                            let connection =
+                                Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
 
                             // Wait for the connection to upgrade and handshake.
-                            if let Err(_e) = await!(ready_rx) {
+                            if let Err(_e) = await!(connection_ready_rx) {
                                 // Connection dropped the sender.
                                 debug!("Ready failed.");
                                 await!(backoff.snooze());
@@ -60,6 +64,11 @@ impl<H: Handler> Supervisor<H> {
                             }
 
                             backoff.reset();
+                            if let Some(ready_tx) = ready_tx.take() {
+                                if let Err(e) = ready_tx.send(()) {
+                                    warn!("No one listening for ready anymore. error={:?}", e);
+                                }
+                            }
 
                             // TODO: handle Some(Err())
                             while let Some(Ok(event)) = await!(self_rx.next()) {
@@ -87,7 +96,9 @@ impl<H: Handler> Supervisor<H> {
                 }
             },
         );
-        connection
+        await!(ready_rx)?;
+        debug!("Supervisor ready.");
+        Ok(connection)
     }
 
     pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {

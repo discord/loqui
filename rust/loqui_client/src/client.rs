@@ -16,7 +16,7 @@ impl<E: Encoder> Client<E> {
     pub async fn connect(address: SocketAddr, config: Config<E>) -> Result<Client<E>, Error> {
         let config = Arc::new(config);
         let handler_creator = move || ConnectionHandler::new(config.clone());
-        let connection = await!(SupervisedConnection::spawn(address, handler_creator));
+        let connection = await!(SupervisedConnection::connect(address, handler_creator))?;
         let client = Self {
             connection: Arc::new(connection),
         };
