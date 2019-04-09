@@ -12,9 +12,14 @@ use tokio::prelude::*;
 
 // TODO: when does it stop attempting? When client object is dropped?
 
+enum Event<H: Handler> {
+    Internal(H::InternalEvent),
+    Close,
+}
+
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
-    self_sender: UnboundedSender<H::InternalEvent>,
+    self_sender: UnboundedSender<Event<H>>,
 }
 
 impl<H: Handler> Supervisor<H> {
@@ -28,9 +33,9 @@ impl<H: Handler> Supervisor<H> {
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (sup_sender, mut sup_rx) = mpsc::unbounded();
+        let (self_sender, mut self_rx) = mpsc::unbounded();
         let connection = Self {
-            self_sender: sup_sender.clone(),
+            self_sender: self_sender.clone(),
         };
         tokio::spawn_async(
             async move {
@@ -48,20 +53,28 @@ impl<H: Handler> Supervisor<H> {
                             let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
 
                             // Wait for the connection to upgrade and handshake.
-                            if let Err(e) = await!(ready_rx) {
+                            if let Err(_e) = await!(ready_rx) {
                                 // Connection dropped the sender.
                                 debug!("Ready failed.");
                                 await!(backoff.snooze());
                                 break;
                             }
 
-                            // TODO: does this exit with the connection task still running? Probably since the connection has a sender to itself!
                             // TODO: handle Some(Err())
-                            while let Some(Ok(internal_event)) = await!(sup_rx.next()) {
-                                if let Err(e) = connection.send(internal_event) {
-                                    debug!("Connection no longer running. error={:?}", e);
-                                    await!(backoff.snooze());
-                                    break;
+                            while let Some(Ok(event)) = await!(self_rx.next()) {
+                                match event {
+                                    Event::Internal(internal_event) => {
+                                        if let Err(e) = connection.send(internal_event) {
+                                            debug!("Connection no longer running. error={:?}", e);
+                                            await!(backoff.snooze());
+                                            break;
+                                        }
+                                    }
+                                    Event::Close => {
+                                        debug!("Closing connection.");
+                                        let _result = connection.close();
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -77,9 +90,15 @@ impl<H: Handler> Supervisor<H> {
         connection
     }
 
-    pub fn event(&self, event: H::InternalEvent) -> Result<(), Error> {
+    pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
         self.self_sender
-            .unbounded_send(event)
+            .unbounded_send(Event::Internal(event))
+            .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
+    }
+
+    pub fn close(&self) -> Result<(), Error> {
+        self.self_sender
+            .unbounded_send(Event::Close)
             .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
     }
 }

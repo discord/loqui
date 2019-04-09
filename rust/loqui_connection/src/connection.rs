@@ -45,6 +45,10 @@ impl<H: Handler> Connection<H> {
     pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
         self.self_sender.internal(event)
     }
+
+    pub fn close(&self) -> Result<(), Error> {
+        self.self_sender.close()
+    }
 }
 
 /// The events that can be received by the core connection loop once it begins running.
@@ -58,6 +62,8 @@ pub enum Event<InternalEvent: Send + 'static> {
     InternalEvent(InternalEvent),
     /// A response for a request was computed and should be sent back over the socket.
     ResponseComplete(Result<Response, (Error, u32)>),
+    /// Close the connection gracefully.
+    Close,
 }
 
 /// The core run loop for a connection.
@@ -87,8 +93,8 @@ async fn run<H: Handler>(
         Err((error, reader_writer)) => {
             debug!("Not ready. e={:?}", error);
             if let Some(reader_writer) = reader_writer {
-                let (reader, writer) = reader_writer.split();
-                await!(writer.close(reader, Some(error)));
+                let (_reader, writer) = reader_writer.split();
+                await!(writer.close(Some(error)));
             }
             // TODO:
             return Err(LoquiError::TcpStreamIntentionalClose.into());
@@ -115,8 +121,16 @@ async fn run<H: Handler>(
     let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
     while let Some(event) = await!(stream.next()) {
         let event = event?;
-        if let Some(frame) = event_handler.handle_event(event)? {
-            writer = await!(writer.write(frame))?;
+        match event {
+            Event::Close => {
+                await!(writer.close(None));
+                return Ok(());
+            }
+            _ => {
+                if let Some(frame) = event_handler.handle_event(event)? {
+                    writer = await!(writer.write(frame))?
+                }
+            }
         }
     }
 

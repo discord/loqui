@@ -29,6 +29,12 @@ impl<T: Send + 'static> Sender<T> {
             .unbounded_send(Event::ResponseComplete(result))
             .map_err(|_e| LoquiError::TcpStreamClosed.into())
     }
+
+    pub(crate) fn close(&self) -> Result<(), Error> {
+        self.tx
+            .unbounded_send(Event::Close)
+            .map_err(|_e| LoquiError::TcpStreamClosed.into())
+    }
 }
 
 impl<T: Send> Clone for Sender<T> {

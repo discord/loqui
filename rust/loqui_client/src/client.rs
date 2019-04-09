@@ -31,7 +31,7 @@ impl<E: Encoder> Client<E> {
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
         let (waiter_tx, waiter_rx) = oneshot::channel();
         let request = InternalEvent::Request { payload, waiter_tx };
-        self.connection.event(request)?;
+        self.connection.send(request)?;
         match await!(waiter_rx) {
             Ok(result) => result,
             Err(oneshot::Canceled) => Err(LoquiError::ConnectionClosed.into()),
@@ -41,6 +41,10 @@ impl<E: Encoder> Client<E> {
     /// Send a push to the server.
     pub async fn push(&self, payload: E::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
-        self.connection.event(push)
+        self.connection.send(push)
+    }
+
+    pub fn close(&self) -> Result<(), Error> {
+        self.connection.close()
     }
 }

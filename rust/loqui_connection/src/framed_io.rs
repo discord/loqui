@@ -37,7 +37,7 @@ impl FramedWriter {
     }
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
-    pub async fn close(self, reader: FramedReader, error: Option<Error>) {
+    pub async fn close(self, error: Option<Error>) {
         let go_away = GoAway {
             flags: 0,
             code: go_away_code(error) as u16,
