@@ -21,7 +21,11 @@ use tokio::prelude::*;
 use tokio_codec::Framed;
 
 #[derive(Debug)]
-pub enum InternalEvent<Encoded: Serialize + Send + Sync, Decoded: DeserializeOwned + Send + Sync> {
+pub enum InternalEvent<Encoded, Decoded>
+where
+    Encoded: Serialize + Send + Sync,
+    Decoded: DeserializeOwned + Send + Sync,
+{
     Request {
         payload: Encoded,
         waiter_tx: OneShotSender<Result<Decoded, Error>>,
@@ -181,7 +185,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 Some(request.into())
             }
             Err(error) => {
-                waiter_tx.send(Err(error.into()));
+                notify_waiter(waiter_tx, Err(error.into()));
                 None
             }
         }
@@ -200,9 +204,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                     is_compressed(flags),
                     payload,
                 );
-                if let Err(_e) = waiter_tx.send(response) {
-                    warn!("Waiter is no longer listening.")
-                }
+                notify_waiter(waiter_tx, response);
             }
             None => {
                 warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -222,9 +224,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 let result = String::from_utf8(payload)
                     .map_err(Error::from)
                     .and_then(|reason| Err(err_msg(reason)));
-                if let Err(_e) = waiter_tx.send(result) {
-                    warn!("Waiter is no longer listening.")
-                }
+                notify_waiter(waiter_tx, result);
             }
             None => {
                 warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -283,5 +283,14 @@ impl<E: Encoder> ConnectionHandler<E> {
             ping_interval,
             transport_options,
         })
+    }
+}
+
+fn notify_waiter<Decoded: DeserializeOwned + Send + Sync>(
+    waiter_tx: OneShotSender<Result<Decoded, Error>>,
+    result: Result<Decoded, Error>,
+) {
+    if let Err(_e) = waiter_tx.send(result) {
+        warn!("Waiter is no longer listening.")
     }
 }
