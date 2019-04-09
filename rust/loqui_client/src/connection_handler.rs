@@ -257,8 +257,16 @@ impl<E: Encoder> ClientConnectionHandler<E> {
         Hello {
             flags: 0,
             version: VERSION,
-            encodings: E::ENCODINGS.iter().map(|s| s.to_string()).collect(),
-            compressions: E::COMPRESSIONS.iter().map(|s| s.to_string()).collect(),
+            encodings: E::ENCODINGS
+                .to_owned()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            compressions: E::COMPRESSIONS
+                .to_owned()
+                .into_iter()
+                .map(String::from)
+                .collect(),
         }
     }
 
