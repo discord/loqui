@@ -1,6 +1,6 @@
 use super::connection::Event;
-use super::connection_handler::{ConnectionHandler, DelegatedFrame, TransportOptions};
 use super::error::LoquiError;
+use super::handler::{DelegatedFrame, Handler, TransportOptions};
 use super::id_sequence::IdSequence;
 use super::sender::ConnectionSender;
 use crate::LoquiErrorCode;
@@ -8,11 +8,11 @@ use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
 
 /// Main handler of connection `Event`s.
-pub struct EventHandler<C: ConnectionHandler> {
-    connection_handler: C,
+pub struct EventHandler<H: Handler> {
+    handler: H,
     pong_received: bool,
     id_sequence: IdSequence,
-    self_sender: ConnectionSender<C::InternalEvent>,
+    self_sender: ConnectionSender<H::InternalEvent>,
     transport_options: TransportOptions,
 }
 
@@ -22,14 +22,14 @@ pub struct EventHandler<C: ConnectionHandler> {
 /// be sent back over the connection.
 type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
-impl<C: ConnectionHandler> EventHandler<C> {
+impl<H: Handler> EventHandler<H> {
     pub fn new(
-        self_sender: ConnectionSender<C::InternalEvent>,
-        connection_handler: C,
+        self_sender: ConnectionSender<H::InternalEvent>,
+        handler: H,
         transport_options: TransportOptions,
     ) -> Self {
         Self {
-            connection_handler,
+            handler,
             pong_received: true,
             id_sequence: IdSequence::default(),
             self_sender,
@@ -39,7 +39,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
 
     /// High level event handler entry point. This is called by the connection whenever an
     /// event comes in.
-    pub fn handle_event(&mut self, event: Event<C::InternalEvent>) -> MaybeFrameResult {
+    pub fn handle_event(&mut self, event: Event<H::InternalEvent>) -> MaybeFrameResult {
         match event {
             Event::Ping => self.handle_ping(),
             Event::SocketReceive(frame) => self.handle_frame(frame),
@@ -92,7 +92,7 @@ impl<C: ConnectionHandler> EventHandler<C> {
     fn delegate_frame<D: Into<DelegatedFrame>>(&mut self, delegated_frame: D) -> MaybeFrameResult {
         let delegated_frame = delegated_frame.into();
         let maybe_future = self
-            .connection_handler
+            .handler
             .handle_frame(delegated_frame, &self.transport_options);
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
@@ -138,8 +138,8 @@ impl<C: ConnectionHandler> EventHandler<C> {
         }
     }
 
-    fn handle_internal_event(&mut self, internal_event: C::InternalEvent) -> MaybeFrameResult {
-        Ok(self.connection_handler.handle_internal_event(
+    fn handle_internal_event(&mut self, internal_event: H::InternalEvent) -> MaybeFrameResult {
+        Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
             &self.transport_options,

@@ -65,9 +65,9 @@ impl Decoder for Codec {
                     return Ok(None);
                 }
 
-                // TOOD: case insensitive
-                if message.contains("upgrade") || message.contains("Upgrade") {
-                    if message.starts_with("GET") {
+                let message = message.to_lowercase();
+                if message.contains("upgrade") {
+                    if message.starts_with("get") {
                         Ok(Some(UpgradeFrame::Request))
                     } else {
                         Ok(Some(UpgradeFrame::Response))

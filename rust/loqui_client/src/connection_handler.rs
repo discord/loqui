@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::{
-    ConnectionHandler, DelegatedFrame, Encoder, FramedReaderWriter, IdSequence, LoquiError, Ready,
+    DelegatedFrame, Encoder, FramedReaderWriter, Handler, IdSequence, LoquiError, Ready,
     TransportOptions,
 };
 use loqui_protocol::frames::{
@@ -33,12 +33,12 @@ pub enum InternalEvent<Encoded: Serialize + Send + Sync, Decoded: DeserializeOwn
     },
 }
 
-pub struct ClientConnectionHandler<E: Encoder> {
+pub struct ConnectionHandler<E: Encoder> {
     waiters: HashMap<u32, OneShotSender<Result<E::Decoded, Error>>>,
     config: Arc<Config<E>>,
 }
 
-impl<E: Encoder> ClientConnectionHandler<E> {
+impl<E: Encoder> ConnectionHandler<E> {
     pub fn new(config: Arc<Config<E>>) -> Self {
         Self {
             // TODO: should probably sweep these, probably request timeout
@@ -48,7 +48,7 @@ impl<E: Encoder> ClientConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
+impl<E: Encoder> Handler for ConnectionHandler<E> {
     type InternalEvent = InternalEvent<E::Encoded, E::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -155,7 +155,7 @@ impl<E: Encoder> ConnectionHandler for ClientConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> ClientConnectionHandler<E> {
+impl<E: Encoder> ConnectionHandler<E> {
     fn handle_push(&mut self, payload: E::Encoded, encoding: &'static str) -> Option<LoquiFrame> {
         match self.config.encoder.encode(encoding, payload) {
             Ok((payload, compressed)) => {

@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::FramedReaderWriter;
 use loqui_connection::{
-    ConnectionHandler, DelegatedFrame, Encoder, IdSequence, LoquiError, Ready, TransportOptions,
+    DelegatedFrame, Encoder, Handler, IdSequence, LoquiError, Ready, TransportOptions,
 };
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
@@ -17,17 +17,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub struct ServerConnectionHandler<R: RequestHandler<E>, E: Encoder> {
+pub struct ConnectionHandler<R: RequestHandler<E>, E: Encoder> {
     config: Arc<Config<R, E>>,
 }
 
-impl<R: RequestHandler<E>, E: Encoder> ServerConnectionHandler<R, E> {
+impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler<R, E> {
     pub fn new(config: Arc<Config<R, E>>) -> Self {
         Self { config }
     }
 }
 
-impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler for ServerConnectionHandler<R, E> {
+impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -168,7 +168,7 @@ async fn handle_request<E: Encoder, R: RequestHandler<E>>(
     })
 }
 
-impl<E: Encoder, R: RequestHandler<E>> ServerConnectionHandler<R, E> {
+impl<E: Encoder, R: RequestHandler<E>> ConnectionHandler<R, E> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,

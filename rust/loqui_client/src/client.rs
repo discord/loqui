@@ -1,4 +1,4 @@
-use crate::connection_handler::{ClientConnectionHandler, InternalEvent};
+use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::Config;
 use failure::Error;
 use futures::sync::oneshot;
@@ -9,7 +9,7 @@ use tokio::await;
 
 #[derive(Clone)]
 pub struct Client<E: Encoder> {
-    connection: Arc<SupervisedConnection<ClientConnectionHandler<E>>>,
+    connection: Arc<SupervisedConnection<ConnectionHandler<E>>>,
 }
 
 impl<E: Encoder> Client<E> {
@@ -19,11 +19,8 @@ impl<E: Encoder> Client<E> {
     ) -> Result<Client<E>, Error> {
         let address: SocketAddr = address_str.as_ref().parse()?;
         let config = Arc::new(config);
-        let connection_handler_creator = move || ClientConnectionHandler::new(config.clone());
-        let connection = await!(SupervisedConnection::spawn(
-            address,
-            connection_handler_creator
-        ));
+        let handler_creator = move || ConnectionHandler::new(config.clone());
+        let connection = await!(SupervisedConnection::spawn(address, handler_creator));
         let client = Self {
             connection: Arc::new(connection),
         };

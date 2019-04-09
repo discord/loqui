@@ -1,6 +1,6 @@
-use crate::connection_handler::ConnectionHandler;
 use crate::event_handler::EventHandler;
 use crate::framed_io::FramedReaderWriter;
+use crate::handler::Handler;
 use crate::sender::ConnectionSender;
 use crate::LoquiError;
 use failure::Error;
@@ -13,37 +13,27 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 #[derive(Debug)]
-pub struct Connection<C: ConnectionHandler> {
-    self_sender: ConnectionSender<C::InternalEvent>,
+pub struct Connection<H: Handler> {
+    self_sender: ConnectionSender<H::InternalEvent>,
 }
 
-impl<C: ConnectionHandler> Connection<C> {
+impl<H: Handler> Connection<H> {
     /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
     /// the `Connection`.
     ///
     /// # Arguments
     ///
     /// * `tcp_stream` - the tcp socket
-    /// * `connection_handler` - implements logic for the client or server specific things
+    /// * `handler` - implements logic for the client or server specific things
     /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-    pub fn spawn(
-        tcp_stream: TcpStream,
-        connection_handler: C,
-        ready_tx: Option<oneshot::Sender<()>>,
-    ) -> Self {
+    pub fn spawn(tcp_stream: TcpStream, handler: H, ready_tx: Option<oneshot::Sender<()>>) -> Self {
         let (self_sender, self_rx) = ConnectionSender::new();
         let connection = Self {
             self_sender: self_sender.clone(),
         };
         tokio::spawn_async(
             async move {
-                let result = await!(run(
-                    tcp_stream,
-                    self_sender,
-                    self_rx,
-                    connection_handler,
-                    ready_tx
-                ));
+                let result = await!(run(tcp_stream, self_sender, self_rx, handler, ready_tx));
                 if let Err(e) = result {
                     error!("Connection closed. error={:?}", e)
                 }
@@ -52,20 +42,20 @@ impl<C: ConnectionHandler> Connection<C> {
         connection
     }
 
-    pub fn send_event(&self, event: C::InternalEvent) -> Result<(), Error> {
+    pub fn send_event(&self, event: H::InternalEvent) -> Result<(), Error> {
         self.self_sender.internal(event)
     }
 }
 
 /// The events that can be received by the core connection loop once it begins running.
 #[derive(Debug)]
-pub enum Event<T: Send + 'static> {
+pub enum Event<InternalEvent: Send + 'static> {
     /// A full frame was received on the socket.
     SocketReceive(LoquiFrame),
     /// A ping should be sent.
     Ping,
     /// Generic event that will be delegated to the connection handler.
-    InternalEvent(T),
+    InternalEvent(InternalEvent),
     /// A response for a request was computed and should be sent back over the socket.
     ResponseComplete(Result<Response, (Error, u32)>),
 }
@@ -79,20 +69,20 @@ pub enum Event<T: Send + 'static> {
 /// * `self_sender` - a sender that is used to for the connection to enqueue an event to itself.
 ///                   This is used when a response for a request is computed asynchronously in a task.
 /// * `self_rx` - a receiver that InternalEvents will be sent over
-/// * `connection_handler` - implements logic for the client or server specific things
+/// * `handler` - implements logic for the client or server specific things
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-async fn run<C: ConnectionHandler>(
+async fn run<H: Handler>(
     tcp_stream: TcpStream,
-    self_sender: ConnectionSender<C::InternalEvent>,
-    self_rx: UnboundedReceiver<Event<C::InternalEvent>>,
-    mut connection_handler: C,
+    self_sender: ConnectionSender<H::InternalEvent>,
+    self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
+    mut handler: H,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
-    let tcp_stream = await!(connection_handler.upgrade(tcp_stream))?;
-    let max_payload_size = connection_handler.max_payload_size();
+    let tcp_stream = await!(handler.upgrade(tcp_stream))?;
+    let max_payload_size = handler.max_payload_size();
     let reader_writer = FramedReaderWriter::new(tcp_stream, max_payload_size);
 
-    let (ready, reader_writer) = match await!(connection_handler.handshake(reader_writer)) {
+    let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
         Ok((ready, reader_writer)) => (ready, reader_writer),
         Err((error, reader_writer)) => {
             debug!("Not ready. e={:?}", error);
@@ -122,8 +112,7 @@ async fn run<C: ConnectionHandler>(
 
     let mut stream = framed_reader.select(self_rx).select(ping_stream);
 
-    let mut event_handler =
-        EventHandler::new(self_sender, connection_handler, ready.transport_options);
+    let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
     while let Some(event) = await!(stream.next()) {
         let event = event?;
         if let Some(frame) = event_handler.handle_event(event)? {
