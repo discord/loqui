@@ -5,6 +5,7 @@ use futures::future::Future;
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use loqui_connection::{Encoder, LoquiError, Supervisor as SupervisedConnection};
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::await;
@@ -34,13 +35,14 @@ impl<E: Encoder> Client<E> {
         let waiter = Waiter::new(waiter_tx, self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
-        match await!(waiter_rx
+        let receive_future = waiter_rx
             .map_err(|oneshot::Canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout(self.config.request_timeout))
-        {
+            .timeout(self.config.request_timeout);
+        match await!(receive_future) {
             Ok(result) => result,
             Err(error) => {
-                if let Some(_error) = error.downcast_ref::<std::io::Error>() {
+                let error = error.downcast::<io::Error>()?;
+                if error.kind() == io::ErrorKind::TimedOut {
                     Err(LoquiError::RequestTimeout.into())
                 } else {
                     Err(error.into())

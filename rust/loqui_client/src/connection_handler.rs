@@ -200,7 +200,7 @@ impl<E: Encoder> ConnectionHandler<E> {
         waiter: Waiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline < Instant::now() {
-            debug!("Timeout.");
+            waiter.notify(Err(LoquiError::RequestTimeout.into()));
             return None;
         }
 
