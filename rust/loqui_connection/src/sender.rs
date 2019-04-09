@@ -30,9 +30,9 @@ impl<T: Send + 'static> Sender<T> {
             .map_err(|_e| LoquiError::TcpStreamClosed.into())
     }
 
-    pub(crate) fn close(&self) -> Result<(), Error> {
+    pub(crate) fn close(&self, go_away: bool) -> Result<(), Error> {
         self.tx
-            .unbounded_send(Event::Close)
+            .unbounded_send(Event::Close { go_away })
             .map_err(|_e| LoquiError::TcpStreamClosed.into())
     }
 }

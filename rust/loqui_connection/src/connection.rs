@@ -46,8 +46,8 @@ impl<H: Handler> Connection<H> {
         self.self_sender.internal(event)
     }
 
-    pub fn close(&self) -> Result<(), Error> {
-        self.self_sender.close()
+    pub fn close(&self, go_away: bool) -> Result<(), Error> {
+        self.self_sender.close(go_away)
     }
 }
 
@@ -63,7 +63,7 @@ pub enum Event<InternalEvent: Send + 'static> {
     /// A response for a request was computed and should be sent back over the socket.
     ResponseComplete(Result<Response, (Error, u32)>),
     /// Close the connection gracefully.
-    Close,
+    Close { go_away: bool },
 }
 
 /// The core run loop for a connection.
@@ -119,18 +119,18 @@ async fn run<H: Handler>(
     let mut stream = framed_reader.select(self_rx).select(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
+    let mut closing = false;
     while let Some(event) = await!(stream.next()) {
         let event = event?;
-        match event {
-            Event::Close => {
-                await!(writer.close(None));
-                return Ok(());
-            }
-            _ => {
-                if let Some(frame) = event_handler.handle_event(event)? {
-                    writer = await!(writer.write(frame))?
-                }
-            }
+        if let Event::Close { .. } = event {
+            closing = true;
+        }
+        if let Some(frame) = event_handler.handle_event(event)? {
+            writer = await!(writer.write(frame))?
+        }
+
+        if closing {
+            return Ok(());
         }
     }
 

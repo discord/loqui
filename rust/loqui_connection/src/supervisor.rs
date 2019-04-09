@@ -14,7 +14,7 @@ use tokio::prelude::*;
 
 enum Event<H: Handler> {
     Internal(H::InternalEvent),
-    Close,
+    Close { go_away: bool },
 }
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
@@ -70,9 +70,9 @@ impl<H: Handler> Supervisor<H> {
                                             break;
                                         }
                                     }
-                                    Event::Close => {
+                                    Event::Close { go_away } => {
                                         debug!("Closing connection.");
-                                        let _result = connection.close();
+                                        let _result = connection.close(go_away);
                                         return;
                                     }
                                 }
@@ -96,9 +96,9 @@ impl<H: Handler> Supervisor<H> {
             .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
     }
 
-    pub fn close(&self) -> Result<(), Error> {
+    pub fn close(&self, go_away: bool) -> Result<(), Error> {
         self.self_sender
-            .unbounded_send(Event::Close)
+            .unbounded_send(Event::Close { go_away })
             .map_err(|_e| LoquiError::ConnectionSupervisorDead.into())
     }
 }

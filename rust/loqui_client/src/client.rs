@@ -45,6 +45,6 @@ impl<E: Encoder> Client<E> {
     }
 
     pub fn close(&self) -> Result<(), Error> {
-        self.connection.close()
+        self.connection.close(false)
     }
 }

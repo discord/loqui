@@ -45,19 +45,23 @@ impl<H: Handler> EventHandler<H> {
             Event::SocketReceive(frame) => self.handle_frame(frame),
             Event::InternalEvent(internal_event) => self.handle_internal_event(internal_event),
             Event::ResponseComplete(response) => self.handle_response_complete(response),
-            Event::Close => self.handle_close(),
+            Event::Close { go_away } => self.handle_close(go_away),
         }
     }
 
-    fn handle_close(&mut self) -> MaybeFrameResult {
-        Ok(Some(
-            GoAway {
-                flags: 0,
-                code: LoquiErrorCode::Normal as u16,
-                payload: vec![],
-            }
-            .into(),
-        ))
+    fn handle_close(&mut self, go_away: bool) -> MaybeFrameResult {
+        if go_away {
+            Ok(Some(
+                GoAway {
+                    flags: 0,
+                    code: LoquiErrorCode::Normal as u16,
+                    payload: vec![],
+                }
+                .into(),
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Handles a request to ping the other side. Returns an `Error` if a `Pong` hasn't been
