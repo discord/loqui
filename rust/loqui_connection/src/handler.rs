@@ -1,4 +1,4 @@
-use crate::framed_io::FramedReaderWriter;
+use crate::framed_io::ReaderWriter;
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
 use failure::Error;
@@ -42,7 +42,7 @@ pub trait Handler: Send + Sync + 'static {
     /// Result of handshaking. Needs to be a type so we don't have to box the future.
     type HandshakeFuture: Send
         + Future<
-            Output = Result<(Ready, FramedReaderWriter), (Error, Option<FramedReaderWriter>)>,
+            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
         >;
     /// Result of handling a frame. Needs to be a type so we don't have to box the future.
     type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
@@ -55,7 +55,7 @@ pub trait Handler: Send + Sync + 'static {
     /// Takes a tcp stream and completes an HTTP upgrade.
     fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture;
     /// Hello/HelloAck handshake.
-    fn handshake(&mut self, reader_writer: FramedReaderWriter) -> Self::HandshakeFuture;
+    fn handshake(&mut self, reader_writer: ReaderWriter) -> Self::HandshakeFuture;
     /// Handle a single delegated frame. Optionally returns a future that resolves to a
     /// Response. The Response will be sent back through the socket to the other side.
     fn handle_frame(

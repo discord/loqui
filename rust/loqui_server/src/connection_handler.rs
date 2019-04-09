@@ -2,7 +2,7 @@ use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
-use loqui_connection::FramedReaderWriter;
+use loqui_connection::ReaderWriter;
 use loqui_connection::{Encoder, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
@@ -31,7 +31,7 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
         + Future<
-            Output = Result<(Ready, FramedReaderWriter), (Error, Option<FramedReaderWriter>)>,
+            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
         >;
     existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
@@ -63,7 +63,7 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
         }
     }
 
-    fn handshake(&mut self, mut reader_writer: FramedReaderWriter) -> Self::HandshakeFuture {
+    fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
         let ping_interval = self.config.ping_interval;
         async move {
             match await!(reader_writer.reader.next()) {

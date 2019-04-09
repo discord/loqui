@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
-use loqui_connection::{Encoder, FramedReaderWriter, IdSequence, LoquiError};
+use loqui_connection::{Encoder, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
@@ -51,7 +51,7 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
         + Future<
-            Output = Result<(Ready, FramedReaderWriter), (Error, Option<FramedReaderWriter>)>,
+            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
         >;
     existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
@@ -82,7 +82,7 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
         }
     }
 
-    fn handshake(&mut self, mut reader_writer: FramedReaderWriter) -> Self::HandshakeFuture {
+    fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
         async move {
             let hello = Self::make_hello();
             reader_writer = match await!(reader_writer.write(hello)) {

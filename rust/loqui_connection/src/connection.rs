@@ -1,5 +1,5 @@
 use crate::event_handler::EventHandler;
-use crate::framed_io::FramedReaderWriter;
+use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
 use crate::sender::Sender;
 use crate::LoquiError;
@@ -86,7 +86,7 @@ async fn run<H: Handler>(
 ) -> Result<(), Error> {
     let tcp_stream = await!(handler.upgrade(tcp_stream))?;
     let max_payload_size = handler.max_payload_size();
-    let reader_writer = FramedReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
+    let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
     let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
         Ok((ready, reader_writer)) => (ready, reader_writer),

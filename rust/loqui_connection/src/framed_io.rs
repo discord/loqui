@@ -13,15 +13,15 @@ use tokio::prelude::*;
 use tokio_codec::Framed;
 
 /// Used to read frames off the tcp socket.
-pub type FramedReader = SplitStream<Framed<TcpStream, Codec>>;
+pub type Reader = SplitStream<Framed<TcpStream, Codec>>;
 
 /// Used to write frames to the tcp socket.
-pub struct FramedWriter {
+pub struct Writer {
     inner: SplitSink<Framed<TcpStream, Codec>>,
     send_go_away: bool,
 }
 
-impl FramedWriter {
+impl Writer {
     pub fn new(writer: SplitSink<Framed<TcpStream, Codec>>, send_go_away: bool) -> Self {
         Self {
             inner: writer,
@@ -78,16 +78,16 @@ fn go_away_code(error: &Option<Error>) -> LoquiErrorCode {
     }
 }
 
-pub struct FramedReaderWriter {
-    pub reader: FramedReader,
-    writer: FramedWriter,
+pub struct ReaderWriter {
+    pub reader: Reader,
+    writer: Writer,
 }
 
-impl FramedReaderWriter {
+impl ReaderWriter {
     pub fn new(tcp_stream: TcpStream, max_payload_size: ByteSize, send_go_away: bool) -> Self {
         let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
         let (writer, reader) = framed_socket.split();
-        let writer = FramedWriter::new(writer, send_go_away);
+        let writer = Writer::new(writer, send_go_away);
         Self { reader, writer }
     }
 
@@ -102,8 +102,8 @@ impl FramedReaderWriter {
         }
     }
 
-    pub fn split(self) -> (FramedReader, FramedWriter) {
-        let FramedReaderWriter { reader, writer } = self;
+    pub fn split(self) -> (Reader, Writer) {
+        let ReaderWriter { reader, writer } = self;
         (reader, writer)
     }
 }
