@@ -3,7 +3,7 @@ use crate::connection::Connection;
 use crate::error::LoquiError;
 use crate::handler::Handler;
 use failure::Error;
-use futures::sync::mpsc::{self, Sender};
+use futures::sync::mpsc::{self, Sender, UnboundedSender};
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use std::io;
@@ -23,6 +23,7 @@ enum Event<H: Handler> {
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
     self_sender: Sender<Event<H>>,
+    close_sender: UnboundedSender<()>,
 }
 
 impl<H: Handler> Supervisor<H> {
@@ -37,8 +38,10 @@ impl<H: Handler> Supervisor<H> {
         F: Fn() -> H + Send + Sync + 'static,
     {
         let (self_sender, mut self_rx) = mpsc::channel(1);
+        let (close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
             self_sender: self_sender.clone(),
+            close_sender,
         };
         let (ready_tx, ready_rx) = oneshot::channel();
         tokio::spawn_async(
@@ -47,6 +50,12 @@ impl<H: Handler> Supervisor<H> {
                 // Make it an option so we only send once.
                 let mut ready_tx = Some(ready_tx);
                 loop {
+                    debug!("ok");
+                    if let Ok(Async::Ready(_)) = close_rx.poll() {
+                        debug!("Close requested while connecting.");
+                        return;
+                    }
+
                     let handler = handler_creator();
                     debug!("Connecting to {}", address);
 
@@ -58,6 +67,8 @@ impl<H: Handler> Supervisor<H> {
                             let connection =
                                 Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
 
+                            debug!("Connection spawn");
+                            // TODO: connect timeout!
                             // Wait for the connection to upgrade and handshake.
                             if let Err(_e) = await!(connection_ready_rx) {
                                 // Connection dropped the sender.
@@ -74,7 +85,8 @@ impl<H: Handler> Supervisor<H> {
                                 }
                             }
 
-                            loop {}
+                            continue;
+                            //loop {}
 
                             while let Some(Ok(event)) = await!(self_rx.next()) {
                                 match event {
@@ -130,6 +142,12 @@ impl<H: Handler> Supervisor<H> {
     }
 
     pub async fn close(&self) -> Result<(), Error> {
+        debug!("Closing");
+        self.close_sender
+            .unbounded_send(())
+            .map_err(|_| Error::from(LoquiError::ConnectionClosed))?;
+        debug!("CLosed");
+
         match await!(self.self_sender.clone().send(Event::Close)) {
             Ok(_sender) => Ok(()),
             Err(_e) => Err(LoquiError::ConnectionClosed.into()),

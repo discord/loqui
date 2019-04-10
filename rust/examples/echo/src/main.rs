@@ -86,6 +86,7 @@ async fn client_send_loop() {
     let client = await!(Client::connect(address, config)).expect("Failed to connect");
 
     let messages = &["test", "test2", "test3"];
+    await!(client.close());
     loop {
         for message in messages {
             let client = client.clone();
@@ -107,7 +108,6 @@ async fn client_send_loop() {
         }
 
         thread::sleep(Duration::from_secs(1));
-        //client.close();
     }
 }
 

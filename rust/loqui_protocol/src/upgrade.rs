@@ -47,11 +47,13 @@ impl Decoder for Codec {
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if buf.is_empty() {
+            println!("empty");
             return Ok(None);
         }
 
         let payload_size = buf.len() as u32;
         if payload_size > self.max_payload_size_in_bytes {
+            println!("payload large");
             return Err(ProtocolError::PayloadTooLarge {
                 actual: payload_size,
                 max: self.max_payload_size_in_bytes,
@@ -59,6 +61,7 @@ impl Decoder for Codec {
             .into());
         }
 
+        println!("data {:?}", String::from_utf8(buf[..].to_vec()));
         match String::from_utf8(buf[..].to_vec()) {
             Ok(payload) => {
                 if !payload.ends_with("\r\n\r\n") {

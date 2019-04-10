@@ -84,8 +84,10 @@ async fn run<H: Handler>(
     mut handler: H,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
+    debug!("upgrade");
     let tcp_stream = await!(handler.upgrade(tcp_stream))?;
     let max_payload_size = handler.max_payload_size();
+    debug!("creating reader writer");
     let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
     let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
