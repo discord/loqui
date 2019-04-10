@@ -13,6 +13,8 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
+const QUEUE_SIZE: usize = 10_000;
+
 enum Event<H: Handler> {
     Internal(H::InternalEvent),
     Close,
@@ -35,7 +37,7 @@ impl<H: Handler> Supervisor<H> {
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (self_sender, mut self_rx) = mpsc::channel(1);
+        let (self_sender, mut self_rx) = mpsc::channel(QUEUE_SIZE);
         let (close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
             self_sender: self_sender.clone(),
