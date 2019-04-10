@@ -16,11 +16,15 @@ pub struct ResponseWaiter<Decoded: DeserializeOwned + Send + Sync> {
 impl<Decoded: DeserializeOwned + Send + Sync> ResponseWaiter<Decoded> {
     /// Creates a new response waiter that will wait until the specified timeout.
     /// The returned future will resolve when someone calls waiter.notify().
-    /// The returned future will either return the `Decoded` `struct`, a `LoquiError::RequestTimeout`,
-    /// error, or another error from the server.
     ///
     /// # Arguments
+    ///
     /// * `timeout` - the `Duration` of time to wait before giving up on the request
+    ///
+    /// # Errors
+    ///
+    /// `LoquiError::RequestTimeout` or some other error from the server.
+    ///
     pub fn new(timeout: Duration) -> (Self, impl Future<Item = Decoded, Error = Error>) {
         let (tx, rx) = oneshot::channel::<Result<Decoded, Error>>();
 
