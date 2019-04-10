@@ -55,6 +55,7 @@ impl<Decoded: DeserializeOwned + Send + Sync> ResponseWaiter<Decoded> {
         )
     }
 
+    /// Notify the waiter that a result was received.
     pub fn notify(self, result: Result<Decoded, Error>) {
         if let Err(_e) = self.tx.send(result) {
             warn!("Waiter is no longer listening.")
