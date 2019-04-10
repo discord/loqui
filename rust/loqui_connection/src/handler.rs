@@ -71,6 +71,8 @@ pub trait Handler: Send + Sync + 'static {
         id_sequence: &mut IdSequence,
         transport_options: &TransportOptions,
     ) -> Option<LoquiFrame>;
+    /// Periodic callback that fires whenever a ping fires.
+    fn handle_ping(&mut self);
 }
 
 impl From<Push> for DelegatedFrame {

@@ -1,7 +1,7 @@
+use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
-use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
 use loqui_connection::{Encoder, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
@@ -14,7 +14,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -28,7 +28,7 @@ where
 {
     Request {
         payload: Encoded,
-        waiter_tx: OneShotSender<Result<Decoded, Error>>,
+        waiter: ResponseWaiter<Decoded>,
     },
     Push {
         payload: Encoded,
@@ -36,14 +36,13 @@ where
 }
 
 pub struct ConnectionHandler<E: Encoder> {
-    waiters: HashMap<u32, OneShotSender<Result<E::Decoded, Error>>>,
+    waiters: HashMap<u32, ResponseWaiter<E::Decoded>>,
     config: Arc<Config<E>>,
 }
 
 impl<E: Encoder> ConnectionHandler<E> {
     pub fn new(config: Arc<Config<E>>) -> Self {
         Self {
-            // TODO: should probably sweep these, probably request timeout
             waiters: HashMap::new(),
             config,
         }
@@ -77,7 +76,7 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
             match await!(reader.next()) {
                 Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
-                Some(Err(e)) => Err(e.into()),
+                Some(Err(e)) => Err(e),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }
@@ -140,12 +139,19 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
         let TransportOptions { encoding, .. } = transport_options;
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
-            InternalEvent::Request { payload, waiter_tx } => {
+            InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, encoding, sequence_id, waiter_tx)
+                self.handle_request(payload, encoding, sequence_id, waiter)
             }
             InternalEvent::Push { payload } => self.handle_push(payload, encoding),
         }
+    }
+
+    fn handle_ping(&mut self) {
+        // Use to sweep dead waiters.
+        let now = Instant::now();
+        self.waiters
+            .retain(|_sequence_id, waiter| waiter.deadline > now);
     }
 }
 
@@ -171,12 +177,17 @@ impl<E: Encoder> ConnectionHandler<E> {
         payload: E::Encoded,
         encoding: &'static str,
         sequence_id: u32,
-        waiter_tx: OneShotSender<Result<E::Decoded, Error>>,
+        waiter: ResponseWaiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
+        if waiter.deadline <= Instant::now() {
+            waiter.notify(Err(LoquiError::RequestTimeout.into()));
+            return None;
+        }
+
         match self.config.encoder.encode(encoding, payload) {
             Ok((payload, compressed)) => {
                 // Store the waiter so we can notify it when we get a response.
-                self.waiters.insert(sequence_id, waiter_tx);
+                self.waiters.insert(sequence_id, waiter);
                 let request = Request {
                     payload,
                     sequence_id,
@@ -185,7 +196,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 Some(request.into())
             }
             Err(error) => {
-                notify_waiter(waiter_tx, Err(error.into()));
+                waiter.notify(Err(error.into()));
                 None
             }
         }
@@ -198,16 +209,16 @@ impl<E: Encoder> ConnectionHandler<E> {
             payload,
         } = response;
         match self.waiters.remove(&sequence_id) {
-            Some(waiter_tx) => {
+            Some(waiter) => {
                 let response = self.config.encoder.decode(
                     transport_options.encoding,
                     is_compressed(flags),
                     payload,
                 );
-                notify_waiter(waiter_tx, response);
+                waiter.notify(response);
             }
             None => {
-                warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+                debug!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
             }
         }
     }
@@ -219,12 +230,12 @@ impl<E: Encoder> ConnectionHandler<E> {
             ..
         } = error;
         match self.waiters.remove(&sequence_id) {
-            Some(waiter_tx) => {
+            Some(waiter) => {
                 // payload is always a string
                 let result = String::from_utf8(payload)
                     .map_err(Error::from)
                     .and_then(|reason| Err(err_msg(reason)));
-                notify_waiter(waiter_tx, result);
+                waiter.notify(result);
             }
             None => {
                 warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -283,14 +294,5 @@ impl<E: Encoder> ConnectionHandler<E> {
             ping_interval,
             transport_options,
         })
-    }
-}
-
-fn notify_waiter<Decoded: DeserializeOwned + Send + Sync>(
-    waiter_tx: OneShotSender<Result<Decoded, Error>>,
-    result: Result<Decoded, Error>,
-) {
-    if let Err(_e) = waiter_tx.send(result) {
-        warn!("Waiter is no longer listening.")
     }
 }

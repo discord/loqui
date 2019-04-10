@@ -79,6 +79,7 @@ async fn client_send_loop() {
     let config = ClientConfig {
         max_payload_size: ByteSize::kb(5000),
         encoder: StringEncoder {},
+        request_timeout: Duration::from_secs(1),
     };
 
     let address: SocketAddr = CLIENT_ADDRESS.parse().expect("Failed to parse address.");
@@ -98,7 +99,7 @@ async fn client_send_loop() {
                             info!("Received response: {}", response);
                         }
                         Err(e) => {
-                            error!("Request failed. error={:?}", e);
+                            error!("Request failed. error={}", e);
                         }
                     }
                 },
@@ -106,7 +107,7 @@ async fn client_send_loop() {
         }
 
         thread::sleep(Duration::from_secs(1));
-        client.close();
+        //client.close();
     }
 }
 
