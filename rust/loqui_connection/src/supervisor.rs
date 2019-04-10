@@ -22,7 +22,7 @@ enum Event<H: Handler> {
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
-    self_sender: Sender<Event<H>>,
+    event_sender: Sender<Event<H>>,
     close_sender: UnboundedSender<()>,
 }
 
@@ -37,10 +37,10 @@ impl<H: Handler> Supervisor<H> {
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (self_sender, mut self_rx) = mpsc::channel(QUEUE_SIZE);
+        let (event_sender, mut self_rx) = mpsc::channel(QUEUE_SIZE);
         let (close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
-            self_sender: self_sender.clone(),
+            event_sender,
             close_sender,
         };
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -123,7 +123,7 @@ impl<H: Handler> Supervisor<H> {
 
     pub async fn send(&self, event: H::InternalEvent, timeout: Duration) -> Result<(), Error> {
         let future = self
-            .self_sender
+            .event_sender
             .clone()
             .send(Event::Internal(event))
             .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
@@ -149,7 +149,7 @@ impl<H: Handler> Supervisor<H> {
             .unbounded_send(())
             .map_err(|_| Error::from(LoquiError::ConnectionClosed))?;
 
-        match await!(self.self_sender.clone().send(Event::Close)) {
+        match await!(self.event_sender.clone().send(Event::Close)) {
             Ok(_sender) => Ok(()),
             Err(_e) => Err(LoquiError::ConnectionClosed.into()),
         }
