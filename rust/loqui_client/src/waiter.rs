@@ -28,9 +28,11 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
     pub fn new(timeout: Duration) -> (Self, impl Future<Item = Decoded, Error = Error>) {
         let (tx, rx) = oneshot::channel::<Result<Decoded, Error>>();
 
+        let deadline = Instant::now() + timeout;
+
         let awaitable = rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout(timeout)
+            .timeout_at(deadline)
             .map_err(|error| match error.downcast::<io::Error>() {
                 Ok(error) => {
                     // Change the timeout error back into one we like.
@@ -50,13 +52,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
                 },
             );
 
-        (
-            Self {
-                tx,
-                deadline: Instant::now() + timeout,
-            },
-            awaitable,
-        )
+        (Self { tx, deadline }, awaitable)
     }
 
     /// Notify the waiter that a result was received.
