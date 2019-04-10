@@ -79,7 +79,7 @@ async fn client_send_loop() {
     let config = ClientConfig {
         max_payload_size: ByteSize::kb(5000),
         encoder: StringEncoder {},
-        request_timeout: Duration::from_secs(1),
+        request_timeout: Duration::from_secs(5),
     };
 
     let address: SocketAddr = CLIENT_ADDRESS.parse().expect("Failed to parse address.");

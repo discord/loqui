@@ -3,9 +3,12 @@ use crate::connection::Connection;
 use crate::error::LoquiError;
 use crate::handler::Handler;
 use failure::Error;
-use futures::sync::mpsc::{self, UnboundedSender};
+use futures::sync::mpsc::{self, Sender};
 use futures::sync::oneshot;
+use futures_timer::FutureExt;
+use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -19,7 +22,7 @@ enum Event<H: Handler> {
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
-    self_sender: UnboundedSender<Event<H>>,
+    self_sender: Sender<Event<H>>,
 }
 
 impl<H: Handler> Supervisor<H> {
@@ -33,7 +36,7 @@ impl<H: Handler> Supervisor<H> {
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (self_sender, mut self_rx) = mpsc::unbounded();
+        let (self_sender, mut self_rx) = mpsc::channel(1);
         let connection = Self {
             self_sender: self_sender.clone(),
         };
@@ -71,6 +74,8 @@ impl<H: Handler> Supervisor<H> {
                                 }
                             }
 
+                            loop {}
+
                             while let Some(Ok(event)) = await!(self_rx.next()) {
                                 match event {
                                     Event::Internal(internal_event) => {
@@ -101,15 +106,33 @@ impl<H: Handler> Supervisor<H> {
         Ok(connection)
     }
 
-    pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
-        self.self_sender
-            .unbounded_send(Event::Internal(event))
-            .map_err(|_e| LoquiError::ConnectionClosed.into())
+    pub async fn send(&self, event: H::InternalEvent, timeout: Duration) -> Result<(), Error> {
+        let future = self
+            .self_sender
+            .clone()
+            .send(Event::Internal(event))
+            .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
+            .timeout(timeout);
+        match await!(future) {
+            Ok(_sender) => Ok(()),
+            Err(error) => match error.downcast::<io::Error>() {
+                Ok(error) => {
+                    // Change the timeout error back into one we like.
+                    if error.kind() == io::ErrorKind::TimedOut {
+                        Err(LoquiError::RequestTimeout.into())
+                    } else {
+                        Err(error.into())
+                    }
+                }
+                Err(error) => Err(error.into()),
+            },
+        }
     }
 
-    pub fn close(&self) -> Result<(), Error> {
-        self.self_sender
-            .unbounded_send(Event::Close)
-            .map_err(|_e| LoquiError::ConnectionClosed.into())
+    pub async fn close(&self) -> Result<(), Error> {
+        match await!(self.self_sender.clone().send(Event::Close)) {
+            Ok(_sender) => Ok(()),
+            Err(_e) => Err(LoquiError::ConnectionClosed.into()),
+        }
     }
 }
