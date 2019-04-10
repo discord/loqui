@@ -2,10 +2,7 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::Waiter;
 use crate::Config;
 use failure::Error;
-use futures::future::Future;
-use futures_timer::FutureExt;
-use loqui_connection::{Encoder, LoquiError, Supervisor as SupervisedConnection};
-use std::io;
+use loqui_connection::{Encoder, Supervisor as SupervisedConnection};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::await;
@@ -31,23 +28,10 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let (waiter, rx) = Waiter::new(self.config.request_timeout);
+        let (waiter, awaitable) = Waiter::new(self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
-        let receive_future = rx
-            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout(self.config.request_timeout);
-        match await!(receive_future) {
-            Ok(result) => result,
-            Err(error) => {
-                let error = error.downcast::<io::Error>()?;
-                if error.kind() == io::ErrorKind::TimedOut {
-                    Err(LoquiError::RequestTimeout.into())
-                } else {
-                    Err(error.into())
-                }
-            }
-        }
+        await!(awaitable)
     }
 
     /// Send a push to the server.

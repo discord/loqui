@@ -107,7 +107,7 @@ async fn client_send_loop() {
         }
 
         thread::sleep(Duration::from_secs(1));
-        client.close();
+        //client.close();
     }
 }
 

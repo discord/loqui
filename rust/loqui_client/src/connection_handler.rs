@@ -76,7 +76,7 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
             match await!(reader.next()) {
                 Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
-                Some(Err(e)) => Err(e.into()),
+                Some(Err(e)) => Err(e),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }
