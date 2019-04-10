@@ -11,3 +11,6 @@ loqui_protocol = { path = "../../loqui_protocol" }
 loqui_server = { path = "../../loqui_server" }
 tokio = { version = "0.1.16", features = ["async-await-preview"] }
 bytesize = "1.0.0"
+log = "0.4"
+fern = "0.5"
+chrono = "0.4"

@@ -1,10 +1,14 @@
 #![feature(await_macro, async_await, futures_api, existential_type)]
 
 use bytesize::ByteSize;
+use chrono;
 use failure::Error;
+use fern;
 use loqui_server::{Config, Encoder, RequestHandler, Server};
 use std::future::Future;
 use std::time::Duration;
+#[macro_use]
+extern crate log;
 
 const ADDRESS: &str = "127.0.0.1:8080";
 
@@ -51,7 +55,8 @@ impl Encoder for BytesEncoder {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
+    //configure_logging()?;
     tokio::run_async(
         async {
             let config = Config {
@@ -65,4 +70,25 @@ fn main() {
             println!("Run result={:?}", result);
         },
     );
+    Ok(())
+}
+
+fn configure_logging() -> Result<(), Error> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}:{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.level(),
+                record.target(),
+                record.line().unwrap_or(0),
+                message
+            ));
+        })
+        .level(log::LevelFilter::Debug)
+        .level_for("tokio_core", log::LevelFilter::Warn)
+        .level_for("tokio_reactor", log::LevelFilter::Warn)
+        .chain(std::io::stdout())
+        .apply()
+        .map_err(Error::from)
 }

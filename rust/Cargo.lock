@@ -269,8 +269,11 @@ name = "loqui_bench_server"
 version = "0.0.1"
 dependencies = [
  "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fern 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "loqui_protocol 0.0.1",
  "loqui_server 0.0.1",
  "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",

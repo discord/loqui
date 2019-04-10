@@ -1,6 +1,7 @@
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
+use crate::select_breaker::StreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
@@ -84,10 +85,8 @@ async fn run<H: Handler>(
     mut handler: H,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
-    debug!("upgrade");
     let tcp_stream = await!(handler.upgrade(tcp_stream))?;
     let max_payload_size = handler.max_payload_size();
-    debug!("creating reader writer");
     let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
     let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
@@ -118,7 +117,9 @@ async fn run<H: Handler>(
     let framed_reader = reader.map(Event::SocketReceive);
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
-    let mut stream = framed_reader.select(self_rx).select(ping_stream);
+    let mut stream = framed_reader
+        .select_breaker(self_rx)
+        .select_breaker(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
     while let Some(event) = await!(stream.next()) {

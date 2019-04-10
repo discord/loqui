@@ -41,7 +41,7 @@ impl Encoder for StringEncoder {
     type Decoded = String;
     type Encoded = String;
 
-    const ENCODINGS: &'static [&'static str] = &["string"];
+    const ENCODINGS: &'static [&'static str] = &["string", "bytes"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn decode(
