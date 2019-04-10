@@ -19,7 +19,6 @@ impl<R: RequestHandler<E>, E: Encoder> Server<R, E> {
     }
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
-        debug!("handling connection");
         let connection_handler = ConnectionHandler::new(self.config.clone());
         let _connection = Connection::spawn(tcp_stream, connection_handler, None);
     }

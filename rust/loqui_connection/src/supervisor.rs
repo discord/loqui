@@ -13,8 +13,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-// TODO: when does it stop attempting? When client object is dropped?
-
 enum Event<H: Handler> {
     Internal(H::InternalEvent),
     Close,
@@ -50,9 +48,12 @@ impl<H: Handler> Supervisor<H> {
                 // Make it an option so we only send once.
                 let mut ready_tx = Some(ready_tx);
                 loop {
-                    debug!("ok");
-                    if let Ok(Async::Ready(_)) = close_rx.poll() {
-                        debug!("Close requested while connecting.");
+                    if let Ok(Async::Ready(message)) = close_rx.poll() {
+                        if message.is_none() {
+                            trace!("Client dropped while connecting.");
+                        } else {
+                            trace!("Close requested while connecting.");
+                        }
                         return;
                     }
 
@@ -67,7 +68,6 @@ impl<H: Handler> Supervisor<H> {
                             let connection =
                                 Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
 
-                            debug!("Connection spawn");
                             // TODO: connect timeout!
                             // Wait for the connection to upgrade and handshake.
                             if let Err(_e) = await!(connection_ready_rx) {
@@ -101,6 +101,10 @@ impl<H: Handler> Supervisor<H> {
                                     }
                                 }
                             }
+
+                            debug!("Client hung up. Closing connection.");
+                            let _result = connection.close();
+                            return;
                         }
                         Err(e) => {
                             debug!("Connection closed with error. error={:?}", e);
@@ -139,11 +143,9 @@ impl<H: Handler> Supervisor<H> {
     }
 
     pub async fn close(&self) -> Result<(), Error> {
-        debug!("Closing");
         self.close_sender
             .unbounded_send(())
             .map_err(|_| Error::from(LoquiError::ConnectionClosed))?;
-        debug!("CLosed");
 
         match await!(self.self_sender.clone().send(Event::Close)) {
             Ok(_sender) => Ok(()),

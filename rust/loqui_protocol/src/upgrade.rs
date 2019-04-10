@@ -61,7 +61,6 @@ impl Decoder for Codec {
             .into());
         }
 
-        println!("data {:?}", String::from_utf8(buf[..].to_vec()));
         match String::from_utf8(buf[..].to_vec()) {
             Ok(payload) => {
                 if !payload.ends_with("\r\n\r\n") {
