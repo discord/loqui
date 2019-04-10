@@ -1,7 +1,7 @@
+use crate::waiter::Waiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
-use futures::sync::oneshot::Sender as OneShotSender;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
 use loqui_connection::{Encoder, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
@@ -19,27 +19,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
-
-#[derive(Debug)]
-pub struct Waiter<Decoded: DeserializeOwned + Send + Sync> {
-    tx: OneShotSender<Result<Decoded, Error>>,
-    deadline: Instant,
-}
-
-impl<Decoded: DeserializeOwned + Send + Sync> Waiter<Decoded> {
-    pub fn new(tx: OneShotSender<Result<Decoded, Error>>, timeout: Duration) -> Self {
-        Self {
-            tx,
-            deadline: Instant::now() + timeout,
-        }
-    }
-
-    fn notify(self, result: Result<Decoded, Error>) {
-        if let Err(_e) = self.tx.send(result) {
-            warn!("Waiter is no longer listening.")
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum InternalEvent<Encoded, Decoded>

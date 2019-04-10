@@ -1,8 +1,8 @@
-use crate::connection_handler::{ConnectionHandler, InternalEvent, Waiter};
+use crate::connection_handler::{ConnectionHandler, InternalEvent};
+use crate::waiter::Waiter;
 use crate::Config;
 use failure::Error;
 use futures::future::Future;
-use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use loqui_connection::{Encoder, LoquiError, Supervisor as SupervisedConnection};
 use std::io;
@@ -31,12 +31,11 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let (tx, rx) = oneshot::channel();
-        let waiter = Waiter::new(tx, self.config.request_timeout);
+        let (waiter, rx) = Waiter::new(self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
         let receive_future = rx
-            .map_err(|oneshot::Canceled| Error::from(LoquiError::ConnectionClosed))
+            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
             .timeout(self.config.request_timeout);
         match await!(receive_future) {
             Ok(result) => result,
