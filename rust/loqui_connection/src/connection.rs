@@ -1,7 +1,7 @@
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
-use crate::select_breaker::StreamExt;
+use crate::select_break::StreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
@@ -118,8 +118,8 @@ async fn run<H: Handler>(
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
     let mut stream = framed_reader
-        .select_breaker(self_rx)
-        .select_breaker(ping_stream);
+        .select_break(self_rx)
+        .select_break(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
     while let Some(event) = await!(stream.next()) {

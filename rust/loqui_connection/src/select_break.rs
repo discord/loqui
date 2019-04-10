@@ -10,25 +10,25 @@ use futures::{Async, Poll};
 /// Unlike normal select, the stream will stop once one of the streams ends.
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
-pub struct SelectBreaker<S1, S2> {
+pub struct SelectBreak<S1, S2> {
     stream1: Fuse<S1>,
     stream2: Fuse<S2>,
     flag: bool,
 }
 
-fn new<S1, S2>(stream1: S1, stream2: S2) -> SelectBreaker<S1, S2>
+fn new<S1, S2>(stream1: S1, stream2: S2) -> SelectBreak<S1, S2>
 where
     S1: Stream,
     S2: Stream<Item = S1::Item, Error = S1::Error>,
 {
-    SelectBreaker {
+    SelectBreak {
         stream1: stream1.fuse(),
         stream2: stream2.fuse(),
         flag: false,
     }
 }
 
-impl<S1, S2> Stream for SelectBreaker<S1, S2>
+impl<S1, S2> Stream for SelectBreak<S1, S2>
 where
     S1: Stream,
     S2: Stream<Item = S1::Item, Error = S1::Error>,
@@ -66,7 +66,7 @@ where
 }
 
 pub trait StreamExt: Stream + Sized {
-    fn select_breaker<S>(self, other: S) -> SelectBreaker<Self, S>
+    fn select_break<S>(self, other: S) -> SelectBreak<Self, S>
     where
         S: Stream<Item = Self::Item, Error = Self::Error>,
         Self: Sized,
