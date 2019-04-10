@@ -218,7 +218,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 waiter.notify(response);
             }
             None => {
-                warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+                debug!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
             }
         }
     }
