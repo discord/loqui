@@ -1,5 +1,5 @@
 use crate::connection_handler::{ConnectionHandler, InternalEvent};
-use crate::waiter::Waiter;
+use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
 use loqui_connection::{Encoder, Supervisor as SupervisedConnection};
@@ -28,7 +28,7 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let (waiter, awaitable) = Waiter::new(self.config.request_timeout);
+        let (waiter, awaitable) = ResponseWaiter::new(self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
         await!(awaitable)

@@ -8,14 +8,16 @@ use std::io;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
-pub struct Waiter<Decoded: DeserializeOwned + Send + Sync> {
+pub struct ResponseWaiter<Decoded: DeserializeOwned + Send + Sync> {
     tx: Sender<Result<Decoded, Error>>,
     pub deadline: Instant,
 }
 
-impl<Decoded: DeserializeOwned + Send + Sync> Waiter<Decoded> {
-    /// Creates a new waiter that wait for the specified timeout. Awaiting on the returned future
-    /// will either return the Decoded object, a timeout error, or another error from the server.
+impl<Decoded: DeserializeOwned + Send + Sync> ResponseWaiter<Decoded> {
+    /// Creates a new response waiter that will wait until the specified timeout.
+    /// The returned future will resolve when someone calls waiter.notify().
+    /// The returned future will either return the Decoded object, a timeout error, or another
+    /// error from the server.
     ///
     /// # Arguments
     /// * `timeout` - the `Duration` of time to wait before giving up on the request

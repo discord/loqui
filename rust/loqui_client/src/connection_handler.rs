@@ -1,4 +1,4 @@
-use crate::waiter::Waiter;
+use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
@@ -28,7 +28,7 @@ where
 {
     Request {
         payload: Encoded,
-        waiter: Waiter<Decoded>,
+        waiter: ResponseWaiter<Decoded>,
     },
     Push {
         payload: Encoded,
@@ -36,7 +36,7 @@ where
 }
 
 pub struct ConnectionHandler<E: Encoder> {
-    waiters: HashMap<u32, Waiter<E::Decoded>>,
+    waiters: HashMap<u32, ResponseWaiter<E::Decoded>>,
     config: Arc<Config<E>>,
 }
 
@@ -176,7 +176,7 @@ impl<E: Encoder> ConnectionHandler<E> {
         payload: E::Encoded,
         encoding: &'static str,
         sequence_id: u32,
-        waiter: Waiter<E::Decoded>,
+        waiter: ResponseWaiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline < Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
