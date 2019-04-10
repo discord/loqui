@@ -179,7 +179,7 @@ impl<E: Encoder> ConnectionHandler<E> {
         sequence_id: u32,
         waiter: ResponseWaiter<E::Decoded>,
     ) -> Option<LoquiFrame> {
-        if waiter.deadline < Instant::now() {
+        if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
             return None;
         }
