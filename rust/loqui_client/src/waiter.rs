@@ -8,12 +8,12 @@ use std::io;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
-pub struct ResponseWaiter<Decoded: DeserializeOwned + Send + Sync> {
+pub struct ResponseWaiter<Decoded: DeserializeOwned + Send> {
     tx: Sender<Result<Decoded, Error>>,
     pub deadline: Instant,
 }
 
-impl<Decoded: DeserializeOwned + Send + Sync> ResponseWaiter<Decoded> {
+impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
     /// Creates a new response waiter that will wait until the specified timeout.
     /// The returned future will resolve when someone calls waiter.notify().
     ///
@@ -62,7 +62,9 @@ impl<Decoded: DeserializeOwned + Send + Sync> ResponseWaiter<Decoded> {
     /// Notify the waiter that a result was received.
     pub fn notify(self, result: Result<Decoded, Error>) {
         if let Err(_e) = self.tx.send(result) {
-            warn!("Waiter is no longer listening.")
+            if self.deadline > Instant::now() {
+                warn!("Waiter is no longer listening.")
+            }
         }
     }
 }

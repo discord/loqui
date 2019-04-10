@@ -149,8 +149,9 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
 
     fn handle_ping(&mut self) {
         // Use to sweep dead waiters.
+        let now = Instant::now();
         self.waiters
-            .retain(|_sequence_id, waiter| waiter.deadline > Instant::now());
+            .retain(|_sequence_id, waiter| waiter.deadline > now);
     }
 }
 
