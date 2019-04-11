@@ -8,7 +8,7 @@ use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use std::io;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::Instant;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -121,13 +121,13 @@ impl<H: Handler> Supervisor<H> {
         Ok(connection)
     }
 
-    pub async fn send(&self, event: H::InternalEvent, timeout: Duration) -> Result<(), Error> {
+    pub async fn send(&self, event: H::InternalEvent, deadline: Instant) -> Result<(), Error> {
         let future = self
             .event_sender
             .clone()
             .send(Event::Internal(event))
             .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
-            .timeout(timeout);
+            .timeout_at(deadline);
         match await!(future) {
             Ok(_sender) => Ok(()),
             Err(error) => match error.downcast::<io::Error>() {

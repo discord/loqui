@@ -5,6 +5,7 @@ use failure::Error;
 use loqui_connection::{Encoder, Supervisor as SupervisedConnection};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::await;
 
 #[derive(Clone)]
@@ -28,17 +29,18 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let request_timeout = self.config.request_timeout;
-        let (waiter, awaitable) = ResponseWaiter::new(request_timeout);
+        let (waiter, awaitable) = ResponseWaiter::new(self.config.request_timeout);
+        let deadline = waiter.deadline;
         let request = InternalEvent::Request { payload, waiter };
-        await!(self.connection.send(request, request_timeout))?;
+        await!(self.connection.send(request, deadline))?;
         await!(awaitable)
     }
 
     /// Send a push to the server.
     pub async fn push(&self, payload: E::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
-        await!(self.connection.send(push, self.config.request_timeout))
+        let deadline = Instant::now() + self.config.request_timeout;
+        await!(self.connection.send(push, deadline))
     }
 
     pub async fn close(&self) -> Result<(), Error> {
