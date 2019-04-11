@@ -4,8 +4,7 @@ pub enum Flags {
 }
 
 pub fn is_compressed(flags: u8) -> bool {
-    let as_u8 = Flags::Compressed as u8;
-    flags & as_u8 == as_u8
+    (flags & Flags::Compressed as u8) != 0
 }
 
 /// Creates the u8 flags for a frame. We only have one flag right now, Flags::Compressed.
