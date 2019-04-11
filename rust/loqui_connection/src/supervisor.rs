@@ -50,6 +50,8 @@ impl<H: Handler> Supervisor<H> {
                 // Make it an option so we only send once.
                 let mut ready_tx = Some(ready_tx);
                 loop {
+                    // Poll the close receiver before connecting to make sure the client hasn't
+                    // hung up.
                     if let Ok(Async::Ready(message)) = close_rx.poll() {
                         if message.is_none() {
                             trace!("Client dropped while connecting.");
@@ -70,7 +72,6 @@ impl<H: Handler> Supervisor<H> {
                             let connection =
                                 Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
 
-                            // TODO: connect timeout!
                             // Wait for the connection to upgrade and handshake.
                             if let Err(_e) = await!(connection_ready_rx) {
                                 // Connection dropped the sender.
