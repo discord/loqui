@@ -14,21 +14,21 @@ struct EchoHandler {}
 struct BytesEncoder {}
 
 impl RequestHandler<BytesEncoder> for EchoHandler {
-    existential type RequestFuture: Future<Output = String>;
+    existential type RequestFuture: Future<Output = Vec<u8>>;
     existential type PushFuture: Send + Future<Output = ()>;
 
-    fn handle_request(&self, request: String) -> Self::RequestFuture {
+    fn handle_request(&self, request: Vec<u8>) -> Self::RequestFuture {
         async { request }
     }
 
-    fn handle_push(&self, _push: String) -> Self::PushFuture {
+    fn handle_push(&self, _push: Vec<u8>) -> Self::PushFuture {
         async {}
     }
 }
 
 impl Encoder for BytesEncoder {
-    type Decoded = String;
-    type Encoded = String;
+    type Decoded = Vec<u8>;
+    type Encoded = Vec<u8>;
 
     const ENCODINGS: &'static [&'static str] = &["bytes"];
     const COMPRESSIONS: &'static [&'static str] = &[];
@@ -39,7 +39,7 @@ impl Encoder for BytesEncoder {
         _compressed: bool,
         payload: Vec<u8>,
     ) -> Result<Self::Decoded, Error> {
-        String::from_utf8(payload).map_err(Error::from)
+        Ok(payload)
     }
 
     fn encode(
@@ -47,7 +47,7 @@ impl Encoder for BytesEncoder {
         _encoding: &'static str,
         payload: Self::Encoded,
     ) -> Result<(Vec<u8>, bool), Error> {
-        Ok((payload.as_bytes().to_vec(), false))
+        Ok((payload, false))
     }
 }
 
