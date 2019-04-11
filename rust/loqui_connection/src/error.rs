@@ -44,6 +44,8 @@ pub enum LoquiError {
     ReadySendFailed,
     #[fail(display = "Request timeout.")]
     RequestTimeout,
+    #[fail(display = "Reached max backoff elapsed time.")]
+    ReachedMaxBackoffElapsedTime,
 }
 
 pub enum LoquiErrorCode {
