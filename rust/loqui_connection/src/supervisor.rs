@@ -88,17 +88,22 @@ impl<H: Handler> Supervisor<H> {
                                 }
                             }
 
-                            while let Some(Ok(event)) = await!(self_rx.next()) {
-                                match event {
-                                    Event::Internal(internal_event) => {
+                            loop {
+                                match await!(self_rx.next()) {
+                                    Some(Ok(Event::Internal(internal_event))) => {
                                         if let Err(e) = connection.send(internal_event) {
                                             debug!("Connection no longer running. error={:?}", e);
                                             await!(backoff.snooze());
                                             break;
                                         }
                                     }
-                                    Event::Close => {
+                                    Some(Ok(Event::Close)) => {
                                         debug!("Closing connection.");
+                                        let _result = connection.close();
+                                        return;
+                                    }
+                                    Some(Err(_)) | None => {
+                                        debug!("Client hung up. Closing connection.");
                                         let _result = connection.close();
                                         return;
                                     }
