@@ -114,7 +114,7 @@ mod tests {
 
     fn test_frame_round_trip<F: Into<LoquiFrame>>(frame_bytes: &[u8], expected_frame: F) {
         let expected_frame = expected_frame.into();
-        let mut codec = Codec::new(500);
+        let mut codec = Codec::new(ByteSize::b(500));
         let buf = &mut BytesMut::with_capacity(1024);
 
         // Incomplete Payload
@@ -155,7 +155,7 @@ mod tests {
                 flags: 15,
                 ping_interval_ms: 32000,
                 encoding: "msgpack".into(),
-                compression: "gzip".into(),
+                compression: Some("gzip".into()),
             },
         );
     }
