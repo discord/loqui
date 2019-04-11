@@ -37,7 +37,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
             .then(
                 |result: Result<Result<Decoded, Error>, Error>| match result {
                     Ok(result) => result,
-                    Err(error) => Err(error.into()),
+                    Err(error) => Err(error),
                 },
             );
 
@@ -52,4 +52,67 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::future_utils::{block_on_all, spawn};
+    use futures_timer::Delay;
+    use tokio::await;
+
+    #[test]
+    fn it_receives_ok() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+        let result = block_on_all(
+            async {
+                spawn(
+                    async {
+                        waiter.notify(Ok(()));
+                        Ok(())
+                    },
+                );
+                await!(awaitable)
+            },
+        );
+        assert!(result.is_ok())
+    }
+
+    #[test]
+    fn it_receives_error() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+
+        let result: Result<(), Error> = block_on_all(
+            async {
+                spawn(
+                    async {
+                        waiter.notify(Err(LoquiError::ConnectionClosed.into()));
+                        Ok(())
+                    },
+                );
+                await!(awaitable)
+            },
+        );
+        assert!(result.is_err())
+    }
+
+    #[test]
+    fn it_times_out() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_millis(1));
+
+        let result = block_on_all(
+            async {
+                spawn(
+                    async {
+                        await!(Delay::new(Duration::from_millis(50))).unwrap();
+                        waiter.notify(Ok(()));
+                        Ok(())
+                    },
+                );
+                await!(awaitable)
+            },
+        );
+        assert!(result.is_err())
+    }
+
 }

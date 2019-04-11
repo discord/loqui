@@ -1,4 +1,6 @@
+use crate::LoquiError;
 use backoff::{backoff::Backoff, exponential::ExponentialBackoff};
+use failure::Error;
 use futures_timer::Delay;
 use std::time::Duration;
 use tokio::await;
@@ -19,6 +21,8 @@ impl AsyncBackoff {
                 initial_interval: BACKOFF_INITIAL_INTERVAL,
                 multiplier: BACKOFF_MULTIPLIER,
                 max_interval: BACKOFF_MAX_INTERVAL,
+                // Setting this to Some(duration) will result in the backoff eventually
+                // no longer doing anything. i.e. inner.next_backoff() will return None!
                 max_elapsed_time: None,
                 ..Default::default()
             },
@@ -26,11 +30,14 @@ impl AsyncBackoff {
     }
 
     /// Snooze the current future.
-    pub async fn snooze(&mut self) {
-        let backoff_duration = self.inner.next_backoff().expect("missing backoff");
+    pub async fn snooze(&mut self) -> Result<(), Error> {
+        let backoff_duration = self
+            .inner
+            .next_backoff()
+            .ok_or_else(|| LoquiError::ReachedMaxBackoffElapsedTime)?;
         debug!("Backing off. duration={:?}", backoff_duration);
-        let result = await!(Delay::new(backoff_duration));
-        debug!("delay result {:?}", result)
+        let _result = await!(Delay::new(backoff_duration))?;
+        Ok(())
     }
 
     /// Reset the backoff.

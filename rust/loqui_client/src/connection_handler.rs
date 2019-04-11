@@ -196,7 +196,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 Some(request.into())
             }
             Err(error) => {
-                waiter.notify(Err(error.into()));
+                waiter.notify(Err(error));
                 None
             }
         }
@@ -295,4 +295,116 @@ impl<E: Encoder> ConnectionHandler<E> {
             transport_options,
         })
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::future_utils::block_on_all;
+    use tokio::await;
+
+    #[derive(Clone)]
+    struct BytesEncoder {}
+
+    impl Encoder for BytesEncoder {
+        type Decoded = Vec<u8>;
+        type Encoded = Vec<u8>;
+
+        const ENCODINGS: &'static [&'static str] = &["bytes"];
+        const COMPRESSIONS: &'static [&'static str] = &[];
+
+        fn decode(
+            &self,
+            _encoding: &'static str,
+            _compressed: bool,
+            payload: Vec<u8>,
+        ) -> Result<Self::Decoded, Error> {
+            Ok(payload)
+        }
+
+        fn encode(
+            &self,
+            _encoding: &'static str,
+            payload: Self::Encoded,
+        ) -> Result<(Vec<u8>, bool), Error> {
+            Ok((payload, false))
+        }
+    }
+
+    fn make_handler() -> ConnectionHandler<BytesEncoder> {
+        let config = Config {
+            encoder: BytesEncoder {},
+            max_payload_size: ByteSize::b(5000),
+            request_timeout: Duration::from_secs(5),
+        };
+
+        ConnectionHandler::new(Arc::new(config))
+    }
+
+    fn make_transport_options() -> TransportOptions {
+        TransportOptions {
+            encoding: "bytes",
+            compression: None,
+        }
+    }
+
+    #[test]
+    fn it_handles_request_response() {
+        let mut handler = make_handler();
+        let transport_options = make_transport_options();
+        let mut id_sequence = IdSequence::default();
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+        let payload = b"hello".to_vec();
+        let request = handler
+            .handle_internal_event(
+                InternalEvent::Request {
+                    payload: payload.clone(),
+                    waiter,
+                },
+                &mut id_sequence,
+                &transport_options,
+            )
+            .expect("no request");
+        match request {
+            LoquiFrame::Request(request) => {
+                let response = Response {
+                    sequence_id: request.sequence_id,
+                    flags: 0,
+                    payload: payload.clone(),
+                };
+                let frame = handler.handle_frame(response.into(), &transport_options);
+                assert!(frame.is_none())
+            }
+            _other => panic!("request not returned"),
+        }
+        let result = block_on_all(async { await!(awaitable) }).unwrap();
+        assert_eq!(result, payload)
+    }
+
+    #[test]
+    fn it_handles_request_response_diff_sequence_id() {
+        let mut handler = make_handler();
+        let transport_options = make_transport_options();
+        let mut id_sequence = IdSequence::default();
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(1));
+        let _request = handler
+            .handle_internal_event(
+                InternalEvent::Request {
+                    payload: vec![],
+                    waiter,
+                },
+                &mut id_sequence,
+                &transport_options,
+            )
+            .expect("no request");
+        let response = Response {
+            sequence_id: id_sequence.next(),
+            flags: 0,
+            payload: vec![],
+        };
+        let _frame = handler.handle_frame(response.into(), &transport_options);
+        let result = block_on_all(async { await!(awaitable) });
+        assert!(result.is_err())
+    }
+
 }
