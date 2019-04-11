@@ -51,12 +51,12 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
                 Some(Ok(UpgradeFrame::Request)) => {
                     writer = match await!(writer.send(UpgradeFrame::Response)) {
                         Ok(writer) => writer,
-                        Err(e) => return Err(e.into()),
+                        Err(e) => return Err(e),
                     };
                     Ok(writer.reunite(reader)?.into_inner())
                 }
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
-                Some(Err(e)) => Err(e.into()),
+                Some(Err(e)) => Err(e),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
         }

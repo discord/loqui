@@ -196,7 +196,7 @@ impl<E: Encoder> ConnectionHandler<E> {
                 Some(request.into())
             }
             Err(error) => {
-                waiter.notify(Err(error.into()));
+                waiter.notify(Err(error));
                 None
             }
         }

@@ -42,13 +42,13 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
                         error.into()
                     }
                 }
-                Err(error) => error.into(),
+                Err(error) => error,
             })
             // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
             .then(
                 |result: Result<Result<Decoded, Error>, Error>| match result {
                     Ok(result) => result,
-                    Err(error) => Err(error.into()),
+                    Err(error) => Err(error),
                 },
             );
 
