@@ -16,8 +16,7 @@ use std::net::SocketAddr;
 use std::{thread, time::Duration};
 use tokio::await;
 
-const CLIENT_ADDRESS: &str = "127.0.0.1:8080";
-const SERVER_ADDRESS: &str = "127.0.0.1:8080";
+const ADDRESS: &str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
@@ -84,7 +83,7 @@ async fn client_send_loop() {
         request_timeout: Duration::from_secs(5),
     };
 
-    let address: SocketAddr = CLIENT_ADDRESS.parse().expect("Failed to parse address.");
+    let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
     let client = await!(Client::connect(address, config)).expect("Failed to connect");
 
     let messages = &["test", "test2", "test3"];
@@ -123,7 +122,7 @@ fn spawn_server() {
                 encoder: StringEncoder {},
             };
             let server = Server::new(config);
-            let result = await!(server.listen_and_serve(SERVER_ADDRESS.to_string()));
+            let result = await!(server.listen_and_serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);
         },
     );
