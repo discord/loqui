@@ -64,3 +64,54 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_timer::Delay;
+    use tokio::await;
+
+    #[test]
+    fn it_receives_ok() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+
+        tokio::run_async(
+            async {
+                tokio::spawn_async(async { waiter.notify(Ok(())) });
+                assert!(await!(awaitable).is_ok())
+            },
+        )
+    }
+
+    #[test]
+    fn it_receives_error() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+
+        tokio::run_async(
+            async {
+                tokio::spawn_async(
+                    async { waiter.notify(Err(LoquiError::ConnectionClosed.into())) },
+                );
+                let response: Result<(), Error> = await!(awaitable);
+                assert!(response.is_err())
+            },
+        )
+    }
+
+    #[test]
+    fn it_times_out() {
+        let (waiter, awaitable) = ResponseWaiter::new(Duration::from_millis(1));
+
+        tokio::run_async(
+            async {
+                tokio::spawn_async(
+                    async {
+                        await!(Delay::new(Duration::from_millis(50))).unwrap();
+                        waiter.notify(Ok(()))
+                    },
+                );
+                assert!(await!(awaitable).is_err())
+            },
+        )
+    }
+}
