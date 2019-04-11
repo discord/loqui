@@ -28,19 +28,20 @@ impl<E: Encoder> Client<E> {
 
     /// Send a request to the server.
     pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
-        let (waiter, awaitable) = ResponseWaiter::new(self.config.request_timeout);
+        let request_timeout = self.config.request_timeout;
+        let (waiter, awaitable) = ResponseWaiter::new(request_timeout);
         let request = InternalEvent::Request { payload, waiter };
-        self.connection.send(request)?;
+        await!(self.connection.send(request, request_timeout))?;
         await!(awaitable)
     }
 
     /// Send a push to the server.
     pub async fn push(&self, payload: E::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
-        self.connection.send(push)
+        await!(self.connection.send(push, self.config.request_timeout))
     }
 
-    pub fn close(&self) -> Result<(), Error> {
-        self.connection.close()
+    pub async fn close(&self) -> Result<(), Error> {
+        await!(self.connection.close())
     }
 }
