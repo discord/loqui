@@ -42,8 +42,4 @@ impl<E: Encoder> Client<E> {
         let deadline = Instant::now() + self.config.request_timeout;
         await!(self.connection.send(push, deadline))
     }
-
-    pub async fn close(&self) -> Result<(), Error> {
-        await!(self.connection.close())
-    }
 }

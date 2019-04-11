@@ -15,15 +15,12 @@ use tokio::prelude::*;
 
 const QUEUE_SIZE: usize = 10_000;
 
-enum Event<H: Handler> {
-    Internal(H::InternalEvent),
-    Close,
-}
-
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
-    event_sender: Sender<Event<H>>,
-    close_sender: UnboundedSender<()>,
+    event_sender: Sender<H::InternalEvent>,
+    /// A Sender that will drop once the client is dropped. If it's dropped then we should
+    /// stop trying to connect.
+    _close_sender: UnboundedSender<()>,
 }
 
 impl<H: Handler> Supervisor<H> {
@@ -38,10 +35,10 @@ impl<H: Handler> Supervisor<H> {
         F: Fn() -> H + Send + Sync + 'static,
     {
         let (event_sender, mut self_rx) = mpsc::channel(QUEUE_SIZE);
-        let (close_sender, mut close_rx) = mpsc::unbounded::<()>();
+        let (_close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
             event_sender,
-            close_sender,
+            _close_sender,
         };
         let (ready_tx, ready_rx) = oneshot::channel();
         tokio::spawn_async(
@@ -52,12 +49,8 @@ impl<H: Handler> Supervisor<H> {
                 loop {
                     // Poll the close receiver before connecting to make sure the client hasn't
                     // hung up.
-                    if let Ok(Async::Ready(message)) = close_rx.poll() {
-                        if message.is_none() {
-                            trace!("Client dropped while connecting.");
-                        } else {
-                            trace!("Close requested while connecting.");
-                        }
+                    if let Ok(Async::Ready(_)) = close_rx.poll() {
+                        trace!("Client dropped while connecting.");
                         return;
                     }
 
@@ -90,17 +83,12 @@ impl<H: Handler> Supervisor<H> {
 
                             loop {
                                 match await!(self_rx.next()) {
-                                    Some(Ok(Event::Internal(internal_event))) => {
+                                    Some(Ok(internal_event)) => {
                                         if let Err(e) = connection.send(internal_event) {
                                             debug!("Connection no longer running. error={:?}", e);
                                             await!(backoff.snooze());
                                             break;
                                         }
-                                    }
-                                    Some(Ok(Event::Close)) => {
-                                        debug!("Closing connection.");
-                                        let _result = connection.close();
-                                        return;
                                     }
                                     Some(Err(_)) | None => {
                                         debug!("Client hung up. Closing connection.");
@@ -131,7 +119,7 @@ impl<H: Handler> Supervisor<H> {
         let future = self
             .event_sender
             .clone()
-            .send(Event::Internal(event))
+            .send(event)
             .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
             .timeout_at(deadline);
         match await!(future) {
@@ -147,17 +135,6 @@ impl<H: Handler> Supervisor<H> {
                 }
                 Err(error) => Err(error.into()),
             },
-        }
-    }
-
-    pub async fn close(&self) -> Result<(), Error> {
-        self.close_sender
-            .unbounded_send(())
-            .map_err(|_| Error::from(LoquiError::ConnectionClosed))?;
-
-        match await!(self.event_sender.clone().send(Event::Close)) {
-            Ok(_sender) => Ok(()),
-            Err(_e) => Err(LoquiError::ConnectionClosed.into()),
         }
     }
 }
