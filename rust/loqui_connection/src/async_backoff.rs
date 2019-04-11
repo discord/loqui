@@ -27,7 +27,6 @@ impl AsyncBackoff {
 
     /// Snooze the current future.
     pub async fn snooze(&mut self) {
-        // TODO: expect
         let backoff_duration = self.inner.next_backoff().expect("missing backoff");
         debug!("Backing off. duration={:?}", backoff_duration);
         let result = await!(Delay::new(backoff_duration));

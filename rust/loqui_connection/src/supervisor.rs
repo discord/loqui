@@ -10,8 +10,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-// TODO: when does it stop attempting? When client object is dropped?
-
 enum Event<H: Handler> {
     Internal(H::InternalEvent),
     Close,

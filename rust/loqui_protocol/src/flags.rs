@@ -17,7 +17,3 @@ pub fn make_flags(compressed: bool) -> u8 {
     };
     flag as u8
 }
-
-// TODO:
-#[cfg(test)]
-mod tests {}

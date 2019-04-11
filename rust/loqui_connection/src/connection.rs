@@ -91,7 +91,6 @@ async fn run<H: Handler>(
     let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
         Ok((ready, reader_writer)) => (ready, reader_writer),
         Err((error, reader_writer)) => {
-            // TODO: send the ready error to ready_tx?
             debug!("Not ready. e={:?}", error);
             if let Some(reader_writer) = reader_writer {
                 let (_reader, writer) = reader_writer.split();
@@ -127,7 +126,6 @@ async fn run<H: Handler>(
             Ok(None) => {}
             Err(error) => {
                 await!(writer.close(Some(&error)));
-                // TODO: should we return okay?
                 return Ok(());
             }
         }
