@@ -70,7 +70,6 @@ pub enum LoquiErrorCode {
 pub fn convert_timeout_error(error: Error) -> Error {
     match error.downcast::<io::Error>() {
         Ok(error) => {
-            // Change the timeout error back into one we like.
             if error.kind() == io::ErrorKind::TimedOut {
                 LoquiError::RequestTimeout.into()
             } else {

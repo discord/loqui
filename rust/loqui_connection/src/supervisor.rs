@@ -115,11 +115,10 @@ impl<H: Handler> Supervisor<H> {
             .event_sender
             .clone()
             .send(event)
+            .map(|_sender| ())
             .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(deadline);
-        match await!(send_with_deadline) {
-            Ok(_sender) => Ok(()),
-            Err(error) => Err(convert_timeout_error(error)),
-        }
+            .timeout_at(deadline)
+            .map_err(convert_timeout_error);
+        await!(send_with_deadline)
     }
 }
