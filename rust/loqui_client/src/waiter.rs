@@ -69,7 +69,6 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
 mod tests {
     use super::*;
     use crate::future_utils::{block_on_all, spawn};
-    use futures::future::lazy;
     use futures_timer::Delay;
     use tokio::await;
 

@@ -6,6 +6,7 @@ extern crate log;
 mod client;
 mod config;
 mod connection_handler;
+#[cfg(test)]
 mod future_utils;
 mod waiter;
 

@@ -300,8 +300,8 @@ impl<E: Encoder> ConnectionHandler<E> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::future_utils::block_on_all;
     use tokio::await;
-    use tokio_current_thread;
 
     #[derive(Clone)]
     struct BytesEncoder {}
@@ -376,7 +376,8 @@ mod test {
             }
             _other => panic!("request not returned"),
         }
-        tokio::run_async(async { assert!(await!(awaitable).is_ok()) })
+        let result = block_on_all(async { await!(awaitable) });
+        assert!(result.is_ok())
     }
 
     #[test]
@@ -385,7 +386,7 @@ mod test {
         let transport_options = make_transport_options();
         let mut id_sequence = IdSequence::default();
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(1));
-        let request = handler
+        let _request = handler
             .handle_internal_event(
                 InternalEvent::Request {
                     payload: vec![],
@@ -395,19 +396,14 @@ mod test {
                 &transport_options,
             )
             .expect("no request");
-        match request {
-            LoquiFrame::Request(request) => {
-                let response = Response {
-                    sequence_id: id_sequence.next(),
-                    flags: 0,
-                    payload: vec![],
-                };
-                let frame = handler.handle_frame(response.into(), &transport_options);
-                assert!(frame.is_none())
-            }
-            _other => panic!("request not returned"),
-        }
-        assert!(tokio_current_thread::block_on_all(awaitable).is_err())
+        let response = Response {
+            sequence_id: id_sequence.next(),
+            flags: 0,
+            payload: vec![],
+        };
+        let _frame = handler.handle_frame(response.into(), &transport_options);
+        let result = block_on_all(async { await!(awaitable) });
+        assert!(result.is_err())
     }
 
 }
