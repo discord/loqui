@@ -3,6 +3,7 @@ use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
+use std::fmt::Debug;
 use std::future::Future;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -36,7 +37,7 @@ pub struct Ready {
 pub trait Handler: Send + Sync + 'static {
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
-    type InternalEvent: Send;
+    type InternalEvent: Send + Debug;
     /// Result of upgrading. Needs to be a type so we don't have to box the future.
     type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     /// Result of handshaking. Needs to be a type so we don't have to box the future.

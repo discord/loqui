@@ -1,13 +1,14 @@
 use failure::Error;
 use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 
 /// Interface for encoding and decoding. Used by the connection to hand back proper `Decoded`
 /// and `Encoded` structs from a vector of bytes.
 pub trait Encoder: Clone + Send + Sync + 'static {
     /// The resulting type when a `Vec<u8>` is decoded.
-    type Decoded: DeserializeOwned + Send + Sync;
+    type Decoded: DeserializeOwned + Send + Sync + Debug;
     /// The type that is encoded into a `Vec<u8>`.
-    type Encoded: Serialize + Send + Sync;
+    type Encoded: Serialize + Send + Sync + Debug;
 
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];

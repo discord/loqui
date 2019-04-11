@@ -10,6 +10,7 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
+#[derive(Debug)]
 enum Event<H: Handler> {
     Internal(H::InternalEvent),
     Close,

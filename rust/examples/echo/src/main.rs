@@ -8,11 +8,13 @@ use bytesize::ByteSize;
 use chrono;
 use failure::Error;
 use fern;
+use futures_timer::Delay;
 use loqui_client::{Client, Config as ClientConfig};
 use loqui_server::{Config as ServerConfig, Encoder, RequestHandler, Server};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::{thread, time::Duration};
+use tokio::await;
 
 const CLIENT_ADDRESS: &str = "127.0.0.1:8080";
 const SERVER_ADDRESS: &str = "127.0.0.1:8080";
@@ -79,7 +81,7 @@ async fn client_send_loop() {
     let config = ClientConfig {
         max_payload_size: ByteSize::kb(5000),
         encoder: StringEncoder {},
-        request_timeout: Duration::from_secs(1),
+        request_timeout: Duration::from_secs(5),
     };
 
     let address: SocketAddr = CLIENT_ADDRESS.parse().expect("Failed to parse address.");
@@ -106,7 +108,7 @@ async fn client_send_loop() {
             );
         }
 
-        thread::sleep(Duration::from_secs(1));
+        await!(Delay::new(Duration::from_secs(1))).expect("Failed to delay.");
         //client.close();
     }
 }
