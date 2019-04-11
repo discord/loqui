@@ -20,8 +20,7 @@ pub fn make_flags(compressed: bool) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use crate::is_compressed;
-    use crate::make_flags;
+    use super::*;
 
     #[test]
     fn it_is_compressed() {

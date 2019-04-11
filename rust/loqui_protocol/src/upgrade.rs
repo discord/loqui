@@ -17,7 +17,7 @@ impl Codec {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UpgradeFrame {
     Request,
     Response,
@@ -65,6 +65,9 @@ impl Decoder for Codec {
                     return Ok(None);
                 }
 
+                // Clear buffer.
+                buf.clear();
+
                 let payload = payload.to_lowercase();
                 if payload.contains("upgrade") {
                     if payload.starts_with("get") {
@@ -79,5 +82,43 @@ impl Decoder for Codec {
 
             Err(_e) => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::{BufMut, BytesMut};
+
+    fn test_round_trip(frame_bytes: &[u8], expected_frame: UpgradeFrame) {
+        let expected_frame = expected_frame.into();
+        let mut codec = Codec::new(ByteSize::b(500));
+        let buf = &mut BytesMut::with_capacity(1024);
+
+        // Incomplete Payload
+        buf.put(frame_bytes[..frame_bytes.len() - 1].to_vec());
+        assert_eq!(codec.decode(buf).unwrap(), None);
+
+        // Complete Frame
+        buf.put(frame_bytes[frame_bytes.len() - 1..].to_vec());
+        assert_eq!(codec.decode(buf).unwrap().unwrap(), expected_frame);
+
+        // Buffer has been consumed
+        assert!(buf.is_empty());
+        assert_eq!(codec.decode(buf).unwrap(), None);
+
+        // Encode a frame to make sure it can round-trip.
+        let _ = codec.encode(expected_frame, buf);
+        assert_eq!(buf, frame_bytes);
+    }
+
+    #[test]
+    fn it_round_trips_request() {
+        test_round_trip(REQUEST.to_string().as_bytes(), UpgradeFrame::Request)
+    }
+
+    #[test]
+    fn it_round_trips_response() {
+        test_round_trip(RESPONSE.to_string().as_bytes(), UpgradeFrame::Response)
     }
 }
