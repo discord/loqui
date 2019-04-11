@@ -1,6 +1,7 @@
 use failure::{Error, Fail};
 use loqui_protocol::frames::GoAway;
 use loqui_protocol::upgrade::UpgradeFrame;
+use std::io;
 
 #[derive(Debug, Fail)]
 pub enum LoquiError {
@@ -63,4 +64,18 @@ pub enum LoquiErrorCode {
     PingTimeout = 6,
     // InternalServerError is sent when a single request dies due to an error.
     InternalServerError = 7,
+}
+
+pub fn convert_timeout_error(error: Error) -> Error {
+    match error.downcast::<io::Error>() {
+        Ok(error) => {
+            // Change the timeout error back into one we like.
+            if error.kind() == io::ErrorKind::TimedOut {
+                LoquiError::RequestTimeout.into()
+            } else {
+                error.into()
+            }
+        }
+        Err(error) => error,
+    }
 }

@@ -1,12 +1,11 @@
 use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
-use crate::error::LoquiError;
+use crate::error::{convert_timeout_error, LoquiError};
 use crate::handler::Handler;
 use failure::Error;
 use futures::sync::mpsc::{self, Sender, UnboundedSender};
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
-use std::io;
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::await;
@@ -112,25 +111,15 @@ impl<H: Handler> Supervisor<H> {
     }
 
     pub async fn send(&self, event: H::InternalEvent, deadline: Instant) -> Result<(), Error> {
-        let future = self
+        let send_with_deadline = self
             .event_sender
             .clone()
             .send(event)
             .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
             .timeout_at(deadline);
-        match await!(future) {
+        match await!(send_with_deadline) {
             Ok(_sender) => Ok(()),
-            Err(error) => match error.downcast::<io::Error>() {
-                Ok(error) => {
-                    // Change the timeout error back into one we like.
-                    if error.kind() == io::ErrorKind::TimedOut {
-                        Err(LoquiError::RequestTimeout.into())
-                    } else {
-                        Err(error.into())
-                    }
-                }
-                Err(error) => Err(error.into()),
-            },
+            Err(error) => Err(convert_timeout_error(error)),
         }
     }
 }

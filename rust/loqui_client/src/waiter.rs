@@ -2,9 +2,8 @@ use failure::Error;
 use futures::future::Future;
 use futures::sync::oneshot::{self, Sender};
 use futures_timer::FutureExt;
-use loqui_connection::LoquiError;
+use loqui_connection::{convert_timeout_error, LoquiError};
 use serde::de::DeserializeOwned;
-use std::io;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -33,17 +32,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
         let awaitable = rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
             .timeout_at(deadline)
-            .map_err(|error| match error.downcast::<io::Error>() {
-                Ok(error) => {
-                    // Change the timeout error back into one we like.
-                    if error.kind() == io::ErrorKind::TimedOut {
-                        LoquiError::RequestTimeout.into()
-                    } else {
-                        error.into()
-                    }
-                }
-                Err(error) => error.into(),
-            })
+            .map_err(convert_timeout_error)
             // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
             .then(
                 |result: Result<Result<Decoded, Error>, Error>| match result {

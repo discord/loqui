@@ -17,7 +17,7 @@ pub mod handler;
 
 pub use connection::Connection;
 pub use encoder::Encoder;
-pub use error::{LoquiError, LoquiErrorCode};
+pub use error::{convert_timeout_error, LoquiError, LoquiErrorCode};
 pub use framed_io::ReaderWriter;
 pub use id_sequence::IdSequence;
 pub use supervisor::Supervisor;
