@@ -85,7 +85,7 @@ impl<H: Handler> Supervisor<H> {
                                 match await!(self_rx.next()) {
                                     Some(Ok(internal_event)) => {
                                         if let Err(e) = connection.send(internal_event) {
-                                            debug!("Connection no longer running. error={:?}", e);
+                                            debug!("Connection no longer running. Will reconnect. error={:?}", e);
                                             await!(backoff.snooze());
                                             break;
                                         }
@@ -97,10 +97,6 @@ impl<H: Handler> Supervisor<H> {
                                     }
                                 }
                             }
-
-                            debug!("Client hung up. Closing connection.");
-                            let _result = connection.close();
-                            return;
                         }
                         Err(e) => {
                             debug!("Connection closed with error. error={:?}", e);
