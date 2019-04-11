@@ -64,3 +64,17 @@ pub enum LoquiErrorCode {
     // InternalServerError is sent when a single request dies due to an error.
     InternalServerError = 7,
 }
+
+impl LoquiError {
+    pub(crate) fn code(&self) -> LoquiErrorCode {
+        match self {
+            LoquiError::InvalidOpcode { .. } => LoquiErrorCode::InvalidOpcode,
+            LoquiError::UnsupportedVersion { .. } => LoquiErrorCode::UnsupportedVersion,
+            LoquiError::NoCommonEncoding { .. } => LoquiErrorCode::NoCommonEncoding,
+            LoquiError::InvalidEncoding => LoquiErrorCode::InvalidEncoding,
+            LoquiError::InvalidCompression => LoquiErrorCode::InvalidCompression,
+            LoquiError::PingTimeout => LoquiErrorCode::PingTimeout,
+            _ => LoquiErrorCode::InternalServerError,
+        }
+    }
+}
