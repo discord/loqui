@@ -354,10 +354,11 @@ mod test {
         let transport_options = make_transport_options();
         let mut id_sequence = IdSequence::default();
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
+        let payload = b"hello".to_vec();
         let request = handler
             .handle_internal_event(
                 InternalEvent::Request {
-                    payload: vec![],
+                    payload: payload.clone(),
                     waiter,
                 },
                 &mut id_sequence,
@@ -369,15 +370,15 @@ mod test {
                 let response = Response {
                     sequence_id: request.sequence_id,
                     flags: 0,
-                    payload: vec![],
+                    payload: payload.clone(),
                 };
                 let frame = handler.handle_frame(response.into(), &transport_options);
                 assert!(frame.is_none())
             }
             _other => panic!("request not returned"),
         }
-        let result = block_on_all(async { await!(awaitable) });
-        assert!(result.is_ok())
+        let result = block_on_all(async { await!(awaitable) }).unwrap();
+        assert_eq!(result, payload)
     }
 
     #[test]
