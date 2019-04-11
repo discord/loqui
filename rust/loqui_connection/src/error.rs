@@ -66,6 +66,7 @@ pub enum LoquiErrorCode {
     InternalServerError = 7,
 }
 
+/// Convert an error to a LoquiError::RequestTimeout if it's a time out.
 pub fn convert_timeout_error(error: Error) -> Error {
     match error.downcast::<io::Error>() {
         Ok(error) => {
