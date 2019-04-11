@@ -27,7 +27,7 @@ impl<H: Handler> Supervisor<H> {
     ///
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
-    /// * `queue_size` - the number of requests the supervisor should hold before dropping requests
+    /// * `queue_size` - the number of requests the supervisor should hold before dropping requests.
     pub async fn connect<F>(
         address: SocketAddr,
         handler_creator: F,
