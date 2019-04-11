@@ -12,8 +12,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-const QUEUE_SIZE: usize = 10_000;
-
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
     event_sender: Sender<H::InternalEvent>,
@@ -29,11 +27,16 @@ impl<H: Handler> Supervisor<H> {
     ///
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
-    pub async fn connect<F>(address: SocketAddr, handler_creator: F) -> Result<Self, Error>
+    /// * `queue_size` - the number of requests the supervisor should hold before dropping requests
+    pub async fn connect<F>(
+        address: SocketAddr,
+        handler_creator: F,
+        queue_size: usize,
+    ) -> Result<Self, Error>
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (event_sender, mut self_rx) = mpsc::channel(QUEUE_SIZE);
+        let (event_sender, mut self_rx) = mpsc::channel(queue_size);
         let (_close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
             event_sender,

@@ -19,7 +19,11 @@ impl<E: Encoder> Client<E> {
         let config = Arc::new(config);
         let handler_config = config.clone();
         let handler_creator = move || ConnectionHandler::new(handler_config.clone());
-        let connection = await!(SupervisedConnection::connect(address, handler_creator))?;
+        let connection = await!(SupervisedConnection::connect(
+            address,
+            handler_creator,
+            config.request_queue_size
+        ))?;
         let client = Self {
             connection: Arc::new(connection),
             config,
