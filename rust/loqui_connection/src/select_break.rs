@@ -66,6 +66,13 @@ where
 }
 
 pub trait StreamExt: Stream + Sized {
+    /// An adapter for merging the output of two streams.
+    ///
+    /// The merged stream produces items from either of the underlying streams as
+    /// they become available, and the streams are polled in a round-robin fashion.
+    /// Errors, however, are not merged: you get at most one error at a time.
+    ///
+    /// Unlike normal select, the stream will stop once one of the streams ends.
     fn select_break<S>(self, other: S) -> SelectBreak<Self, S>
     where
         S: Stream<Item = Self::Item, Error = Self::Error>,
