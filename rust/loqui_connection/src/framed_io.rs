@@ -65,13 +65,14 @@ fn go_away_code(error: &Option<&Error>) -> LoquiErrorCode {
         Some(error) => {
             if let Some(protocol_error) = error.downcast_ref::<ProtocolError>() {
                 let error_code = match protocol_error {
-                    // TODO: elixir sends back a 413 http response
-                    ProtocolError::PayloadTooLarge { .. } => LoquiErrorCode::InternalServerError,
                     ProtocolError::InvalidOpcode { .. } => LoquiErrorCode::InvalidOpcode,
-                    // TODO
-                    ProtocolError::InvalidPayload { .. } => LoquiErrorCode::InternalServerError,
+                    ProtocolError::PayloadTooLarge { .. }
+                    | ProtocolError::InvalidPayload { .. } => LoquiErrorCode::InternalServerError,
                 };
                 return error_code;
+            }
+            if let Some(loqui_error) = error.downcast_ref::<LoquiError>() {
+                return loqui_error.code();
             }
             LoquiErrorCode::InternalServerError
         }

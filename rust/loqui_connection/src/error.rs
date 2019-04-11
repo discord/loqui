@@ -66,6 +66,20 @@ pub enum LoquiErrorCode {
     InternalServerError = 7,
 }
 
+impl LoquiError {
+    pub(crate) fn code(&self) -> LoquiErrorCode {
+        match self {
+            LoquiError::InvalidOpcode { .. } => LoquiErrorCode::InvalidOpcode,
+            LoquiError::UnsupportedVersion { .. } => LoquiErrorCode::UnsupportedVersion,
+            LoquiError::NoCommonEncoding { .. } => LoquiErrorCode::NoCommonEncoding,
+            LoquiError::InvalidEncoding => LoquiErrorCode::InvalidEncoding,
+            LoquiError::InvalidCompression => LoquiErrorCode::InvalidCompression,
+            LoquiError::PingTimeout => LoquiErrorCode::PingTimeout,
+            _ => LoquiErrorCode::InternalServerError,
+        }
+    }
+}
+
 /// Convert an error to a LoquiError::RequestTimeout if it's a timeout.
 pub fn convert_timeout_error(error: Error) -> Error {
     match error.downcast::<io::Error>() {
