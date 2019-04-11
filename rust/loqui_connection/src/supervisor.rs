@@ -87,6 +87,10 @@ impl<H: Handler> Supervisor<H> {
                                     }
                                 }
                             }
+
+                            debug!("Client hung up. Closing connection.");
+                            let _result = connection.close();
+                            return;
                         }
                         Err(e) => {
                             debug!("Connection closed with error. error={:?}", e);
