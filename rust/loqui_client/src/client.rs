@@ -10,7 +10,7 @@ use tokio::await;
 
 pub struct Client<F: EncoderFactory> {
     connection: Arc<SupervisedConnection<F, ConnectionHandler<F>>>,
-    config: Arc<Config<F>>,
+    config: Arc<Config>,
 }
 
 // XXX: #[derive(Clone)] requires EncoderFactory to be Clone for some unknown reason.
@@ -24,7 +24,7 @@ impl<F: EncoderFactory> Clone for Client<F> {
 }
 
 impl<F: EncoderFactory> Client<F> {
-    pub async fn connect(address: SocketAddr, config: Config<F>) -> Result<Client<F>, Error> {
+    pub async fn connect(address: SocketAddr, config: Config) -> Result<Client<F>, Error> {
         let config = Arc::new(config);
         let handler_config = config.clone();
         let handler_creator = move || ConnectionHandler::new(handler_config.clone());

@@ -103,10 +103,14 @@ fn main() -> Result<(), Error> {
 }
 
 async fn client_send_loop() {
-    let config = ClientConfig::<Factory>::new(ByteSize::kb(5000), Duration::from_secs(5), 10);
+    let config = ClientConfig {
+        max_payload_size: ByteSize::kb(5000),
+        request_timeout: Duration::from_secs(5),
+        request_queue_size: 10,
+    };
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-    let client = await!(Client::connect(address, config)).expect("Failed to connect");
+    let client = await!(Client::<Factory>::connect(address, config)).expect("Failed to connect");
 
     let messages = &["test", "test2", "test3"];
     loop {
