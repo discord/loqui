@@ -13,12 +13,6 @@ use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-#[derive(Debug)]
-enum Event<F: Factory, H: Handler<F>> {
-    Internal(H::InternalEvent),
-    Close,
-}
-
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<F: Factory, H: Handler<F>> {
     event_sender: Sender<H::InternalEvent>,

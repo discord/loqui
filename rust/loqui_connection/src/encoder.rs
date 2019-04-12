@@ -1,7 +1,6 @@
 use failure::Error;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
-use std::pin::Pin;
 use std::sync::Arc;
 
 /// Interface for encoding and decoding. Used by the connection to hand back proper `Decoded`

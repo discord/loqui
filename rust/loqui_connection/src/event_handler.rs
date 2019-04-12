@@ -1,13 +1,12 @@
 use super::connection::Event;
 use super::error::LoquiError;
-use super::handler::{DelegatedFrame, Handler, TransportOptions};
+use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
 use crate::encoder::{Encoder, Factory};
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
-use std::pin::Pin;
 use std::sync::Arc;
 
 /// Main handler of connection `Event`s.

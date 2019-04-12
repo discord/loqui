@@ -6,7 +6,6 @@ use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
 use std::fmt::Debug;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;

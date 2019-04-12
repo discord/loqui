@@ -105,7 +105,8 @@ fn main() -> Result<(), Error> {
 }
 
 async fn client_send_loop() {
-    let config = ClientConfig::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5),  10);
+    let config =
+        ClientConfig::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5), 10);
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
     let client = await!(Client::connect(address, config)).expect("Failed to connect");
