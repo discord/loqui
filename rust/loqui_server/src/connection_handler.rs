@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
 use loqui_connection::ReaderWriter;
-use loqui_connection::{Encoder, Factory, IdSequence, LoquiError};
+use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::Flags;
@@ -16,17 +16,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub struct ConnectionHandler<R: RequestHandler<F>, F: Factory> {
+pub struct ConnectionHandler<R: RequestHandler<F>, F: EncoderFactory> {
     config: Arc<Config<R, F>>,
 }
 
-impl<R: RequestHandler<F>, F: Factory> ConnectionHandler<R, F> {
+impl<R: RequestHandler<F>, F: EncoderFactory> ConnectionHandler<R, F> {
     pub fn new(config: Arc<Config<R, F>>) -> Self {
         Self { config }
     }
 }
 
-impl<R: RequestHandler<F>, F: Factory> Handler<F> for ConnectionHandler<R, F> {
+impl<R: RequestHandler<F>, F: EncoderFactory> Handler<F> for ConnectionHandler<R, F> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -113,7 +113,7 @@ impl<R: RequestHandler<F>, F: Factory> Handler<F> for ConnectionHandler<R, F> {
     fn handle_ping(&mut self) {}
 }
 
-async fn handle_push<F: Factory, R: RequestHandler<F>>(
+async fn handle_push<F: EncoderFactory, R: RequestHandler<F>>(
     config: Arc<Config<R, F>>,
     push: Push,
     encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
@@ -129,7 +129,7 @@ async fn handle_push<F: Factory, R: RequestHandler<F>>(
     }
 }
 
-async fn handle_request<F: Factory, R: RequestHandler<F>>(
+async fn handle_request<F: EncoderFactory, R: RequestHandler<F>>(
     config: Arc<Config<R, F>>,
     request: Request,
     encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
@@ -156,7 +156,7 @@ async fn handle_request<F: Factory, R: RequestHandler<F>>(
     })
 }
 
-impl<F: Factory, R: RequestHandler<F>> ConnectionHandler<R, F> {
+impl<F: EncoderFactory, R: RequestHandler<F>> ConnectionHandler<R, F> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,

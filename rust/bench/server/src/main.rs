@@ -2,7 +2,7 @@
 
 use bytesize::ByteSize;
 use failure::Error;
-use loqui_server::{Config, Encoder, Factory, RequestHandler, Server};
+use loqui_server::{Config, Encoder, EncoderFactory, RequestHandler, Server};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +14,7 @@ struct EchoHandler {}
 #[derive(Clone)]
 struct BytesEncoder {}
 
-impl RequestHandler<EncoderFactory> for EchoHandler {
+impl RequestHandler<EncoderEncoderFactory> for EchoHandler {
     existential type RequestFuture: Future<Output = Vec<u8>>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -28,9 +28,9 @@ impl RequestHandler<EncoderFactory> for EchoHandler {
 }
 
 #[derive(Clone)]
-struct EncoderFactory {}
+struct EncoderEncoderFactory {}
 
-impl Factory for EncoderFactory {
+impl EncoderFactory for EncoderEncoderFactory {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
 
@@ -63,7 +63,7 @@ impl Encoder for IdentityEncoder {
 fn main() {
     tokio::run_async(
         async {
-            let config = Config::<EchoHandler, EncoderFactory>::new(
+            let config = Config::<EchoHandler, EncoderEncoderFactory>::new(
                 EchoHandler {},
                 ByteSize::kb(5000),
                 Duration::from_secs(5),

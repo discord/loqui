@@ -10,7 +10,7 @@ use failure::Error;
 use fern;
 use futures_timer::Delay;
 use loqui_client::{Client, Config as ClientConfig};
-use loqui_server::{Config as ServerConfig, Encoder, Factory, RequestHandler, Server};
+use loqui_server::{Config as ServerConfig, Encoder, EncoderFactory, RequestHandler, Server};
 use serde_json;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -22,7 +22,7 @@ const ADDRESS: &str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
-impl RequestHandler<EncoderFactory> for EchoHandler {
+impl RequestHandler<Factory> for EchoHandler {
     existential type RequestFuture: Future<Output = String>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -38,9 +38,9 @@ impl RequestHandler<EncoderFactory> for EchoHandler {
 }
 
 #[derive(Clone)]
-struct EncoderFactory {}
+struct Factory {}
 
-impl Factory for EncoderFactory {
+impl EncoderFactory for Factory {
     type Decoded = String;
     type Encoded = String;
 
@@ -105,8 +105,7 @@ fn main() -> Result<(), Error> {
 }
 
 async fn client_send_loop() {
-    let config =
-        ClientConfig::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5), 10);
+    let config = ClientConfig::<Factory>::new(ByteSize::kb(5000), Duration::from_secs(5), 10);
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
     let client = await!(Client::connect(address, config)).expect("Failed to connect");
@@ -140,7 +139,7 @@ async fn client_send_loop() {
 fn spawn_server() {
     tokio::spawn_async(
         async {
-            let config = ServerConfig::<EchoHandler, EncoderFactory>::new(
+            let config = ServerConfig::<EchoHandler, Factory>::new(
                 EchoHandler {},
                 ByteSize::kb(5000),
                 Duration::from_secs(5),

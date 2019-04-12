@@ -1,17 +1,17 @@
 use crate::connection_handler::ConnectionHandler;
 use crate::{Config, RequestHandler};
 use failure::Error;
-use loqui_connection::{Connection, Factory};
+use loqui_connection::{Connection, EncoderFactory};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
-pub struct Server<R: RequestHandler<F>, F: Factory> {
+pub struct Server<R: RequestHandler<F>, F: EncoderFactory> {
     config: Arc<Config<R, F>>,
 }
 
-impl<R: RequestHandler<F>, F: Factory> Server<R, F> {
+impl<R: RequestHandler<F>, F: EncoderFactory> Server<R, F> {
     pub fn new(config: Config<R, F>) -> Self {
         Self {
             config: Arc::new(config),

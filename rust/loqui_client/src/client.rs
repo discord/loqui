@@ -2,19 +2,19 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
-use loqui_connection::{Encoder, Factory, Supervisor as SupervisedConnection};
+use loqui_connection::{EncoderFactory, Supervisor as SupervisedConnection};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::await;
 
 #[derive(Clone)]
-pub struct Client<F: Factory> {
+pub struct Client<F: EncoderFactory> {
     connection: Arc<SupervisedConnection<F, ConnectionHandler<F>>>,
     config: Arc<Config<F>>,
 }
 
-impl<F: Factory> Client<F> {
+impl<F: EncoderFactory> Client<F> {
     pub async fn connect(address: SocketAddr, config: Config<F>) -> Result<Client<F>, Error> {
         let config = Arc::new(config);
         let handler_config = config.clone();

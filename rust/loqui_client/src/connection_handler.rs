@@ -3,7 +3,7 @@ use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
-use loqui_connection::{Encoder, Factory, IdSequence, LoquiError, ReaderWriter};
+use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
@@ -35,12 +35,12 @@ where
     },
 }
 
-pub struct ConnectionHandler<F: Factory> {
+pub struct ConnectionHandler<F: EncoderFactory> {
     waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
     config: Arc<Config<F>>,
 }
 
-impl<F: Factory> ConnectionHandler<F> {
+impl<F: EncoderFactory> ConnectionHandler<F> {
     pub fn new(config: Arc<Config<F>>) -> Self {
         Self {
             waiters: HashMap::new(),
@@ -49,7 +49,7 @@ impl<F: Factory> ConnectionHandler<F> {
     }
 }
 
-impl<F: Factory> Handler<F> for ConnectionHandler<F> {
+impl<F: EncoderFactory> Handler<F> for ConnectionHandler<F> {
     type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -154,7 +154,7 @@ impl<F: Factory> Handler<F> for ConnectionHandler<F> {
     }
 }
 
-impl<F: Factory> ConnectionHandler<F> {
+impl<F: EncoderFactory> ConnectionHandler<F> {
     fn handle_push(
         &mut self,
         payload: F::Encoded,
