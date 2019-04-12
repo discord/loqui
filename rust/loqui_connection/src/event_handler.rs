@@ -1,6 +1,7 @@
 use super::connection::Event;
 use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler, TransportOptions};
+use crate::encoder::{Factory, Encoder};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
 use crate::LoquiErrorCode;
@@ -8,12 +9,12 @@ use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
 
 /// Main handler of connection `Event`s.
-pub struct EventHandler<H: Handler> {
+pub struct EventHandler<F: Factory, H: Handler<F>> {
     handler: H,
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    transport_options: TransportOptions,
+    encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
 }
 
 /// Standard return type for handler functions.
@@ -22,18 +23,18 @@ pub struct EventHandler<H: Handler> {
 /// be sent back over the connection.
 type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
-impl<H: Handler> EventHandler<H> {
+impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
     pub fn new(
         self_sender: Sender<H::InternalEvent>,
         handler: H,
-        transport_options: TransportOptions,
+        encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
     ) -> Self {
         Self {
             handler,
             pong_received: true,
             id_sequence: IdSequence::default(),
             self_sender,
-            transport_options,
+            encoder,
         }
     }
 
@@ -98,7 +99,7 @@ impl<H: Handler> EventHandler<H> {
         let delegated_frame = delegated_frame.into();
         let maybe_future = self
             .handler
-            .handle_frame(delegated_frame, &self.transport_options);
+            .handle_frame(delegated_frame, self.encoder);
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
@@ -148,7 +149,7 @@ impl<H: Handler> EventHandler<H> {
         Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
-            &self.transport_options,
+            &self.encoder,
         ))
     }
 }

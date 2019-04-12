@@ -10,25 +10,27 @@ pub trait Encoder: Send + Sync + 'static {
     /// The type that is encoded into a `Vec<u8>`.
     type Encoded: Serialize + Send + Sync + Debug;
 
+    /// Decode a `Vec<u8>` into a struct.
+    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error>;
+    /// Encode a struct into a `Vec<u8>`. Returns `(Vec<u8>, bool)` where `bool` is true if
+    /// the payload is compressed.
+    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error>;
+}
+
+pub trait Factory: Send + Sync + 'static {
+    /// The resulting type when a `Vec<u8>` is decoded.
+    type Decoded: DeserializeOwned + Send + Sync + Debug;
+    /// The type that is encoded into a `Vec<u8>`.
+    type Encoded: Serialize + Send + Sync + Debug;
+
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];
     /// Compressions supported.
     const COMPRESSIONS: &'static [&'static str];
 
-    /// Decode a `Vec<u8>` into a struct.
-    fn decode(
-        &self,
+    fn make(
         encoding: &'static str,
-        compressed: bool,
-        payload: Vec<u8>,
-    ) -> Result<Self::Decoded, Error>;
-    /// Encode a struct into a `Vec<u8>`. Returns `(Vec<u8>, bool)` where `bool` is true if
-    /// the payload is compressed.
-    fn encode(
-        &self,
-        encoding: &'static str,
-        payload: Self::Encoded,
-    ) -> Result<(Vec<u8>, bool), Error>;
+    ) -> Box<dyn Encoder<Decoded = Self::Decoded, Encoded = Self::Encoded>>;
 
     fn find_encoding<S: AsRef<str>>(encoding: S) -> Option<&'static str> {
         let encoding = encoding.as_ref();

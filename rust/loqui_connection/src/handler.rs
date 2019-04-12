@@ -3,6 +3,7 @@ use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
+use crate::encoder::{Encoder, Factory};
 use std::fmt::Debug;
 use std::future::Future;
 use std::time::Duration;
@@ -34,7 +35,7 @@ pub struct Ready {
 
 /// A trait that handles the specific functionality of a connection. The client and server each
 /// implement this.
-pub trait Handler: Send + Sync + 'static {
+pub trait Handler<F: Factory>: Send + Sync + 'static {
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
     type InternalEvent: Send + Debug;
@@ -62,7 +63,7 @@ pub trait Handler: Send + Sync + 'static {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        transport_options: &TransportOptions,
+        encoder: Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<Self::HandleFrameFuture>;
     /// Handle internal events for this connection. Completely opaque to the connection. Optionally
     /// return a `LoquiFrame` that will be sent back through the socket to the other side.
@@ -70,7 +71,7 @@ pub trait Handler: Send + Sync + 'static {
         &mut self,
         event: Self::InternalEvent,
         id_sequence: &mut IdSequence,
-        transport_options: &TransportOptions,
+        encoder: Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<LoquiFrame>;
     /// Periodic callback that fires whenever a ping fires.
     fn handle_ping(&mut self);

@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
 use loqui_connection::ReaderWriter;
-use loqui_connection::{Encoder, IdSequence, LoquiError};
+use loqui_connection::{Encoder, Factory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::Flags;
@@ -16,17 +16,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub struct ConnectionHandler<R: RequestHandler<E>, E: Encoder> {
-    config: Arc<Config<R, E>>,
+pub struct ConnectionHandler<R: RequestHandler<F>, F: Factory> {
+    config: Arc<Config<R, F>>,
 }
 
-impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler<R, E> {
-    pub fn new(config: Arc<Config<R, E>>) -> Self {
+impl<R: RequestHandler<F>, F: Encoder> ConnectionHandler<R, F> {
+    pub fn new(config: Arc<Config<R, F>>) -> Self {
         Self { config }
     }
 }
 
-impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
+impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -89,16 +89,20 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
+                /*
                 tokio::spawn_async(handle_push(
                     self.config.clone(),
                     push,
                     transport_options.encoding,
                 ));
+                */
                 None
             }
             DelegatedFrame::Request(request) => {
+                /*
                 let response_future =
                     handle_request(self.config.clone(), request, transport_options.encoding);
+                    */
                 Some(response_future)
             }
             DelegatedFrame::Error(_) => None,
@@ -118,9 +122,10 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     fn handle_ping(&mut self) {}
 }
 
-async fn handle_push<E: Encoder, R: RequestHandler<E>>(
+async fn handle_push<R: RequestHandler<F>>(
     config: Arc<Config<R, E>>,
     push: Push,
+    encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
     encoding: &'static str,
 ) {
     let Push { payload, flags } = push;
@@ -137,10 +142,10 @@ async fn handle_push<E: Encoder, R: RequestHandler<E>>(
     }
 }
 
-async fn handle_request<E: Encoder, R: RequestHandler<E>>(
-    config: Arc<Config<R, E>>,
+async fn handle_request<F: Factory, R: RequestHandler<F>>(
+    config: Arc<Config<R, F>>,
     request: Request,
-    encoding: &'static str,
+    encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
@@ -170,7 +175,7 @@ async fn handle_request<E: Encoder, R: RequestHandler<E>>(
     })
 }
 
-impl<E: Encoder, R: RequestHandler<E>> ConnectionHandler<R, E> {
+impl<F: Encoder, R: RequestHandler<F>> ConnectionHandler<R, F> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,

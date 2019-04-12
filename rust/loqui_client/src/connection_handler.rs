@@ -3,7 +3,7 @@ use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
-use loqui_connection::{Encoder, IdSequence, LoquiError, ReaderWriter};
+use loqui_connection::{Encoder, Factory, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
@@ -35,13 +35,13 @@ where
     },
 }
 
-pub struct ConnectionHandler<E: Encoder> {
-    waiters: HashMap<u32, ResponseWaiter<E::Decoded>>,
+pub struct ConnectionHandler<F: Factory> {
+    waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
     config: Arc<Config<E>>,
 }
 
-impl<E: Encoder> ConnectionHandler<E> {
-    pub fn new(config: Arc<Config<E>>) -> Self {
+impl<F: Factory> ConnectionHandler<F> {
+    pub fn new(config: Arc<Config<F>>) -> Self {
         Self {
             waiters: HashMap::new(),
             config,
@@ -49,8 +49,8 @@ impl<E: Encoder> ConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> Handler for ConnectionHandler<E> {
-    type InternalEvent = InternalEvent<E::Encoded, E::Decoded>;
+impl<F: Factory> Handler for ConnectionHandler<F> {
+    type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
         + Future<
@@ -132,7 +132,7 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
 
     fn handle_internal_event(
         &mut self,
-        event: InternalEvent<E::Encoded, E::Decoded>,
+        event: InternalEvent<F::Encoded, F::Decoded>,
         id_sequence: &mut IdSequence,
         transport_options: &TransportOptions,
     ) -> Option<LoquiFrame> {
@@ -141,9 +141,9 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
         match event {
             InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, encoding, sequence_id, waiter)
+                self.handle_request(payload, sequence_id, waiter)
             }
-            InternalEvent::Push { payload } => self.handle_push(payload, encoding),
+            InternalEvent::Push { payload } => self.handle_push(payload),
         }
     }
 
@@ -155,9 +155,13 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> ConnectionHandler<E> {
-    fn handle_push(&mut self, payload: E::Encoded, encoding: &'static str) -> Option<LoquiFrame> {
-        match self.config.encoder.encode(encoding, payload) {
+impl<F: Factory> ConnectionHandler<F> {
+    fn handle_push(
+        &mut self,
+        payload: F::Encoded,
+        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+    ) -> Option<LoquiFrame> {
+        match encoder.encode(payload) {
             Ok((payload, compressed)) => {
                 let push = Push {
                     payload,
@@ -174,17 +178,17 @@ impl<E: Encoder> ConnectionHandler<E> {
 
     fn handle_request(
         &mut self,
-        payload: E::Encoded,
-        encoding: &'static str,
+        payload: F::Encoded,
         sequence_id: u32,
-        waiter: ResponseWaiter<E::Decoded>,
+        waiter: ResponseWaiter<F::Decoded>,
+        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
             return None;
         }
 
-        match self.config.encoder.encode(encoding, payload) {
+        match encoder.encode(payload) {
             Ok((payload, compressed)) => {
                 // Store the waiter so we can notify it when we get a response.
                 self.waiters.insert(sequence_id, waiter);
@@ -202,7 +206,11 @@ impl<E: Encoder> ConnectionHandler<E> {
         }
     }
 
-    fn handle_response(&mut self, response: Response, transport_options: &TransportOptions) {
+    fn handle_response(
+        &mut self,
+        response: Response,
+        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+    ) {
         let Response {
             flags,
             sequence_id,
@@ -210,11 +218,7 @@ impl<E: Encoder> ConnectionHandler<E> {
         } = response;
         match self.waiters.remove(&sequence_id) {
             Some(waiter) => {
-                let response = self.config.encoder.decode(
-                    transport_options.encoding,
-                    is_compressed(flags),
-                    payload,
-                );
+                let response = encoder.decode(payload);
                 waiter.notify(response);
             }
             None => {
@@ -247,12 +251,12 @@ impl<E: Encoder> ConnectionHandler<E> {
         Hello {
             flags: 0,
             version: VERSION,
-            encodings: E::ENCODINGS
+            encodings: F::ENCODINGS
                 .to_owned()
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            compressions: E::COMPRESSIONS
+            compressions: F::COMPRESSIONS
                 .to_owned()
                 .into_iter()
                 .map(String::from)
@@ -274,13 +278,13 @@ impl<E: Encoder> ConnectionHandler<E> {
 
     fn handle_handshake_hello_ack(hello_ack: HelloAck) -> Result<Ready, Error> {
         // Validate the settings and convert them to &'static str.
-        let encoding = match E::find_encoding(hello_ack.encoding) {
+        let encoding = match F::find_encoding(hello_ack.encoding) {
             Some(encoding) => encoding,
             None => return Err(LoquiError::InvalidEncoding.into()),
         };
         let compression = match hello_ack.compression {
             None => None,
-            Some(compression) => match E::find_compression(compression) {
+            Some(compression) => match F::find_compression(compression) {
                 Some(compression) => Some(compression),
                 None => return Err(LoquiError::InvalidCompression.into()),
             },

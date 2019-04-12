@@ -1,4 +1,5 @@
 use crate::event_handler::EventHandler;
+use crate::encoder::Factory;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
 use crate::sender::Sender;
@@ -13,11 +14,11 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 #[derive(Debug)]
-pub struct Connection<H: Handler> {
+pub struct Connection<F: Factory, H: Handler<F>> {
     self_sender: Sender<H::InternalEvent>,
 }
 
-impl<H: Handler> Connection<H> {
+impl<F: Factory, H: Handler<F>> Connection<F, H> {
     /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
     /// the `Connection`.
     ///
@@ -77,7 +78,7 @@ pub enum Event<InternalEvent: Send + 'static> {
 /// * `self_rx` - a receiver that InternalEvents will be sent over
 /// * `handler` - implements logic for the client or server specific things
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-async fn run<H: Handler>(
+async fn run<F: Factory, H: Handler<F>>(
     tcp_stream: TcpStream,
     self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
@@ -116,8 +117,9 @@ async fn run<H: Handler>(
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
     let mut stream = framed_reader.select(self_rx).select(ping_stream);
+    let encoder = F::make(&"json");
 
-    let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
+    let mut event_handler = EventHandler::new(self_sender, handler, encoder);
     while let Some(event) = await!(stream.next()) {
         let event = event?;
 

@@ -2,6 +2,7 @@ use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
 use crate::error::LoquiError;
 use crate::handler::Handler;
+use crate::encoder::Factory;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot;
@@ -11,17 +12,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 #[derive(Debug)]
-enum Event<H: Handler> {
+enum Event<F: Factory, H: Handler<F>> {
     Internal(H::InternalEvent),
     Close,
 }
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
-pub struct Supervisor<H: Handler> {
-    self_sender: UnboundedSender<Event<H>>,
+pub struct Supervisor<F: Factory, H: Handler<F>> {
+    self_sender: UnboundedSender<Event<F, H>>,
 }
 
-impl<H: Handler> Supervisor<H> {
+impl<F: Factory, H: Handler<F>> Supervisor<F, H> {
     /// Spawns a new supervisor. Waits until the connection is ready before returning.
     ///
     /// # Arguments
