@@ -13,9 +13,8 @@ pub trait Encoder: Send + Sync {
 
     /// Decode a `Vec<u8>` into a struct.
     fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error>;
-    /// Encode a struct into a `Vec<u8>`. Returns `(Vec<u8>, bool)` where `bool` is true if
-    /// the payload is compressed.
-    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error>;
+    /// Encode a struct into a `Vec<u8>`.
+    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error>;
 }
 
 pub trait Factory: Send + Sync + 'static {

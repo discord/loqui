@@ -70,8 +70,8 @@ impl Encoder for UTF8Encoder {
         String::from_utf8(payload).map_err(Error::from)
     }
 
-    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
-        Ok((payload.as_bytes().to_vec(), false))
+    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
+        Ok(payload.as_bytes().to_vec())
     }
 }
 
@@ -86,8 +86,8 @@ impl Encoder for JsonEncoder {
         serde_json::from_slice(&payload).map_err(Error::from)
     }
 
-    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
-        Ok((serde_json::to_vec(&payload)?, false))
+    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
+        serde_json::to_vec(&payload).map_err(Error::from)
     }
 }
 

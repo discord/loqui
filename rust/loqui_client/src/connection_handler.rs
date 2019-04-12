@@ -9,7 +9,6 @@ use loqui_protocol::frames::{
 };
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
-use loqui_protocol::{is_compressed, make_flags};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -161,11 +160,8 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         match encoder.encode(payload) {
-            Ok((payload, compressed)) => {
-                let push = Push {
-                    payload,
-                    flags: make_flags(compressed),
-                };
+            Ok(payload) => {
+                let push = Push { payload, flags: 0 };
                 Some(push.into())
             }
             Err(e) => {
@@ -188,13 +184,13 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         }
 
         match encoder.encode(payload) {
-            Ok((payload, compressed)) => {
+            Ok(payload) => {
                 // Store the waiter so we can notify it when we get a response.
                 self.waiters.insert(sequence_id, waiter);
                 let request = Request {
                     payload,
                     sequence_id,
-                    flags: make_flags(compressed),
+                    flags: 0,
                 };
                 Some(request.into())
             }
@@ -211,7 +207,7 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) {
         let Response {
-            flags,
+            flags: _flags,
             sequence_id,
             payload,
         } = response;

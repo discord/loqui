@@ -6,8 +6,7 @@ use loqui_connection::ReaderWriter;
 use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
-use loqui_protocol::Flags;
-use loqui_protocol::{is_compressed, VERSION};
+use loqui_protocol::VERSION;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -118,7 +117,10 @@ async fn handle_push<F: EncoderFactory, R: RequestHandler<F>>(
     push: Push,
     encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
 ) {
-    let Push { payload, flags } = push;
+    let Push {
+        payload,
+        flags: _flags,
+    } = push;
     match encoder.decode(payload) {
         Ok(request) => {
             config.request_handler.handle_push(request);
@@ -136,21 +138,16 @@ async fn handle_request<F: EncoderFactory, R: RequestHandler<F>>(
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
-        flags,
+        flags: _flags,
         sequence_id,
     } = request;
     let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
 
     let response = await!(config.request_handler.handle_request(request));
 
-    let (payload, compressed) = encoder.encode(response).map_err(|e| (e, sequence_id))?;
-    let flags = if compressed {
-        Flags::Compressed
-    } else {
-        Flags::None
-    };
+    let payload = encoder.encode(response).map_err(|e| (e, sequence_id))?;
     Ok(Response {
-        flags: flags as u8,
+        flags: 0,
         sequence_id,
         payload,
     })

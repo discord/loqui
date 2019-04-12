@@ -30,7 +30,7 @@ impl Encoder for IdentityEncoder {
         Ok(payload)
     }
 
-    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
-        Ok((payload, false))
+    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
+        Ok(payload)
     }
 }
