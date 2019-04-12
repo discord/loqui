@@ -25,8 +25,6 @@ pub trait Factory: Send + Sync + 'static {
 
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];
-    /// Compressions supported.
-    const COMPRESSIONS: &'static [&'static str];
 
     fn make(
         encoding: &'static str,
@@ -37,16 +35,6 @@ pub trait Factory: Send + Sync + 'static {
         for supported_encoding in Self::ENCODINGS {
             if encoding == *supported_encoding {
                 return Some(supported_encoding);
-            }
-        }
-        None
-    }
-
-    fn find_compression<S: AsRef<str>>(compression: S) -> Option<&'static str> {
-        let compression = compression.as_ref();
-        for supported_compression in Self::COMPRESSIONS {
-            if compression == *supported_compression {
-                return Some(supported_compression);
             }
         }
         None

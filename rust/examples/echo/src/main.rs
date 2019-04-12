@@ -45,7 +45,6 @@ impl EncoderFactory for Factory {
     type Encoded = String;
 
     const ENCODINGS: &'static [&'static str] = &["json", "utf8"];
-    const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn make(
         encoding: &'static str,

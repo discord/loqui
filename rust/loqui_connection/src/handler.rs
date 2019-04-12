@@ -10,13 +10,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 
-/// Negotiated transport options.
-#[derive(Debug)]
-pub struct TransportOptions {
-    pub encoding: &'static str,
-    pub compression: Option<&'static str>,
-}
-
 /// Specific types of loqui frames that are delegated to a connection handler.  The rest of the
 /// frames will be handled by the connection itself.
 #[derive(Debug)]
@@ -31,7 +24,7 @@ pub enum DelegatedFrame {
 #[derive(Debug)]
 pub struct Ready {
     pub ping_interval: Duration,
-    pub transport_options: TransportOptions,
+    pub encoding: &'static str,
 }
 
 /// A trait that handles the specific functionality of a connection. The client and server each

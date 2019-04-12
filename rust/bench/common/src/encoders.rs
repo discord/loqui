@@ -10,7 +10,6 @@ impl EncoderFactory for BenchEncoderFactory {
     type Encoded = Vec<u8>;
 
     const ENCODINGS: &'static [&'static str] = &["msgpack", "identity"];
-    const COMPRESSIONS: &'static [&'static str] = &[];
 
     fn make(
         _encoding: &'static str,

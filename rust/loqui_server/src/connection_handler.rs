@@ -1,7 +1,7 @@
 use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
-use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::ReaderWriter;
 use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
@@ -205,7 +205,8 @@ impl<R: RequestHandler> ConnectionHandler<R> {
             flags,
             version,
             encodings,
-            compressions,
+            // compression not supported
+            compressions: _compressions,
         } = hello;
         if version != VERSION {
             return Err(LoquiError::UnsupportedVersion {
@@ -215,19 +216,15 @@ impl<R: RequestHandler> ConnectionHandler<R> {
             .into());
         }
         let encoding = Self::negotiate_encoding(&encodings)?;
-        let compression = Self::negotiate_compression(&compressions)?;
         let hello_ack = HelloAck {
             flags,
             ping_interval_ms: ping_interval.as_millis() as u32,
             encoding: encoding.to_string(),
-            compression: compression.map(String::from),
+            compression: None,
         };
         let ready = Ready {
             ping_interval,
-            transport_options: TransportOptions {
-                encoding,
-                compression,
-            },
+            encoding,
         };
         Ok((ready, hello_ack))
     }
@@ -241,22 +238,5 @@ impl<R: RequestHandler> ConnectionHandler<R> {
             }
         }
         Err(LoquiError::NoCommonEncoding.into())
-    }
-
-    fn negotiate_compression(
-        client_compressions: &[String],
-    ) -> Result<Option<&'static str>, Error> {
-        if client_compressions.is_empty() {
-            return Ok(None);
-        }
-
-        for client_compression in client_compressions {
-            if let Some(compression) =
-                <R::EncoderFactory as EncoderFactory>::find_compression(client_compression)
-            {
-                return Ok(Some(compression));
-            }
-        }
-        Err(LoquiError::NoCommonCompression.into())
     }
 }

@@ -2,7 +2,7 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
-use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
@@ -251,11 +251,8 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            compressions: F::COMPRESSIONS
-                .to_owned()
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            // compression not supported
+            compressions: vec![],
         }
     }
 
@@ -277,21 +274,15 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
             Some(encoding) => encoding,
             None => return Err(LoquiError::InvalidEncoding.into()),
         };
-        let compression = match hello_ack.compression {
-            None => None,
-            Some(compression) => match F::find_compression(compression) {
-                Some(compression) => Some(compression),
-                None => return Err(LoquiError::InvalidCompression.into()),
-            },
+
+        // compression not supported
+        if let Some(compression) = hello_ack.compression {
+            return Err(LoquiError::InvalidCompression.into());
         };
         let ping_interval = Duration::from_millis(u64::from(hello_ack.ping_interval_ms));
-        let transport_options = TransportOptions {
-            encoding,
-            compression,
-        };
         Ok(Ready {
             ping_interval,
-            transport_options,
+            encoding,
         })
     }
 }
