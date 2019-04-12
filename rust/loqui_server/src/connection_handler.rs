@@ -20,7 +20,7 @@ pub struct ConnectionHandler<R: RequestHandler<F>, F: Factory> {
     config: Arc<Config<R, F>>,
 }
 
-impl<R: RequestHandler<F>, F: Encoder> ConnectionHandler<R, F> {
+impl<R: RequestHandler<F>, F: Factory> ConnectionHandler<R, F> {
     pub fn new(config: Arc<Config<R, F>>) -> Self {
         Self { config }
     }
@@ -103,7 +103,7 @@ impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
                 let response_future =
                     handle_request(self.config.clone(), request, transport_options.encoding);
                     */
-                Some(response_future)
+                None//Some(response_future)
             }
             DelegatedFrame::Error(_) => None,
             DelegatedFrame::Response(_) => None,
@@ -122,22 +122,27 @@ impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
     fn handle_ping(&mut self) {}
 }
 
-async fn handle_push<R: RequestHandler<F>>(
-    config: Arc<Config<R, E>>,
+fn handle_push<F: Factory, R: RequestHandler<F>>(
+    config: Arc<Config<R, F>>,
     push: Push,
-    encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
-    encoding: &'static str,
-) {
+    encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+) -> impl Future<Output=()> {
+
     let Push { payload, flags } = push;
-    match config
-        .encoder
-        .decode(encoding, is_compressed(flags), payload)
+    match
+        encoder
+        .decode(payload)
     {
         Ok(request) => {
-            config.request_handler.handle_push(request);
+            async {
+                config.request_handler.handle_push(request);
+            }
         }
         Err(e) => {
             error!("Failed to decode payload. error={:?}", e);
+            async {
+
+            }
         }
     }
 }
@@ -145,23 +150,22 @@ async fn handle_push<R: RequestHandler<F>>(
 async fn handle_request<F: Factory, R: RequestHandler<F>>(
     config: Arc<Config<R, F>>,
     request: Request,
-    encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+    encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
         flags,
         sequence_id,
     } = request;
-    let request = config
-        .encoder
-        .decode(encoding, is_compressed(flags), payload)
+    let request =
+        encoder
+        .decode(payload)
         .map_err(|e| (e, sequence_id))?;
 
     let response = await!(config.request_handler.handle_request(request));
 
-    let (payload, compressed) = config
-        .encoder
-        .encode(encoding, response)
+    let (payload, compressed) =
+        encoder.encode(response)
         .map_err(|e| (e, sequence_id))?;
     let flags = if compressed {
         Flags::Compressed
@@ -175,7 +179,7 @@ async fn handle_request<F: Factory, R: RequestHandler<F>>(
     })
 }
 
-impl<F: Encoder, R: RequestHandler<F>> ConnectionHandler<R, F> {
+impl<F: Factory, R: RequestHandler<F>> ConnectionHandler<R, F> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,
@@ -228,7 +232,7 @@ impl<F: Encoder, R: RequestHandler<F>> ConnectionHandler<R, F> {
 
     fn negotiate_encoding(client_encodings: &[String]) -> Result<&'static str, Error> {
         for client_encoding in client_encodings {
-            if let Some(encoding) = E::find_encoding(client_encoding) {
+            if let Some(encoding) = F::find_encoding(client_encoding) {
                 return Ok(encoding);
             }
         }
@@ -243,7 +247,7 @@ impl<F: Encoder, R: RequestHandler<F>> ConnectionHandler<R, F> {
         }
 
         for client_compression in client_compressions {
-            if let Some(compression) = E::find_compression(client_compression) {
+            if let Some(compression) = F::find_compression(client_compression) {
                 return Ok(Some(compression));
             }
         }
