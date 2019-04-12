@@ -1,5 +1,6 @@
 use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
+use crate::encoder::Factory;
 use crate::error::{convert_timeout_error, LoquiError};
 use crate::handler::Handler;
 use failure::Error;
@@ -13,14 +14,14 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
-pub struct Supervisor<H: Handler> {
+pub struct Supervisor<F: Factory, H: Handler<F>> {
     event_sender: Sender<H::InternalEvent>,
     /// A Sender that will drop once the client is dropped. If it's dropped then we should
     /// stop trying to connect.
     _close_sender: UnboundedSender<()>,
 }
 
-impl<H: Handler> Supervisor<H> {
+impl<F: Factory, H: Handler<F>> Supervisor<F, H> {
     /// Spawns a new supervisor. Waits until the connection is ready before returning.
     ///
     /// # Arguments
@@ -28,13 +29,13 @@ impl<H: Handler> Supervisor<H> {
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
     /// * `queue_size` - the number of requests the supervisor should hold before dropping requests.
-    pub async fn connect<F>(
+    pub async fn connect<C>(
         address: SocketAddr,
-        handler_creator: F,
+        handler_creator: C,
         queue_size: usize,
     ) -> Result<Self, Error>
     where
-        F: Fn() -> H + Send + Sync + 'static,
+        C: Fn() -> H + Send + Sync + 'static,
     {
         let (event_sender, mut self_rx) = mpsc::channel(queue_size);
         let (_close_sender, mut close_rx) = mpsc::unbounded::<()>();

@@ -11,4 +11,4 @@ mod server;
 pub use self::config::Config;
 pub use self::request_handler::RequestHandler;
 pub use self::server::Server;
-pub use loqui_connection::Encoder;
+pub use loqui_connection::{Encoder, EncoderFactory};

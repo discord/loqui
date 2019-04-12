@@ -1,3 +1,4 @@
+use crate::encoder::Factory;
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
@@ -14,11 +15,11 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 #[derive(Debug)]
-pub struct Connection<H: Handler> {
+pub struct Connection<F: Factory, H: Handler<F>> {
     self_sender: Sender<H::InternalEvent>,
 }
 
-impl<H: Handler> Connection<H> {
+impl<F: Factory, H: Handler<F>> Connection<F, H> {
     /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
     /// the `Connection`.
     ///
@@ -78,7 +79,7 @@ pub enum Event<InternalEvent: Send + 'static> {
 /// * `self_rx` - a receiver that InternalEvents will be sent over
 /// * `handler` - implements logic for the client or server specific things
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-async fn run<H: Handler>(
+async fn run<F: Factory, H: Handler<F>>(
     tcp_stream: TcpStream,
     self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
@@ -109,6 +110,8 @@ async fn run<H: Handler>(
             .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
     }
 
+    let encoder = F::make(ready.encoding);
+
     // Convert each stream into a Result<Event, Error> stream.
     let ping_stream = Interval::new(ready.ping_interval)
         .map(|()| Event::Ping)
@@ -120,7 +123,7 @@ async fn run<H: Handler>(
         .select_break(self_rx)
         .select_break(ping_stream);
 
-    let mut event_handler = EventHandler::new(self_sender, handler, ready.transport_options);
+    let mut event_handler = EventHandler::new(self_sender, handler, encoder);
     while let Some(event) = await!(stream.next()) {
         let event = event?;
 

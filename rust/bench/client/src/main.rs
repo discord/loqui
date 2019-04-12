@@ -6,14 +6,13 @@ use failure::Error;
 use fern;
 #[macro_use]
 extern crate log;
-use loqui_client::{Client, Config, Encoder};
+use loqui_bench_common::{BenchEncoderFactory, ADDRESS};
+use loqui_client::{Client, Config};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-
-const ADDRESS: &str = "127.0.0.1:8080";
 
 #[derive(Default)]
 struct State {
@@ -28,7 +27,7 @@ fn make_message() -> Vec<u8> {
     b"hello world".to_vec()
 }
 
-async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
+async fn do_work(client: Client<BenchEncoderFactory>, state: Arc<State>) {
     let message = make_message();
     let start = Instant::now();
     state.in_flight.fetch_add(1, Ordering::SeqCst);
@@ -57,7 +56,7 @@ async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
     state.in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
-async fn work_loop(client: Client<BytesEncoder>, state: Arc<State>) {
+async fn work_loop(client: Client<BenchEncoderFactory>, state: Arc<State>) {
     loop {
         await!(do_work(client.clone(), state.clone()));
     }
@@ -92,35 +91,6 @@ fn log_loop(state: Arc<State>) {
     }
 }
 
-#[derive(Clone)]
-struct BytesEncoder {}
-
-impl Encoder for BytesEncoder {
-    type Decoded = Vec<u8>;
-    type Encoded = Vec<u8>;
-
-    // msgpack required to bench against go server
-    const ENCODINGS: &'static [&'static str] = &["bytes", "msgpack"];
-    const COMPRESSIONS: &'static [&'static str] = &[];
-
-    fn decode(
-        &self,
-        _encoding: &'static str,
-        _compressed: bool,
-        payload: Vec<u8>,
-    ) -> Result<Self::Decoded, Error> {
-        Ok(payload)
-    }
-
-    fn encode(
-        &self,
-        _encoding: &'static str,
-        payload: Self::Encoded,
-    ) -> Result<(Vec<u8>, bool), Error> {
-        Ok((payload, false))
-    }
-}
-
 fn main() -> Result<(), Error> {
     let state = Arc::new(State::default());
     let log_state = state.clone();
@@ -151,7 +121,6 @@ fn main() -> Result<(), Error> {
 
             let config = Config {
                 max_payload_size: ByteSize::kb(5000),
-                encoder: BytesEncoder {},
                 request_timeout: Duration::from_secs(5),
                 request_queue_size: 1_000,
             };

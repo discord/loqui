@@ -2,14 +2,13 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
-use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
-use loqui_connection::{Encoder, IdSequence, LoquiError, ReaderWriter};
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
+use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
-use loqui_protocol::{is_compressed, make_flags};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -23,8 +22,8 @@ use tokio_codec::Framed;
 #[derive(Debug)]
 pub enum InternalEvent<Encoded, Decoded>
 where
-    Encoded: Serialize + Send + Sync,
-    Decoded: DeserializeOwned + Send + Sync,
+    Encoded: Serialize + Send,
+    Decoded: DeserializeOwned + Send,
 {
     Request {
         payload: Encoded,
@@ -35,13 +34,13 @@ where
     },
 }
 
-pub struct ConnectionHandler<E: Encoder> {
-    waiters: HashMap<u32, ResponseWaiter<E::Decoded>>,
-    config: Arc<Config<E>>,
+pub struct ConnectionHandler<F: EncoderFactory> {
+    waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
+    config: Arc<Config>,
 }
 
-impl<E: Encoder> ConnectionHandler<E> {
-    pub fn new(config: Arc<Config<E>>) -> Self {
+impl<F: EncoderFactory> ConnectionHandler<F> {
+    pub fn new(config: Arc<Config>) -> Self {
         Self {
             waiters: HashMap::new(),
             config,
@@ -49,8 +48,8 @@ impl<E: Encoder> ConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> Handler for ConnectionHandler<E> {
-    type InternalEvent = InternalEvent<E::Encoded, E::Decoded>;
+impl<F: EncoderFactory> Handler<F> for ConnectionHandler<F> {
+    type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
         + Future<
@@ -104,11 +103,11 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        transport_options: &TransportOptions,
+        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Response(response) => {
-                self.handle_response(response, transport_options);
+                self.handle_response(response, encoder);
                 None
             }
             DelegatedFrame::Error(error) => {
@@ -132,18 +131,17 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
 
     fn handle_internal_event(
         &mut self,
-        event: InternalEvent<E::Encoded, E::Decoded>,
+        event: InternalEvent<F::Encoded, F::Decoded>,
         id_sequence: &mut IdSequence,
-        transport_options: &TransportOptions,
+        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
-        let TransportOptions { encoding, .. } = transport_options;
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
             InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, encoding, sequence_id, waiter)
+                self.handle_request(payload, sequence_id, waiter, encoder)
             }
-            InternalEvent::Push { payload } => self.handle_push(payload, encoding),
+            InternalEvent::Push { payload } => self.handle_push(payload, encoder),
         }
     }
 
@@ -155,14 +153,15 @@ impl<E: Encoder> Handler for ConnectionHandler<E> {
     }
 }
 
-impl<E: Encoder> ConnectionHandler<E> {
-    fn handle_push(&mut self, payload: E::Encoded, encoding: &'static str) -> Option<LoquiFrame> {
-        match self.config.encoder.encode(encoding, payload) {
-            Ok((payload, compressed)) => {
-                let push = Push {
-                    payload,
-                    flags: make_flags(compressed),
-                };
+impl<F: EncoderFactory> ConnectionHandler<F> {
+    fn handle_push(
+        &mut self,
+        payload: F::Encoded,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
+    ) -> Option<LoquiFrame> {
+        match encoder.encode(payload) {
+            Ok(payload) => {
+                let push = Push { payload, flags: 0 };
                 Some(push.into())
             }
             Err(e) => {
@@ -174,24 +173,24 @@ impl<E: Encoder> ConnectionHandler<E> {
 
     fn handle_request(
         &mut self,
-        payload: E::Encoded,
-        encoding: &'static str,
+        payload: F::Encoded,
         sequence_id: u32,
-        waiter: ResponseWaiter<E::Decoded>,
+        waiter: ResponseWaiter<F::Decoded>,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
             return None;
         }
 
-        match self.config.encoder.encode(encoding, payload) {
-            Ok((payload, compressed)) => {
+        match encoder.encode(payload) {
+            Ok(payload) => {
                 // Store the waiter so we can notify it when we get a response.
                 self.waiters.insert(sequence_id, waiter);
                 let request = Request {
                     payload,
                     sequence_id,
-                    flags: make_flags(compressed),
+                    flags: 0,
                 };
                 Some(request.into())
             }
@@ -202,19 +201,19 @@ impl<E: Encoder> ConnectionHandler<E> {
         }
     }
 
-    fn handle_response(&mut self, response: Response, transport_options: &TransportOptions) {
+    fn handle_response(
+        &mut self,
+        response: Response,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
+    ) {
         let Response {
-            flags,
+            flags: _flags,
             sequence_id,
             payload,
         } = response;
         match self.waiters.remove(&sequence_id) {
             Some(waiter) => {
-                let response = self.config.encoder.decode(
-                    transport_options.encoding,
-                    is_compressed(flags),
-                    payload,
-                );
+                let response = encoder.decode(payload);
                 waiter.notify(response);
             }
             None => {
@@ -247,16 +246,13 @@ impl<E: Encoder> ConnectionHandler<E> {
         Hello {
             flags: 0,
             version: VERSION,
-            encodings: E::ENCODINGS
+            encodings: F::ENCODINGS
                 .to_owned()
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            compressions: E::COMPRESSIONS
-                .to_owned()
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            // compression not supported
+            compressions: vec![],
         }
     }
 
@@ -274,25 +270,19 @@ impl<E: Encoder> ConnectionHandler<E> {
 
     fn handle_handshake_hello_ack(hello_ack: HelloAck) -> Result<Ready, Error> {
         // Validate the settings and convert them to &'static str.
-        let encoding = match E::find_encoding(hello_ack.encoding) {
+        let encoding = match F::find_encoding(hello_ack.encoding) {
             Some(encoding) => encoding,
             None => return Err(LoquiError::InvalidEncoding.into()),
         };
-        let compression = match hello_ack.compression {
-            None => None,
-            Some(compression) => match E::find_compression(compression) {
-                Some(compression) => Some(compression),
-                None => return Err(LoquiError::InvalidCompression.into()),
-            },
+
+        // compression not supported
+        if hello_ack.compression.is_some() {
+            return Err(LoquiError::InvalidCompression.into());
         };
         let ping_interval = Duration::from_millis(u64::from(hello_ack.ping_interval_ms));
-        let transport_options = TransportOptions {
-            encoding,
-            compression,
-        };
         Ok(Ready {
             ping_interval,
-            transport_options,
+            encoding,
         })
     }
 }

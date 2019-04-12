@@ -1,13 +1,12 @@
 use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
-use loqui_connection::handler::{DelegatedFrame, Handler, Ready, TransportOptions};
+use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::ReaderWriter;
-use loqui_connection::{Encoder, IdSequence, LoquiError};
+use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
-use loqui_protocol::Flags;
-use loqui_protocol::{is_compressed, VERSION};
+use loqui_protocol::VERSION;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,17 +15,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub struct ConnectionHandler<R: RequestHandler<E>, E: Encoder> {
-    config: Arc<Config<R, E>>,
+pub struct ConnectionHandler<R: RequestHandler> {
+    config: Arc<Config<R>>,
 }
 
-impl<R: RequestHandler<E>, E: Encoder> ConnectionHandler<R, E> {
-    pub fn new(config: Arc<Config<R, E>>) -> Self {
+impl<R: RequestHandler> ConnectionHandler<R> {
+    pub fn new(config: Arc<Config<R>>) -> Self {
         Self { config }
     }
 }
 
-impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
+impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -85,20 +84,22 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        transport_options: &TransportOptions,
+        encoder: Arc<
+            Box<
+                dyn Encoder<
+                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                    > + 'static,
+            >,
+        >,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
-                tokio::spawn_async(handle_push(
-                    self.config.clone(),
-                    push,
-                    transport_options.encoding,
-                ));
+                tokio::spawn_async(handle_push(self.config.clone(), push, encoder));
                 None
             }
             DelegatedFrame::Request(request) => {
-                let response_future =
-                    handle_request(self.config.clone(), request, transport_options.encoding);
+                let response_future = handle_request(self.config.clone(), request, encoder);
                 Some(response_future)
             }
             DelegatedFrame::Error(_) => None,
@@ -110,7 +111,14 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
         &mut self,
         _event: (),
         _id_sequence: &mut IdSequence,
-        _transport_options: &TransportOptions,
+        _encoder: Arc<
+            Box<
+                dyn Encoder<
+                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                    > + 'static,
+            >,
+        >,
     ) -> Option<LoquiFrame> {
         None
     }
@@ -118,16 +126,23 @@ impl<R: RequestHandler<E>, E: Encoder> Handler for ConnectionHandler<R, E> {
     fn handle_ping(&mut self) {}
 }
 
-async fn handle_push<E: Encoder, R: RequestHandler<E>>(
-    config: Arc<Config<R, E>>,
+async fn handle_push<R: RequestHandler>(
+    config: Arc<Config<R>>,
     push: Push,
-    encoding: &'static str,
+    encoder: Arc<
+        Box<
+            dyn Encoder<
+                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                > + 'static,
+        >,
+    >,
 ) {
-    let Push { payload, flags } = push;
-    match config
-        .encoder
-        .decode(encoding, is_compressed(flags), payload)
-    {
+    let Push {
+        payload,
+        flags: _flags,
+    } = push;
+    match encoder.decode(payload) {
         Ok(request) => {
             config.request_handler.handle_push(request);
         }
@@ -137,40 +152,36 @@ async fn handle_push<E: Encoder, R: RequestHandler<E>>(
     }
 }
 
-async fn handle_request<E: Encoder, R: RequestHandler<E>>(
-    config: Arc<Config<R, E>>,
+async fn handle_request<R: RequestHandler>(
+    config: Arc<Config<R>>,
     request: Request,
-    encoding: &'static str,
+    encoder: Arc<
+        Box<
+            dyn Encoder<
+                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                > + 'static,
+        >,
+    >,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
-        flags,
+        flags: _flags,
         sequence_id,
     } = request;
-    let request = config
-        .encoder
-        .decode(encoding, is_compressed(flags), payload)
-        .map_err(|e| (e, sequence_id))?;
+    let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
 
     let response = await!(config.request_handler.handle_request(request));
 
-    let (payload, compressed) = config
-        .encoder
-        .encode(encoding, response)
-        .map_err(|e| (e, sequence_id))?;
-    let flags = if compressed {
-        Flags::Compressed
-    } else {
-        Flags::None
-    };
+    let payload = encoder.encode(response).map_err(|e| (e, sequence_id))?;
     Ok(Response {
-        flags: flags as u8,
+        flags: 0,
         sequence_id,
         payload,
     })
 }
 
-impl<E: Encoder, R: RequestHandler<E>> ConnectionHandler<R, E> {
+impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,
@@ -194,7 +205,8 @@ impl<E: Encoder, R: RequestHandler<E>> ConnectionHandler<R, E> {
             flags,
             version,
             encodings,
-            compressions,
+            // compression not supported
+            compressions: _compressions,
         } = hello;
         if version != VERSION {
             return Err(LoquiError::UnsupportedVersion {
@@ -204,44 +216,27 @@ impl<E: Encoder, R: RequestHandler<E>> ConnectionHandler<R, E> {
             .into());
         }
         let encoding = Self::negotiate_encoding(&encodings)?;
-        let compression = Self::negotiate_compression(&compressions)?;
         let hello_ack = HelloAck {
             flags,
             ping_interval_ms: ping_interval.as_millis() as u32,
             encoding: encoding.to_string(),
-            compression: compression.map(String::from),
+            compression: None,
         };
         let ready = Ready {
             ping_interval,
-            transport_options: TransportOptions {
-                encoding,
-                compression,
-            },
+            encoding,
         };
         Ok((ready, hello_ack))
     }
 
     fn negotiate_encoding(client_encodings: &[String]) -> Result<&'static str, Error> {
         for client_encoding in client_encodings {
-            if let Some(encoding) = E::find_encoding(client_encoding) {
+            if let Some(encoding) =
+                <R::EncoderFactory as EncoderFactory>::find_encoding(client_encoding)
+            {
                 return Ok(encoding);
             }
         }
         Err(LoquiError::NoCommonEncoding.into())
-    }
-
-    fn negotiate_compression(
-        client_compressions: &[String],
-    ) -> Result<Option<&'static str>, Error> {
-        if client_compressions.is_empty() {
-            return Ok(None);
-        }
-
-        for client_compression in client_compressions {
-            if let Some(compression) = E::find_compression(client_compression) {
-                return Ok(Some(compression));
-            }
-        }
-        Err(LoquiError::NoCommonCompression.into())
     }
 }

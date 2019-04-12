@@ -1,0 +1,9 @@
+[package]
+name = "loqui_bench_common"
+version = "0.0.1"
+authors = ["Discord Inc."]
+edition = "2018"
+
+[dependencies]
+failure = "0.1.1"
+loqui_client = { path = "../../loqui_client" }
