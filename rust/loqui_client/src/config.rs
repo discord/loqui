@@ -10,3 +10,13 @@ pub struct Config<F: Factory> {
     pub max_payload_size: ByteSize,
     pub request_timeout: Duration,
 }
+
+impl<F: Factory> Config<F> {
+    pub fn new(max_payload_size: ByteSize, request_timeout: Duration) -> Self {
+        Self {
+            _f: PhantomData,
+            max_payload_size,
+            request_timeout,
+        }
+    }
+}

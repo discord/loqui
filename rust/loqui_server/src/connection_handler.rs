@@ -89,16 +89,11 @@ impl<R: RequestHandler<F>, F: Factory> Handler<F> for ConnectionHandler<R, F> {
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
-                tokio::spawn_async(handle_push(
-                    self.config.clone(),
-                    push,
-                    encoder
-                ));
+                tokio::spawn_async(handle_push(self.config.clone(), push, encoder));
                 None
             }
             DelegatedFrame::Request(request) => {
-                let response_future =
-                    handle_request(self.config.clone(), request, encoder);
+                let response_future = handle_request(self.config.clone(), request, encoder);
                 Some(response_future)
             }
             DelegatedFrame::Error(_) => None,

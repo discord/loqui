@@ -30,7 +30,9 @@ pub trait Factory: Send + Sync + 'static {
     /// Compressions supported.
     const COMPRESSIONS: &'static [&'static str];
 
-    fn make() -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>;
+    fn make(
+        encoding: &'static str,
+    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>;
 
     fn find_encoding<S: AsRef<str>>(encoding: S) -> Option<&'static str> {
         let encoding = encoding.as_ref();

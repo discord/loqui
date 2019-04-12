@@ -10,9 +10,11 @@ use failure::Error;
 use fern;
 use futures_timer::Delay;
 use loqui_client::{Client, Config as ClientConfig};
-use loqui_server::{Config as ServerConfig, Encoder, RequestHandler, Server};
+use loqui_server::{Config as ServerConfig, Encoder, Factory, RequestHandler, Server};
+use serde_json;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::{thread, time::Duration};
 use tokio::await;
 
@@ -21,9 +23,9 @@ const ADDRESS: &str = "127.0.0.1:8080";
 struct EchoHandler {}
 
 #[derive(Clone)]
-struct StringEncoder {}
+struct UTF8Encoder {}
 
-impl RequestHandler<StringEncoder> for EchoHandler {
+impl RequestHandler<EncoderFactory> for EchoHandler {
     existential type RequestFuture: Future<Output = String>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -38,28 +40,54 @@ impl RequestHandler<StringEncoder> for EchoHandler {
     }
 }
 
-impl Encoder for StringEncoder {
+#[derive(Clone)]
+struct EncoderFactory {}
+
+impl Factory for EncoderFactory {
     type Decoded = String;
     type Encoded = String;
 
-    const ENCODINGS: &'static [&'static str] = &["string"];
+    const ENCODINGS: &'static [&'static str] = &["json", "utf8"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
-    fn decode(
-        &self,
-        _encoding: &'static str,
-        _compressed: bool,
-        payload: Vec<u8>,
-    ) -> Result<Self::Decoded, Error> {
+    fn make(
+        encoding: &'static str,
+    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>> {
+        match encoding {
+            "utf8" => Arc::new(Box::new(UTF8Encoder {})),
+            "json" => Arc::new(Box::new(JsonEncoder {})),
+            // TODO:
+            _ => Arc::new(Box::new(UTF8Encoder {})),
+        }
+    }
+}
+
+impl Encoder for UTF8Encoder {
+    type Decoded = String;
+    type Encoded = String;
+
+    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
         String::from_utf8(payload).map_err(Error::from)
     }
 
-    fn encode(
-        &self,
-        _encoding: &'static str,
-        payload: Self::Encoded,
-    ) -> Result<(Vec<u8>, bool), Error> {
+    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
         Ok((payload.as_bytes().to_vec(), false))
+    }
+}
+
+#[derive(Clone)]
+struct JsonEncoder {}
+
+impl Encoder for JsonEncoder {
+    type Decoded = String;
+    type Encoded = String;
+
+    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
+        serde_json::from_slice(&payload).map_err(Error::from)
+    }
+
+    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
+        Ok((serde_json::to_vec(&payload)?, false))
     }
 }
 
@@ -77,11 +105,7 @@ fn main() -> Result<(), Error> {
 }
 
 async fn client_send_loop() {
-    let config = ClientConfig {
-        max_payload_size: ByteSize::kb(5000),
-        encoder: StringEncoder {},
-        request_timeout: Duration::from_secs(5),
-    };
+    let config = ClientConfig::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5));
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
     let client = await!(Client::connect(address, config)).expect("Failed to connect");
@@ -115,12 +139,11 @@ async fn client_send_loop() {
 fn spawn_server() {
     tokio::spawn_async(
         async {
-            let config = ServerConfig {
-                request_handler: EchoHandler {},
-                max_payload_size: ByteSize::kb(5000),
-                ping_interval: Duration::from_secs(5),
-                encoder: StringEncoder {},
-            };
+            let config = ServerConfig::<EchoHandler, EncoderFactory>::new(
+                EchoHandler {},
+                ByteSize::kb(5000),
+                Duration::from_secs(5),
+            );
             let server = Server::new(config);
             let result = await!(server.listen_and_serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);
