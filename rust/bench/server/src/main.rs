@@ -8,7 +8,8 @@ use std::time::Duration;
 
 struct EchoHandler {}
 
-impl RequestHandler<BenchEncoderFactory> for EchoHandler {
+impl RequestHandler for EchoHandler {
+    type EncoderFactory = BenchEncoderFactory;
     existential type RequestFuture: Future<Output = Vec<u8>>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -24,11 +25,11 @@ impl RequestHandler<BenchEncoderFactory> for EchoHandler {
 fn main() {
     tokio::run_async(
         async {
-            let config = Config::<EchoHandler, BenchEncoderFactory>::new(
-                EchoHandler {},
-                ByteSize::kb(5000),
-                Duration::from_secs(5),
-            );
+            let config = Config {
+                request_handler: EchoHandler {},
+                max_payload_size: ByteSize::kb(5000),
+                ping_interval: Duration::from_secs(5),
+            };
             let server = Server::new(config);
             let result = await!(server.listen_and_serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);
