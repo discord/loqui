@@ -6,7 +6,7 @@ use failure::Error;
 use fern;
 #[macro_use]
 extern crate log;
-use loqui_client::{Client, Config, Encoder};
+use loqui_client::{Client, Config, Encoder, Factory};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -28,7 +28,7 @@ fn make_message() -> Vec<u8> {
     b"hello world".to_vec()
 }
 
-async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
+async fn do_work(client: Client<EncoderFactory>, state: Arc<State>) {
     let message = make_message();
     let start = Instant::now();
     state.in_flight.fetch_add(1, Ordering::SeqCst);
@@ -57,7 +57,7 @@ async fn do_work(client: Client<BytesEncoder>, state: Arc<State>) {
     state.in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
-async fn work_loop(client: Client<BytesEncoder>, state: Arc<State>) {
+async fn work_loop(client: Client<EncoderFactory>, state: Arc<State>) {
     loop {
         await!(do_work(client.clone(), state.clone()));
     }
@@ -93,30 +93,34 @@ fn log_loop(state: Arc<State>) {
 }
 
 #[derive(Clone)]
-struct BytesEncoder {}
+struct EncoderFactory {}
 
-impl Encoder for BytesEncoder {
+impl Factory for EncoderFactory {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
 
-    // msgpack required to bench against go server
-    const ENCODINGS: &'static [&'static str] = &["bytes", "msgpack"];
+    const ENCODINGS: &'static [&'static str] = &["msgpack", "identity"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
-    fn decode(
-        &self,
+    fn make(
         _encoding: &'static str,
-        _compressed: bool,
-        payload: Vec<u8>,
-    ) -> Result<Self::Decoded, Error> {
+    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>> {
+        Arc::new(Box::new(IdentityEncoder {}))
+    }
+}
+
+#[derive(Clone)]
+struct IdentityEncoder {}
+
+impl Encoder for IdentityEncoder {
+    type Decoded = Vec<u8>;
+    type Encoded = Vec<u8>;
+
+    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
         Ok(payload)
     }
 
-    fn encode(
-        &self,
-        _encoding: &'static str,
-        payload: Self::Encoded,
-    ) -> Result<(Vec<u8>, bool), Error> {
+    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
         Ok((payload, false))
     }
 }
@@ -149,11 +153,7 @@ fn main() -> Result<(), Error> {
                 },
             );
 
-            let config = Config {
-                max_payload_size: ByteSize::kb(5000),
-                encoder: BytesEncoder {},
-                request_timeout: Duration::from_secs(5),
-            };
+            let config = Config::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5));
             let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
             let client = await!(Client::connect(address, config)).expect("Failed to connect");
             for _ in 0..100 {

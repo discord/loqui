@@ -2,8 +2,9 @@
 
 use bytesize::ByteSize;
 use failure::Error;
-use loqui_server::{Config, Encoder, RequestHandler, Server};
+use loqui_server::{Config, Encoder, Factory, RequestHandler, Server};
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 const ADDRESS: &str = "127.0.0.1:8080";
@@ -13,7 +14,7 @@ struct EchoHandler {}
 #[derive(Clone)]
 struct BytesEncoder {}
 
-impl RequestHandler<BytesEncoder> for EchoHandler {
+impl RequestHandler<EncoderFactory> for EchoHandler {
     existential type RequestFuture: Future<Output = Vec<u8>>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -26,27 +27,35 @@ impl RequestHandler<BytesEncoder> for EchoHandler {
     }
 }
 
-impl Encoder for BytesEncoder {
+#[derive(Clone)]
+struct EncoderFactory {}
+
+impl Factory for EncoderFactory {
     type Decoded = Vec<u8>;
     type Encoded = Vec<u8>;
 
-    const ENCODINGS: &'static [&'static str] = &["bytes"];
+    const ENCODINGS: &'static [&'static str] = &["msgpack", "identity"];
     const COMPRESSIONS: &'static [&'static str] = &[];
 
-    fn decode(
-        &self,
+    fn make(
         _encoding: &'static str,
-        _compressed: bool,
-        payload: Vec<u8>,
-    ) -> Result<Self::Decoded, Error> {
+    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>> {
+        Arc::new(Box::new(IdentityEncoder {}))
+    }
+}
+
+#[derive(Clone)]
+struct IdentityEncoder {}
+
+impl Encoder for IdentityEncoder {
+    type Decoded = Vec<u8>;
+    type Encoded = Vec<u8>;
+
+    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
         Ok(payload)
     }
 
-    fn encode(
-        &self,
-        _encoding: &'static str,
-        payload: Self::Encoded,
-    ) -> Result<(Vec<u8>, bool), Error> {
+    fn encode(&self, payload: Self::Encoded) -> Result<(Vec<u8>, bool), Error> {
         Ok((payload, false))
     }
 }
@@ -54,12 +63,11 @@ impl Encoder for BytesEncoder {
 fn main() {
     tokio::run_async(
         async {
-            let config = Config {
-                request_handler: EchoHandler {},
-                max_payload_size: ByteSize::kb(5000),
-                ping_interval: Duration::from_secs(5),
-                encoder: BytesEncoder {},
-            };
+            let config = Config::<EchoHandler, EncoderFactory>::new(
+                EchoHandler {},
+                ByteSize::kb(5000),
+                Duration::from_secs(5),
+            );
             let server = Server::new(config);
             let result = await!(server.listen_and_serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);

@@ -12,4 +12,4 @@ mod waiter;
 
 pub use client::Client;
 pub use config::Config;
-pub use loqui_connection::Encoder;
+pub use loqui_connection::{Encoder, Factory};
