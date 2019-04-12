@@ -149,7 +149,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
-            &self.encoder,
+            self.encoder,
         ))
     }
 }

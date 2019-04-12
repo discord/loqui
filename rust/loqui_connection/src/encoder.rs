@@ -1,10 +1,11 @@
 use failure::Error;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+use std::pin::Pin;
 
 /// Interface for encoding and decoding. Used by the connection to hand back proper `Decoded`
 /// and `Encoded` structs from a vector of bytes.
-pub trait Encoder: Send + Sync + 'static {
+pub trait Encoder: Send + Sync {
     /// The resulting type when a `Vec<u8>` is decoded.
     type Decoded: DeserializeOwned + Send + Sync + Debug;
     /// The type that is encoded into a `Vec<u8>`.
@@ -28,9 +29,7 @@ pub trait Factory: Send + Sync + 'static {
     /// Compressions supported.
     const COMPRESSIONS: &'static [&'static str];
 
-    fn make(
-        encoding: &'static str,
-    ) -> Box<dyn Encoder<Decoded = Self::Decoded, Encoded = Self::Encoded>>;
+    fn make() -> Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>;
 
     fn find_encoding<S: AsRef<str>>(encoding: S) -> Option<&'static str> {
         let encoding = encoding.as_ref();

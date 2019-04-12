@@ -1,5 +1,5 @@
-use crate::event_handler::EventHandler;
 use crate::encoder::Factory;
+use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
 use crate::sender::Sender;
@@ -117,7 +117,7 @@ async fn run<F: Factory, H: Handler<F>>(
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
     let mut stream = framed_reader.select(self_rx).select(ping_stream);
-    let encoder = F::make(&"json");
+    let encoder = F::make();
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoder);
     while let Some(event) = await!(stream.next()) {

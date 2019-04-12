@@ -1,8 +1,8 @@
 use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
+use crate::encoder::Factory;
 use crate::error::LoquiError;
 use crate::handler::Handler;
-use crate::encoder::Factory;
 use failure::Error;
 use futures::sync::mpsc::{self, UnboundedSender};
 use futures::sync::oneshot;
@@ -29,9 +29,9 @@ impl<F: Factory, H: Handler<F>> Supervisor<F, H> {
     ///
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
-    pub async fn connect<F>(address: SocketAddr, handler_creator: F) -> Result<Self, Error>
+    pub async fn connect<C>(address: SocketAddr, handler_creator: C) -> Result<Self, Error>
     where
-        F: Fn() -> H + Send + Sync + 'static,
+        C: Fn() -> H + Send + Sync + 'static,
     {
         let (self_sender, mut self_rx) = mpsc::unbounded();
         let connection = Self {
