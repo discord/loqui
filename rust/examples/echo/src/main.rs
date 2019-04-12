@@ -38,7 +38,6 @@ impl RequestHandler for EchoHandler {
     }
 }
 
-#[derive(Clone)]
 struct Factory {}
 
 impl EncoderFactory for Factory {
@@ -60,7 +59,6 @@ impl EncoderFactory for Factory {
     }
 }
 
-#[derive(Clone)]
 struct UTF8Encoder {}
 
 impl Encoder for UTF8Encoder {
@@ -76,7 +74,6 @@ impl Encoder for UTF8Encoder {
     }
 }
 
-#[derive(Clone)]
 struct JsonEncoder {}
 
 impl Encoder for JsonEncoder {

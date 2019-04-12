@@ -110,6 +110,8 @@ async fn run<F: Factory, H: Handler<F>>(
             .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
     }
 
+    let encoder = F::make(ready.transport_options.encoding);
+
     // Convert each stream into a Result<Event, Error> stream.
     let ping_stream = Interval::new(ready.ping_interval)
         .map(|()| Event::Ping)
@@ -120,7 +122,6 @@ async fn run<F: Factory, H: Handler<F>>(
     let mut stream = framed_reader
         .select_break(self_rx)
         .select_break(ping_stream);
-    let encoder = F::make(ready.transport_options.encoding);
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoder);
     while let Some(event) = await!(stream.next()) {

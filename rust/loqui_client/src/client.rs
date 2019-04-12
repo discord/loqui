@@ -8,10 +8,19 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::await;
 
-#[derive(Clone)]
 pub struct Client<F: EncoderFactory> {
     connection: Arc<SupervisedConnection<F, ConnectionHandler<F>>>,
     config: Arc<Config<F>>,
+}
+
+// XXX: #[derive(Clone)] requires EncoderFactory to be Clone for some unknown reason.
+impl<F: EncoderFactory> Clone for Client<F> {
+    fn clone(&self) -> Self {
+        Self {
+            connection: self.connection.clone(),
+            config: self.config.clone(),
+        }
+    }
 }
 
 impl<F: EncoderFactory> Client<F> {

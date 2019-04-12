@@ -5,7 +5,6 @@ use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Config<F: EncoderFactory> {
-    //pub encoder: E,
     _f: PhantomData<F>,
     pub max_payload_size: ByteSize,
     pub request_timeout: Duration,
