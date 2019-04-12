@@ -63,7 +63,7 @@ pub trait Handler<F: Factory>: Send + Sync + 'static {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
+        encoder: &Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<Self::HandleFrameFuture>;
     /// Handle internal events for this connection. Completely opaque to the connection. Optionally
     /// return a `LoquiFrame` that will be sent back through the socket to the other side.
@@ -71,7 +71,7 @@ pub trait Handler<F: Factory>: Send + Sync + 'static {
         &mut self,
         event: Self::InternalEvent,
         id_sequence: &mut IdSequence,
-        encoder: Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
+        encoder: &Box<dyn Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<LoquiFrame>;
     /// Periodic callback that fires whenever a ping fires.
     fn handle_ping(&mut self);

@@ -99,7 +99,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         let delegated_frame = delegated_frame.into();
         let maybe_future = self
             .handler
-            .handle_frame(delegated_frame, self.encoder);
+            .handle_frame(delegated_frame, &self.encoder);
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
@@ -149,7 +149,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
-            self.encoder,
+            &self.encoder,
         ))
     }
 }
