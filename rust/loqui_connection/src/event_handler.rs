@@ -7,6 +7,7 @@ use super::sender::Sender;
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
+use std::rc::Rc;
 
 /// Main handler of connection `Event`s.
 pub struct EventHandler<F: Factory, H: Handler<F>> {
@@ -14,7 +15,7 @@ pub struct EventHandler<F: Factory, H: Handler<F>> {
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
+    encoder: Rc<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
 }
 
 /// Standard return type for handler functions.
@@ -27,7 +28,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
     pub fn new(
         self_sender: Sender<H::InternalEvent>,
         handler: H,
-        encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
+        encoder: Rc<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
     ) -> Self {
         Self {
             handler,
@@ -149,7 +150,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
-            self.encoder,
+            self.encoder.clone(),
         ))
     }
 }
