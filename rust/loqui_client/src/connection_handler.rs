@@ -22,8 +22,8 @@ use tokio_codec::Framed;
 #[derive(Debug)]
 pub enum InternalEvent<Encoded, Decoded>
 where
-    Encoded: Serialize + Send + Sync,
-    Decoded: DeserializeOwned + Send + Sync,
+    Encoded: Serialize + Send,
+    Decoded: DeserializeOwned + Send,
 {
     Request {
         payload: Encoded,

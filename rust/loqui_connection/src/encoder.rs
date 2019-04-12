@@ -7,9 +7,9 @@ use std::sync::Arc;
 /// and `Encoded` structs from a vector of bytes.
 pub trait Encoder: Send + Sync {
     /// The resulting type when a `Vec<u8>` is decoded.
-    type Decoded: DeserializeOwned + Send + Sync + Debug;
+    type Decoded: DeserializeOwned + Send + Debug;
     /// The type that is encoded into a `Vec<u8>`.
-    type Encoded: Serialize + Send + Sync + Debug;
+    type Encoded: Serialize + Send + Debug;
 
     /// Decode a `Vec<u8>` into a struct.
     fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error>;
@@ -19,9 +19,9 @@ pub trait Encoder: Send + Sync {
 
 pub trait Factory: Send + Sync + 'static {
     /// The resulting type when a `Vec<u8>` is decoded.
-    type Decoded: DeserializeOwned + Send + Sync + Debug;
+    type Decoded: DeserializeOwned + Send + Debug;
     /// The type that is encoded into a `Vec<u8>`.
-    type Encoded: Serialize + Send + Sync + Debug;
+    type Encoded: Serialize + Send + Debug;
 
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];
