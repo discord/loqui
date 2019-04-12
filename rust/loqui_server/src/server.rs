@@ -7,12 +7,12 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
-pub struct Server<R: RequestHandler<F>, F: EncoderFactory> {
-    config: Arc<Config<R, F>>,
+pub struct Server<R: RequestHandler> {
+    config: Arc<Config<R>>,
 }
 
-impl<R: RequestHandler<F>, F: EncoderFactory> Server<R, F> {
-    pub fn new(config: Config<R, F>) -> Self {
+impl<R: RequestHandler> Server<R> {
+    pub fn new(config: Config<R>) -> Self {
         Self {
             config: Arc::new(config),
         }

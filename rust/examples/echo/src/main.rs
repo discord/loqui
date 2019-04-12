@@ -22,7 +22,8 @@ const ADDRESS: &str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
-impl RequestHandler<Factory> for EchoHandler {
+impl RequestHandler for EchoHandler {
+    type EncoderFactory = Factory;
     existential type RequestFuture: Future<Output = String>;
     existential type PushFuture: Send + Future<Output = ()>;
 
@@ -139,11 +140,11 @@ async fn client_send_loop() {
 fn spawn_server() {
     tokio::spawn_async(
         async {
-            let config = ServerConfig::<EchoHandler, Factory>::new(
-                EchoHandler {},
-                ByteSize::kb(5000),
-                Duration::from_secs(5),
-            );
+            let config = ServerConfig {
+                request_handler: EchoHandler {},
+                max_payload_size: ByteSize::kb(5000),
+                ping_interval: Duration::from_secs(5),
+            };
             let server = Server::new(config);
             let result = await!(server.listen_and_serve(ADDRESS.to_string()));
             println!("Run result={:?}", result);

@@ -15,17 +15,17 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub struct ConnectionHandler<R: RequestHandler<F>, F: EncoderFactory> {
-    config: Arc<Config<R, F>>,
+pub struct ConnectionHandler<R: RequestHandler> {
+    config: Arc<Config<R>>,
 }
 
-impl<R: RequestHandler<F>, F: EncoderFactory> ConnectionHandler<R, F> {
-    pub fn new(config: Arc<Config<R, F>>) -> Self {
+impl<R: RequestHandler> ConnectionHandler<R> {
+    pub fn new(config: Arc<Config<R>>) -> Self {
         Self { config }
     }
 }
 
-impl<R: RequestHandler<F>, F: EncoderFactory> Handler<F> for ConnectionHandler<R, F> {
+impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -84,7 +84,14 @@ impl<R: RequestHandler<F>, F: EncoderFactory> Handler<F> for ConnectionHandler<R
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
+        encoder: Arc<
+            Box<
+                dyn Encoder<
+                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                    > + 'static,
+            >,
+        >,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
@@ -104,7 +111,14 @@ impl<R: RequestHandler<F>, F: EncoderFactory> Handler<F> for ConnectionHandler<R
         &mut self,
         _event: (),
         _id_sequence: &mut IdSequence,
-        _encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
+        _encoder: Arc<
+            Box<
+                dyn Encoder<
+                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                    > + 'static,
+            >,
+        >,
     ) -> Option<LoquiFrame> {
         None
     }
@@ -112,10 +126,17 @@ impl<R: RequestHandler<F>, F: EncoderFactory> Handler<F> for ConnectionHandler<R
     fn handle_ping(&mut self) {}
 }
 
-async fn handle_push<F: EncoderFactory, R: RequestHandler<F>>(
-    config: Arc<Config<R, F>>,
+async fn handle_push<R: RequestHandler>(
+    config: Arc<Config<R>>,
     push: Push,
-    encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
+    encoder: Arc<
+        Box<
+            dyn Encoder<
+                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                > + 'static,
+        >,
+    >,
 ) {
     let Push {
         payload,
@@ -131,10 +152,17 @@ async fn handle_push<F: EncoderFactory, R: RequestHandler<F>>(
     }
 }
 
-async fn handle_request<F: EncoderFactory, R: RequestHandler<F>>(
-    config: Arc<Config<R, F>>,
+async fn handle_request<R: RequestHandler>(
+    config: Arc<Config<R>>,
     request: Request,
-    encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
+    encoder: Arc<
+        Box<
+            dyn Encoder<
+                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
+                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
+                > + 'static,
+        >,
+    >,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
@@ -153,7 +181,7 @@ async fn handle_request<F: EncoderFactory, R: RequestHandler<F>>(
     })
 }
 
-impl<F: EncoderFactory, R: RequestHandler<F>> ConnectionHandler<R, F> {
+impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,
@@ -206,7 +234,9 @@ impl<F: EncoderFactory, R: RequestHandler<F>> ConnectionHandler<R, F> {
 
     fn negotiate_encoding(client_encodings: &[String]) -> Result<&'static str, Error> {
         for client_encoding in client_encodings {
-            if let Some(encoding) = F::find_encoding(client_encoding) {
+            if let Some(encoding) =
+                <R::EncoderFactory as EncoderFactory>::find_encoding(client_encoding)
+            {
                 return Ok(encoding);
             }
         }
@@ -221,7 +251,9 @@ impl<F: EncoderFactory, R: RequestHandler<F>> ConnectionHandler<R, F> {
         }
 
         for client_compression in client_compressions {
-            if let Some(compression) = F::find_compression(client_compression) {
+            if let Some(compression) =
+                <R::EncoderFactory as EncoderFactory>::find_compression(client_compression)
+            {
                 return Ok(Some(compression));
             }
         }
