@@ -2,6 +2,7 @@ use crate::encoder::Factory;
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::Handler;
+use crate::select_break::StreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
@@ -116,7 +117,9 @@ async fn run<F: Factory, H: Handler<F>>(
     let framed_reader = reader.map(Event::SocketReceive);
     let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
 
-    let mut stream = framed_reader.select(self_rx).select(ping_stream);
+    let mut stream = framed_reader
+        .select_break(self_rx)
+        .select_break(ping_stream);
     let encoder = F::make(ready.transport_options.encoding);
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoder);

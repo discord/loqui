@@ -153,7 +153,7 @@ fn main() -> Result<(), Error> {
                 },
             );
 
-            let config = Config::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5));
+            let config = Config::<EncoderFactory>::new(ByteSize::kb(5000), Duration::from_secs(5), 10_000);
             let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
             let client = await!(Client::connect(address, config)).expect("Failed to connect");
             for _ in 0..100 {

@@ -5,6 +5,7 @@ use failure::Error;
 use loqui_connection::{Encoder, Factory, Supervisor as SupervisedConnection};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::await;
 
 #[derive(Clone)]
@@ -18,7 +19,11 @@ impl<F: Factory> Client<F> {
         let config = Arc::new(config);
         let handler_config = config.clone();
         let handler_creator = move || ConnectionHandler::new(handler_config.clone());
-        let connection = await!(SupervisedConnection::connect(address, handler_creator))?;
+        let connection = await!(SupervisedConnection::connect(
+            address,
+            handler_creator,
+            config.request_queue_size
+        ))?;
         let client = Self {
             connection: Arc::new(connection),
             config,
@@ -29,18 +34,16 @@ impl<F: Factory> Client<F> {
     /// Send a request to the server.
     pub async fn request(&self, payload: F::Encoded) -> Result<F::Decoded, Error> {
         let (waiter, awaitable) = ResponseWaiter::new(self.config.request_timeout);
+        let deadline = waiter.deadline;
         let request = InternalEvent::Request { payload, waiter };
-        self.connection.send(request)?;
+        await!(self.connection.send(request, deadline))?;
         await!(awaitable)
     }
 
     /// Send a push to the server.
     pub async fn push(&self, payload: F::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
-        self.connection.send(push)
-    }
-
-    pub fn close(&self) -> Result<(), Error> {
-        self.connection.close()
+        let deadline = Instant::now() + self.config.request_timeout;
+        await!(self.connection.send(push, deadline))
     }
 }
