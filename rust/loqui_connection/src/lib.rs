@@ -10,6 +10,7 @@ mod error;
 mod event_handler;
 mod framed_io;
 mod id_sequence;
+mod select_break;
 mod sender;
 mod supervisor;
 
