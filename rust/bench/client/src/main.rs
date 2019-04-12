@@ -122,7 +122,7 @@ fn main() -> Result<(), Error> {
             let config = Config {
                 max_payload_size: ByteSize::kb(5000),
                 request_timeout: Duration::from_secs(5),
-                request_queue_size: 10_000,
+                request_queue_size: 1_000,
             };
             let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
             let client = await!(Client::connect(address, config)).expect("Failed to connect");

@@ -276,7 +276,7 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         };
 
         // compression not supported
-        if let Some(compression) = hello_ack.compression {
+        if hello_ack.compression.is_some() {
             return Err(LoquiError::InvalidCompression.into());
         };
         let ping_interval = Duration::from_millis(u64::from(hello_ack.ping_interval_ms));
