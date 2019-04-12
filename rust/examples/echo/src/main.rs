@@ -22,9 +22,6 @@ const ADDRESS: &str = "127.0.0.1:8080";
 
 struct EchoHandler {}
 
-#[derive(Clone)]
-struct UTF8Encoder {}
-
 impl RequestHandler<EncoderFactory> for EchoHandler {
     existential type RequestFuture: Future<Output = String>;
     existential type PushFuture: Send + Future<Output = ()>;
@@ -61,6 +58,9 @@ impl Factory for EncoderFactory {
         }
     }
 }
+
+#[derive(Clone)]
+struct UTF8Encoder {}
 
 impl Encoder for UTF8Encoder {
     type Decoded = String;
