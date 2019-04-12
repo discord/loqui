@@ -1,24 +1,23 @@
 use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
-use crate::error::LoquiError;
+use crate::error::{convert_timeout_error, LoquiError};
 use crate::handler::Handler;
 use failure::Error;
-use futures::sync::mpsc::{self, UnboundedSender};
+use futures::sync::mpsc::{self, Sender, UnboundedSender};
 use futures::sync::oneshot;
+use futures_timer::FutureExt;
 use std::net::SocketAddr;
+use std::time::Instant;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 
-#[derive(Debug)]
-enum Event<H: Handler> {
-    Internal(H::InternalEvent),
-    Close,
-}
-
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
 pub struct Supervisor<H: Handler> {
-    self_sender: UnboundedSender<Event<H>>,
+    event_sender: Sender<H::InternalEvent>,
+    /// A Sender that will drop once the client is dropped. If it's dropped then we should
+    /// stop trying to connect.
+    _close_sender: UnboundedSender<()>,
 }
 
 impl<H: Handler> Supervisor<H> {
@@ -28,13 +27,20 @@ impl<H: Handler> Supervisor<H> {
     ///
     /// * `address` - The address to connect to
     /// * `handler_creator` - a `Fn` that creates a `Handler`. Called each time a new TCP connection is made.
-    pub async fn connect<F>(address: SocketAddr, handler_creator: F) -> Result<Self, Error>
+    /// * `queue_size` - the number of requests the supervisor should hold before dropping requests.
+    pub async fn connect<F>(
+        address: SocketAddr,
+        handler_creator: F,
+        queue_size: usize,
+    ) -> Result<Self, Error>
     where
         F: Fn() -> H + Send + Sync + 'static,
     {
-        let (self_sender, mut self_rx) = mpsc::unbounded();
+        let (event_sender, mut self_rx) = mpsc::channel(queue_size);
+        let (_close_sender, mut close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
-            self_sender: self_sender.clone(),
+            event_sender,
+            _close_sender,
         };
         let (ready_tx, ready_rx) = oneshot::channel();
         tokio::spawn_async(
@@ -43,6 +49,13 @@ impl<H: Handler> Supervisor<H> {
                 // Make it an option so we only send once.
                 let mut ready_tx = Some(ready_tx);
                 loop {
+                    // Poll the close receiver before connecting to make sure the client hasn't
+                    // hung up.
+                    if let Ok(Async::Ready(_)) = close_rx.poll() {
+                        trace!("Client dropped while connecting.");
+                        return;
+                    }
+
                     let handler = handler_creator();
                     debug!("Connecting to {}", address);
 
@@ -72,17 +85,12 @@ impl<H: Handler> Supervisor<H> {
 
                             loop {
                                 match await!(self_rx.next()) {
-                                    Some(Ok(Event::Internal(internal_event))) => {
+                                    Some(Ok(internal_event)) => {
                                         if let Err(e) = connection.send(internal_event) {
-                                            debug!("Connection no longer running. error={:?}", e);
+                                            debug!("Connection no longer running. Will reconnect. error={:?}", e);
                                             await!(backoff.snooze());
                                             break;
                                         }
-                                    }
-                                    Some(Ok(Event::Close)) => {
-                                        debug!("Closing connection.");
-                                        let _result = connection.close();
-                                        return;
                                     }
                                     Some(Err(_)) | None => {
                                         debug!("Client hung up. Closing connection.");
@@ -105,15 +113,15 @@ impl<H: Handler> Supervisor<H> {
         Ok(connection)
     }
 
-    pub fn send(&self, event: H::InternalEvent) -> Result<(), Error> {
-        self.self_sender
-            .unbounded_send(Event::Internal(event))
-            .map_err(|_e| LoquiError::ConnectionClosed.into())
-    }
-
-    pub fn close(&self) -> Result<(), Error> {
-        self.self_sender
-            .unbounded_send(Event::Close)
-            .map_err(|_e| LoquiError::ConnectionClosed.into())
+    pub async fn send(&self, event: H::InternalEvent, deadline: Instant) -> Result<(), Error> {
+        let send_with_deadline = self
+            .event_sender
+            .clone()
+            .send(event)
+            .map(|_sender| ())
+            .map_err(|_closed| Error::from(LoquiError::ConnectionClosed))
+            .timeout_at(deadline)
+            .map_err(convert_timeout_error);
+        await!(send_with_deadline)
     }
 }

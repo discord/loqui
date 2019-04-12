@@ -1,6 +1,7 @@
 use failure::{Error, Fail};
 use loqui_protocol::frames::GoAway;
 use loqui_protocol::upgrade::UpgradeFrame;
+use std::io;
 
 #[derive(Debug, Fail)]
 pub enum LoquiError {
@@ -78,5 +79,19 @@ impl LoquiError {
             LoquiError::PingTimeout => LoquiErrorCode::PingTimeout,
             _ => LoquiErrorCode::InternalServerError,
         }
+    }
+}
+
+/// Convert an error to a LoquiError::RequestTimeout if it's a timeout.
+pub fn convert_timeout_error(error: Error) -> Error {
+    match error.downcast::<io::Error>() {
+        Ok(error) => {
+            if error.kind() == io::ErrorKind::TimedOut {
+                LoquiError::RequestTimeout.into()
+            } else {
+                error.into()
+            }
+        }
+        Err(error) => error,
     }
 }

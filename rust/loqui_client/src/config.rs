@@ -7,4 +7,5 @@ pub struct Config<E: Encoder> {
     pub encoder: E,
     pub max_payload_size: ByteSize,
     pub request_timeout: Duration,
+    pub request_queue_size: usize,
 }
