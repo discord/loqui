@@ -2,19 +2,19 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
-use loqui_connection::{Encoder, Supervisor as SupervisedConnection};
+use loqui_connection::{Encoder, Factory, Supervisor as SupervisedConnection};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::await;
 
 #[derive(Clone)]
-pub struct Client<E: Encoder> {
-    connection: Arc<SupervisedConnection<ConnectionHandler<E>>>,
-    config: Arc<Config<E>>,
+pub struct Client<F: Factory> {
+    connection: Arc<SupervisedConnection<F, ConnectionHandler<F>>>,
+    config: Arc<Config<F>>,
 }
 
-impl<E: Encoder> Client<E> {
-    pub async fn connect(address: SocketAddr, config: Config<E>) -> Result<Client<E>, Error> {
+impl<F: Factory> Client<F> {
+    pub async fn connect(address: SocketAddr, config: Config<F>) -> Result<Client<F>, Error> {
         let config = Arc::new(config);
         let handler_config = config.clone();
         let handler_creator = move || ConnectionHandler::new(handler_config.clone());
@@ -27,7 +27,7 @@ impl<E: Encoder> Client<E> {
     }
 
     /// Send a request to the server.
-    pub async fn request(&self, payload: E::Encoded) -> Result<E::Decoded, Error> {
+    pub async fn request(&self, payload: F::Encoded) -> Result<F::Decoded, Error> {
         let (waiter, awaitable) = ResponseWaiter::new(self.config.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
@@ -35,7 +35,7 @@ impl<E: Encoder> Client<E> {
     }
 
     /// Send a push to the server.
-    pub async fn push(&self, payload: E::Encoded) -> Result<(), Error> {
+    pub async fn push(&self, payload: F::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
         self.connection.send(push)
     }

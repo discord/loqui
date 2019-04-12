@@ -37,7 +37,7 @@ where
 
 pub struct ConnectionHandler<F: Factory> {
     waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
-    config: Arc<Config<E>>,
+    config: Arc<Config<F>>,
 }
 
 impl<F: Factory> ConnectionHandler<F> {
@@ -49,7 +49,7 @@ impl<F: Factory> ConnectionHandler<F> {
     }
 }
 
-impl<F: Factory> Handler for ConnectionHandler<F> {
+impl<F: Factory> Handler<F> for ConnectionHandler<F> {
     type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -104,11 +104,11 @@ impl<F: Factory> Handler for ConnectionHandler<F> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        transport_options: &TransportOptions,
+        encoder: &Box<Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Response(response) => {
-                self.handle_response(response, transport_options);
+                self.handle_response(response, encoder);
                 None
             }
             DelegatedFrame::Error(error) => {
@@ -134,16 +134,15 @@ impl<F: Factory> Handler for ConnectionHandler<F> {
         &mut self,
         event: InternalEvent<F::Encoded, F::Decoded>,
         id_sequence: &mut IdSequence,
-        transport_options: &TransportOptions,
+        encoder: &Box<Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
     ) -> Option<LoquiFrame> {
-        let TransportOptions { encoding, .. } = transport_options;
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
             InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, sequence_id, waiter)
+                self.handle_request(payload, sequence_id, waiter, encoder)
             }
-            InternalEvent::Push { payload } => self.handle_push(payload),
+            InternalEvent::Push { payload } => self.handle_push(payload, encoder),
         }
     }
 
@@ -159,7 +158,7 @@ impl<F: Factory> ConnectionHandler<F> {
     fn handle_push(
         &mut self,
         payload: F::Encoded,
-        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
     ) -> Option<LoquiFrame> {
         match encoder.encode(payload) {
             Ok((payload, compressed)) => {
@@ -181,7 +180,7 @@ impl<F: Factory> ConnectionHandler<F> {
         payload: F::Encoded,
         sequence_id: u32,
         waiter: ResponseWaiter<F::Decoded>,
-        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
@@ -209,7 +208,7 @@ impl<F: Factory> ConnectionHandler<F> {
     fn handle_response(
         &mut self,
         response: Response,
-        encoder: Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
     ) {
         let Response {
             flags,
