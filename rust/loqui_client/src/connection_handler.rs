@@ -104,7 +104,7 @@ impl<F: Factory> Handler<F> for ConnectionHandler<F> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: &Box<Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
+        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Response(response) => {
@@ -134,7 +134,7 @@ impl<F: Factory> Handler<F> for ConnectionHandler<F> {
         &mut self,
         event: InternalEvent<F::Encoded, F::Decoded>,
         id_sequence: &mut IdSequence,
-        encoder: &Box<Encoder<Encoded=F::Encoded, Decoded=F::Decoded>>,
+        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
@@ -158,7 +158,7 @@ impl<F: Factory> ConnectionHandler<F> {
     fn handle_push(
         &mut self,
         payload: F::Encoded,
-        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         match encoder.encode(payload) {
             Ok((payload, compressed)) => {
@@ -180,7 +180,7 @@ impl<F: Factory> ConnectionHandler<F> {
         payload: F::Encoded,
         sequence_id: u32,
         waiter: ResponseWaiter<F::Decoded>,
-        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
@@ -208,7 +208,7 @@ impl<F: Factory> ConnectionHandler<F> {
     fn handle_response(
         &mut self,
         response: Response,
-        encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) {
         let Response {
             flags,

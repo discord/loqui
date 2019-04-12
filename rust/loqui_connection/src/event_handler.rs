@@ -1,12 +1,14 @@
 use super::connection::Event;
 use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler, TransportOptions};
-use crate::encoder::{Factory, Encoder};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
+use crate::encoder::{Encoder, Factory};
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
+use std::pin::Pin;
+use std::sync::Arc;
 
 /// Main handler of connection `Event`s.
 pub struct EventHandler<F: Factory, H: Handler<F>> {
@@ -14,7 +16,7 @@ pub struct EventHandler<F: Factory, H: Handler<F>> {
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
+    encoder: Arc<Box<dyn Encoder<Decoded = F::Decoded, Encoded = F::Encoded>>>,
 }
 
 /// Standard return type for handler functions.
@@ -27,7 +29,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
     pub fn new(
         self_sender: Sender<H::InternalEvent>,
         handler: H,
-        encoder: Box<dyn Encoder<Decoded=F::Decoded, Encoded=F::Encoded>>,
+        encoder: Arc<Box<dyn Encoder<Decoded = F::Decoded, Encoded = F::Encoded>>>,
     ) -> Self {
         Self {
             handler,
@@ -99,7 +101,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         let delegated_frame = delegated_frame.into();
         let maybe_future = self
             .handler
-            .handle_frame(delegated_frame, &self.encoder);
+            .handle_frame(delegated_frame, self.encoder.clone());
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
@@ -149,7 +151,7 @@ impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
         Ok(self.handler.handle_internal_event(
             internal_event,
             &mut self.id_sequence,
-            &self.encoder,
+            self.encoder.clone(),
         ))
     }
 }

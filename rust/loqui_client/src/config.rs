@@ -1,7 +1,7 @@
 use bytesize::ByteSize;
 use loqui_connection::Factory;
-use std::time::Duration;
 use std::marker::PhantomData;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Config<F: Factory> {

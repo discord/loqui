@@ -26,7 +26,7 @@ impl<R: RequestHandler<F>, F: Factory> ConnectionHandler<R, F> {
     }
 }
 
-impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
+impl<R: RequestHandler<F>, F: Factory> Handler<F> for ConnectionHandler<R, F> {
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -85,25 +85,21 @@ impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        transport_options: &TransportOptions,
+        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
-                /*
                 tokio::spawn_async(handle_push(
                     self.config.clone(),
                     push,
-                    transport_options.encoding,
+                    encoder
                 ));
-                */
                 None
             }
             DelegatedFrame::Request(request) => {
-                /*
                 let response_future =
-                    handle_request(self.config.clone(), request, transport_options.encoding);
-                    */
-                None//Some(response_future)
+                    handle_request(self.config.clone(), request, encoder);
+                Some(response_future)
             }
             DelegatedFrame::Error(_) => None,
             DelegatedFrame::Response(_) => None,
@@ -114,7 +110,7 @@ impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
         &mut self,
         _event: (),
         _id_sequence: &mut IdSequence,
-        _transport_options: &TransportOptions,
+        _encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
     ) -> Option<LoquiFrame> {
         None
     }
@@ -122,27 +118,18 @@ impl<R: RequestHandler<F>, F: Factory> Handler for ConnectionHandler<R, F> {
     fn handle_ping(&mut self) {}
 }
 
-fn handle_push<F: Factory, R: RequestHandler<F>>(
+async fn handle_push<F: Factory, R: RequestHandler<F>>(
     config: Arc<Config<R, F>>,
     push: Push,
-    encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
-) -> impl Future<Output=()> {
-
+    encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
+) {
     let Push { payload, flags } = push;
-    match
-        encoder
-        .decode(payload)
-    {
+    match encoder.decode(payload) {
         Ok(request) => {
-            async {
-                config.request_handler.handle_push(request);
-            }
+            config.request_handler.handle_push(request);
         }
         Err(e) => {
             error!("Failed to decode payload. error={:?}", e);
-            async {
-
-            }
         }
     }
 }
@@ -150,23 +137,18 @@ fn handle_push<F: Factory, R: RequestHandler<F>>(
 async fn handle_request<F: Factory, R: RequestHandler<F>>(
     config: Arc<Config<R, F>>,
     request: Request,
-    encoder: &Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>,
+    encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded> + 'static>>,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,
         flags,
         sequence_id,
     } = request;
-    let request =
-        encoder
-        .decode(payload)
-        .map_err(|e| (e, sequence_id))?;
+    let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
 
     let response = await!(config.request_handler.handle_request(request));
 
-    let (payload, compressed) =
-        encoder.encode(response)
-        .map_err(|e| (e, sequence_id))?;
+    let (payload, compressed) = encoder.encode(response).map_err(|e| (e, sequence_id))?;
     let flags = if compressed {
         Flags::Compressed
     } else {
