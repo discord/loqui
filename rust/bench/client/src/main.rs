@@ -6,17 +6,13 @@ use failure::Error;
 use fern;
 #[macro_use]
 extern crate log;
-use encoders::BenchEncoderFactory;
+use loqui_bench_common::{BenchEncoderFactory, ADDRESS};
 use loqui_client::{Client, Config};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-
-mod encoders;
-
-const ADDRESS: &str = "127.0.0.1:8080";
 
 #[derive(Default)]
 struct State {

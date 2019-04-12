@@ -7,4 +7,5 @@ members = [
   "examples/echo",
   "bench/server",
   "bench/client",
+  "bench/common",
 ]

@@ -264,9 +264,18 @@ dependencies = [
  "fern 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_bench_common 0.0.1",
  "loqui_client 0.0.1",
  "loqui_protocol 0.0.1",
  "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "loqui_bench_common"
+version = "0.0.1"
+dependencies = [
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_client 0.0.1",
 ]
 
 [[package]]
@@ -276,6 +285,7 @@ dependencies = [
  "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_bench_common 0.0.1",
  "loqui_protocol 0.0.1",
  "loqui_server 0.0.1",
  "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
