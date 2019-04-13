@@ -36,7 +36,7 @@ impl AsyncBackoff {
             .next_backoff()
             .ok_or_else(|| LoquiError::ReachedMaxBackoffElapsedTime)?;
         debug!("Backing off. duration={:?}", backoff_duration);
-        let _result = await!(Delay::new(backoff_duration))?;
+        await!(Delay::new(backoff_duration))?;
         Ok(())
     }
 

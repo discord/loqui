@@ -95,8 +95,7 @@ async fn run<H: Handler>(
         Err((error, reader_writer)) => {
             debug!("Not ready. e={:?}", error);
             if let Some(reader_writer) = reader_writer {
-                let (_reader, writer) = reader_writer.split();
-                await!(writer.close(Some(&error)));
+                await!(reader_writer.close(Some(&error)));
             }
             return Err(error);
         }

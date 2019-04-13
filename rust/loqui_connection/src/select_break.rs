@@ -59,7 +59,7 @@ where
 
         match b.poll()? {
             Async::Ready(Some(item)) => Ok(Some(item).into()),
-            Async::Ready(None) => return Ok(None.into()),
+            Async::Ready(None) => Ok(None.into()),
             Async::NotReady => Ok(Async::NotReady),
         }
     }

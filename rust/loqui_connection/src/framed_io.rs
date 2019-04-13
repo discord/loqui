@@ -49,7 +49,7 @@ impl Writer {
 
         let go_away = GoAway {
             flags: 0,
-            code: go_away_code(&error) as u16,
+            code: go_away_code(error) as u16,
             payload: vec![],
         };
         debug!("Closing. Sending GoAway. go_away={:?}", go_away);
@@ -59,7 +59,7 @@ impl Writer {
     }
 }
 
-fn go_away_code(error: &Option<&Error>) -> LoquiErrorCode {
+fn go_away_code(error: Option<&Error>) -> LoquiErrorCode {
     match error {
         None => LoquiErrorCode::Normal,
         Some(error) => {
@@ -106,5 +106,10 @@ impl ReaderWriter {
     pub fn split(self) -> (Reader, Writer) {
         let ReaderWriter { reader, writer } = self;
         (reader, writer)
+    }
+
+    /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
+    pub async fn close(self, error: Option<&Error>) {
+        await!(self.writer.close(error))
     }
 }

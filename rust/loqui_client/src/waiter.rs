@@ -25,7 +25,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
     /// `LoquiError::RequestTimeout` or some other error from the server.
     ///
     pub fn new(timeout: Duration) -> (Self, impl Future<Item = Decoded, Error = Error>) {
-        let (tx, rx) = oneshot::channel::<Result<Decoded, Error>>();
+        let (tx, rx) = oneshot::channel();
 
         let deadline = Instant::now() + timeout;
 
@@ -34,12 +34,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
             .timeout_at(deadline)
             .map_err(convert_timeout_error)
             // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
-            .then(
-                |result: Result<Result<Decoded, Error>, Error>| match result {
-                    Ok(result) => result,
-                    Err(error) => Err(error),
-                },
-            );
+            .then(|result| result.unwrap_or_else(Err));
 
         (Self { tx, deadline }, awaitable)
     }
