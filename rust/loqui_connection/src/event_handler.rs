@@ -3,7 +3,7 @@ use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
-use crate::encoder::{ArcEncoder, Factory};
+use crate::encoder::ArcEncoder;
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};

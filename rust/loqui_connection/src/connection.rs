@@ -110,7 +110,8 @@ async fn run<H: Handler>(
             .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
     }
 
-    let encoder = H::EncoderFactory::make(ready.encoding);
+    let encoder =
+        H::EncoderFactory::make(ready.encoding).ok_or_else(|| LoquiError::InvalidEncoding)?;
 
     // Convert each stream into a Result<Event, Error> stream.
     let ping_stream = Interval::new(ready.ping_interval)

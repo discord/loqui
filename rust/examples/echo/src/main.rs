@@ -48,12 +48,11 @@ impl EncoderFactory for Factory {
 
     fn make(
         encoding: &'static str,
-    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>> {
+    ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>> {
         match encoding {
-            "utf8" => Arc::new(Box::new(UTF8Encoder {})),
-            "json" => Arc::new(Box::new(JsonEncoder {})),
-            // TODO:
-            _ => Arc::new(Box::new(UTF8Encoder {})),
+            "utf8" => Some(Arc::new(Box::new(UTF8Encoder {}))),
+            "json" => Some(Arc::new(Box::new(JsonEncoder {}))),
+            _ => None,
         }
     }
 }
@@ -133,7 +132,6 @@ async fn client_send_loop() {
         }
 
         await!(Delay::new(Duration::from_secs(1))).expect("Failed to delay.");
-        //client.close();
     }
 }
 

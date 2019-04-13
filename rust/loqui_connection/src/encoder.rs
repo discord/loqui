@@ -28,7 +28,7 @@ pub trait Factory: Send + Sync + 'static {
 
     fn make(
         encoding: &'static str,
-    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>;
+    ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>>;
 
     fn find_encoding<S: AsRef<str>>(encoding: S) -> Option<&'static str> {
         let encoding = encoding.as_ref();

@@ -2,7 +2,6 @@ use failure::Error;
 use loqui_client::{Encoder, EncoderFactory};
 use std::sync::Arc;
 
-#[derive(Clone)]
 pub struct BenchEncoderFactory {}
 
 impl EncoderFactory for BenchEncoderFactory {
@@ -13,12 +12,11 @@ impl EncoderFactory for BenchEncoderFactory {
 
     fn make(
         _encoding: &'static str,
-    ) -> Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>> {
-        Arc::new(Box::new(IdentityEncoder {}))
+    ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>> {
+        Some(Arc::new(Box::new(IdentityEncoder {})))
     }
 }
 
-#[derive(Clone)]
 struct IdentityEncoder {}
 
 impl Encoder for IdentityEncoder {
