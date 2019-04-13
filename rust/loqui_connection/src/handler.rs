@@ -1,4 +1,4 @@
-use crate::encoder::{ArcEncoder, Encoder, Factory};
+use crate::encoder::{ArcEncoder, Factory};
 use crate::framed_io::ReaderWriter;
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
@@ -6,7 +6,6 @@ use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 

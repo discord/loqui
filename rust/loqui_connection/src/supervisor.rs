@@ -1,6 +1,5 @@
 use crate::async_backoff::AsyncBackoff;
 use crate::connection::Connection;
-use crate::encoder::Factory;
 use crate::error::{convert_timeout_error, LoquiError};
 use crate::handler::Handler;
 use failure::Error;

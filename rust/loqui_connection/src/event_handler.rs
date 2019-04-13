@@ -3,11 +3,10 @@ use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
-use crate::encoder::{ArcEncoder, Encoder, Factory};
+use crate::encoder::{ArcEncoder, Factory};
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
-use std::sync::Arc;
 
 /// Main handler of connection `Event`s.
 pub struct EventHandler<H: Handler> {
