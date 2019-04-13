@@ -17,6 +17,7 @@ pub trait Encoder: Send + Sync {
     fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error>;
 }
 
+/// Trait for creating encoders based on the encoding that was selected for the connection.
 pub trait Factory: Send + Sync + 'static {
     /// The resulting type when a `Vec<u8>` is decoded.
     type Decoded: DeserializeOwned + Send + Debug;
