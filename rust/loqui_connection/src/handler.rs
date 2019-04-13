@@ -30,6 +30,7 @@ pub struct Ready {
 /// A trait that handles the specific functionality of a connection. The client and server each
 /// implement this.
 pub trait Handler: Send + Sync + 'static {
+    /// Factory for creating encoders for this handler.
     type EncoderFactory: Factory;
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
