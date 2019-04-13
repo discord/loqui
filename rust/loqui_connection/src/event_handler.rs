@@ -50,10 +50,6 @@ impl<H: Handler> EventHandler<H> {
         }
     }
 
-    fn handle_close(&mut self) -> MaybeFrameResult {
-        Err(LoquiError::ConnectionCloseRequested.into())
-    }
-
     /// Handles a request to ping the other side. Returns an `Error` if a `Pong` hasn't been
     /// received since the last ping.
     fn handle_ping(&mut self) -> MaybeFrameResult {
@@ -152,4 +148,10 @@ impl<H: Handler> EventHandler<H> {
             self.encoder.clone(),
         ))
     }
+
+    /// Close requested. Return an `Error` to close the connection.
+    fn handle_close(&mut self) -> MaybeFrameResult {
+        Err(LoquiError::ConnectionCloseRequested.into())
+    }
+
 }

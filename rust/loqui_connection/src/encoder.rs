@@ -27,10 +27,12 @@ pub trait Factory: Send + Sync + 'static {
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];
 
+    /// Create an encoder if the encoding passed in is supported.
     fn make(
         encoding: &'static str,
     ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>>;
 
+    /// Determines if an encoding is supported.
     fn find_encoding<S: AsRef<str>>(encoding: S) -> Option<&'static str> {
         let encoding = encoding.as_ref();
         for supported_encoding in Self::ENCODINGS {
@@ -42,6 +44,8 @@ pub trait Factory: Send + Sync + 'static {
     }
 }
 
+/// Type that is passed into other functions once the `Encoder` is created. This allows us to store
+/// `Factory` as a `type` param on traits instead of having to make them parameters elsewhere.
 pub type ArcEncoder<F> = Arc<
     Box<
         dyn Encoder<Encoded = <F as Factory>::Encoded, Decoded = <F as Factory>::Decoded> + 'static,
