@@ -15,11 +15,11 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 #[derive(Debug)]
-pub struct Connection<F: Factory, H: Handler<F>> {
+pub struct Connection<H: Handler> {
     self_sender: Sender<H::InternalEvent>,
 }
 
-impl<F: Factory, H: Handler<F>> Connection<F, H> {
+impl<H: Handler> Connection<H> {
     /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
     /// the `Connection`.
     ///
@@ -79,7 +79,7 @@ pub enum Event<InternalEvent: Send + 'static> {
 /// * `self_rx` - a receiver that InternalEvents will be sent over
 /// * `handler` - implements logic for the client or server specific things
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-async fn run<F: Factory, H: Handler<F>>(
+async fn run<H: Handler>(
     tcp_stream: TcpStream,
     self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
@@ -110,7 +110,7 @@ async fn run<F: Factory, H: Handler<F>>(
             .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
     }
 
-    let encoder = F::make(ready.encoding);
+    let encoder = H::EncoderFactory::make(ready.encoding);
 
     // Convert each stream into a Result<Event, Error> stream.
     let ping_stream = Interval::new(ready.ping_interval)

@@ -14,14 +14,14 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 
 /// A connection supervisor. It will indefinitely keep the connection alive. Supports backoff.
-pub struct Supervisor<F: Factory, H: Handler<F>> {
+pub struct Supervisor<H: Handler> {
     event_sender: Sender<H::InternalEvent>,
     /// A Sender that will drop once the client is dropped. If it's dropped then we should
     /// stop trying to connect.
     _close_sender: UnboundedSender<()>,
 }
 
-impl<F: Factory, H: Handler<F>> Supervisor<F, H> {
+impl<H: Handler> Supervisor<H> {
     /// Spawns a new supervisor. Waits until the connection is ready before returning.
     ///
     /// # Arguments

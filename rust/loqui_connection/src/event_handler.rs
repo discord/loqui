@@ -3,19 +3,19 @@ use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
-use crate::encoder::{Encoder, Factory};
+use crate::encoder::{Encoder, Factory, ArcEncoder};
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
 use std::sync::Arc;
 
 /// Main handler of connection `Event`s.
-pub struct EventHandler<F: Factory, H: Handler<F>> {
+pub struct EventHandler<H: Handler> {
     handler: H,
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    encoder: Arc<Box<dyn Encoder<Decoded = F::Decoded, Encoded = F::Encoded>>>,
+    encoder: ArcEncoder<H::EncoderFactory>
 }
 
 /// Standard return type for handler functions.
@@ -24,11 +24,11 @@ pub struct EventHandler<F: Factory, H: Handler<F>> {
 /// be sent back over the connection.
 type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
-impl<F: Factory, H: Handler<F>> EventHandler<F, H> {
+impl<H: Handler> EventHandler<H> {
     pub fn new(
         self_sender: Sender<H::InternalEvent>,
         handler: H,
-        encoder: Arc<Box<dyn Encoder<Decoded = F::Decoded, Encoded = F::Encoded>>>,
+        encoder: ArcEncoder<H::EncoderFactory>,
     ) -> Self {
         Self {
             handler,
