@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::ReaderWriter;
-use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError};
+use loqui_connection::{EncoderFactory, IdSequence, LoquiError, ArcEncoder};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
@@ -84,14 +84,7 @@ impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: Arc<
-            Box<
-                dyn Encoder<
-                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
-                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
-                    > + 'static,
-            >,
-        >,
+        encoder: ArcEncoder<R::EncoderFactory>,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
@@ -111,14 +104,7 @@ impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
         &mut self,
         _event: (),
         _id_sequence: &mut IdSequence,
-        _encoder: Arc<
-            Box<
-                dyn Encoder<
-                        Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
-                        Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
-                    > + 'static,
-            >,
-        >,
+        _encoder: ArcEncoder<R::EncoderFactory>,
     ) -> Option<LoquiFrame> {
         None
     }
@@ -129,14 +115,7 @@ impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
 async fn handle_push<R: RequestHandler>(
     config: Arc<Config<R>>,
     push: Push,
-    encoder: Arc<
-        Box<
-            dyn Encoder<
-                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
-                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
-                > + 'static,
-        >,
-    >,
+    encoder: ArcEncoder<R::EncoderFactory>,
 ) {
     let Push {
         payload,
@@ -155,14 +134,7 @@ async fn handle_push<R: RequestHandler>(
 async fn handle_request<R: RequestHandler>(
     config: Arc<Config<R>>,
     request: Request,
-    encoder: Arc<
-        Box<
-            dyn Encoder<
-                    Encoded = <R::EncoderFactory as EncoderFactory>::Encoded,
-                    Decoded = <R::EncoderFactory as EncoderFactory>::Decoded,
-                > + 'static,
-        >,
-    >,
+    encoder: ArcEncoder<R::EncoderFactory>,
 ) -> Result<Response, (Error, u32)> {
     let Request {
         payload,

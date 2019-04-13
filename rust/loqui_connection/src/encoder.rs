@@ -40,3 +40,12 @@ pub trait Factory: Send + Sync + 'static {
         None
     }
 }
+
+pub type ArcEncoder<F> = Arc<
+    Box<
+        dyn Encoder<
+            Encoded = <F as Factory>::Encoded,
+            Decoded = <F as Factory>::Decoded,
+        > + 'static,
+    >,
+>;
