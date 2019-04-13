@@ -48,7 +48,8 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
     }
 }
 
-impl<F: EncoderFactory> Handler<F> for ConnectionHandler<F> {
+impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
+    type EncoderFactory = F;
     type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send

@@ -3,7 +3,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::ReaderWriter;
-use loqui_connection::{EncoderFactory, IdSequence, LoquiError, ArcEncoder};
+use loqui_connection::{ArcEncoder, EncoderFactory, IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
@@ -25,7 +25,8 @@ impl<R: RequestHandler> ConnectionHandler<R> {
     }
 }
 
-impl<R: RequestHandler> Handler<R::EncoderFactory> for ConnectionHandler<R> {
+impl<R: RequestHandler> Handler for ConnectionHandler<R> {
+    type EncoderFactory = R::EncoderFactory;
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
