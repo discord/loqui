@@ -1,4 +1,4 @@
-use crate::encoder::{Encoder, Factory, ArcEncoder};
+use crate::encoder::{ArcEncoder, Encoder, Factory};
 use crate::framed_io::ReaderWriter;
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;

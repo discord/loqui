@@ -3,7 +3,7 @@ use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
-use crate::encoder::{Encoder, Factory, ArcEncoder};
+use crate::encoder::{ArcEncoder, Encoder, Factory};
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
@@ -15,7 +15,7 @@ pub struct EventHandler<H: Handler> {
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    encoder: ArcEncoder<H::EncoderFactory>
+    encoder: ArcEncoder<H::EncoderFactory>,
 }
 
 /// Standard return type for handler functions.
