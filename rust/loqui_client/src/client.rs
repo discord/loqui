@@ -9,7 +9,7 @@ use std::time::Instant;
 use tokio::await;
 
 pub struct Client<F: EncoderFactory> {
-    connection: Arc<SupervisedConnection<F, ConnectionHandler<F>>>,
+    connection: Arc<SupervisedConnection<ConnectionHandler<F>>>,
     config: Arc<Config>,
 }
 
