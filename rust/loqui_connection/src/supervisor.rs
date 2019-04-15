@@ -3,7 +3,7 @@ use crate::connection::Connection;
 use crate::error::{convert_timeout_error, LoquiError};
 use crate::handler::Handler;
 use failure::Error;
-use futures::sync::mpsc::{self, Sender, UnboundedSender};
+use futures::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender};
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use std::net::SocketAddr;
@@ -37,8 +37,8 @@ impl<H: Handler> Supervisor<H> {
     where
         C: Fn() -> H + Send + 'static,
     {
-        let (event_sender, mut self_rx) = mpsc::channel(queue_size);
-        let (_close_sender, mut close_rx) = mpsc::unbounded::<()>();
+        let (event_sender, event_rx) = mpsc::channel(queue_size);
+        let (_close_sender, close_rx) = mpsc::unbounded::<()>();
         let connection = Self {
             event_sender,
             _close_sender,
@@ -46,66 +46,9 @@ impl<H: Handler> Supervisor<H> {
         let (ready_tx, ready_rx) = oneshot::channel();
         tokio::spawn_async(
             async move {
-                let mut backoff = AsyncBackoff::new();
-                // Make it an option so we only send once.
-                let mut ready_tx = Some(ready_tx);
-                loop {
-                    // Poll the close receiver before connecting to make sure the client hasn't
-                    // hung up.
-                    if let Ok(Async::Ready(_)) = close_rx.poll() {
-                        trace!("Client dropped while connecting.");
-                        return;
-                    }
-
-                    let handler = handler_creator();
-                    debug!("Connecting to {}", address);
-
-                    match await!(TcpStream::connect(&address)) {
-                        Ok(tcp_stream) => {
-                            info!("Connected to {}", address);
-
-                            let (connection_ready_tx, connection_ready_rx) = oneshot::channel();
-                            let connection =
-                                Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
-
-                            // Wait for the connection to upgrade and handshake.
-                            if let Err(_e) = await!(connection_ready_rx) {
-                                // Connection dropped the sender.
-                                debug!("Ready failed.");
-                                await!(backoff.snooze());
-                                continue;
-                            }
-
-                            backoff.reset();
-                            if let Some(ready_tx) = ready_tx.take() {
-                                if let Err(e) = ready_tx.send(()) {
-                                    warn!("No one listening for ready anymore. error={:?}", e);
-                                    return;
-                                }
-                            }
-
-                            loop {
-                                match await!(self_rx.next()) {
-                                    Some(Ok(internal_event)) => {
-                                        if let Err(e) = connection.send(internal_event) {
-                                            debug!("Connection no longer running. Will reconnect. error={:?}", e);
-                                            await!(backoff.snooze());
-                                            break;
-                                        }
-                                    }
-                                    Some(Err(_)) | None => {
-                                        debug!("Client hung up. Closing connection.");
-                                        let _result = connection.close();
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            debug!("Connection closed with error. error={:?}", e);
-                            await!(backoff.snooze());
-                        }
-                    }
+                if let Err(e) = await!(run(address, handler_creator, event_rx, close_rx, ready_tx))
+                {
+                    warn!("Supervisor error. error={:?}", e);
                 }
             },
         );
@@ -124,5 +67,80 @@ impl<H: Handler> Supervisor<H> {
             .timeout_at(deadline)
             .map_err(convert_timeout_error);
         await!(send_with_deadline)
+    }
+}
+
+pub async fn run<C, H: Handler>(
+    address: SocketAddr,
+    handler_creator: C,
+    mut event_rx: Receiver<H::InternalEvent>,
+    mut close_rx: UnboundedReceiver<()>,
+    ready_tx: oneshot::Sender<()>,
+) -> Result<(), Error>
+where
+    C: Fn() -> H + Send + 'static,
+{
+    let mut backoff = AsyncBackoff::new();
+    // Make it an option so we only send once.
+    let mut ready_tx = Some(ready_tx);
+    loop {
+        // Poll the close receiver before connecting to make sure the client hasn't
+        // hung up.
+        if let Ok(Async::Ready(_)) = close_rx.poll() {
+            trace!("Client dropped while connecting.");
+            return Ok(());
+        }
+
+        let handler = handler_creator();
+        debug!("Connecting to {}", address);
+
+        match await!(TcpStream::connect(&address)) {
+            Ok(tcp_stream) => {
+                info!("Connected to {}", address);
+
+                let (connection_ready_tx, connection_ready_rx) = oneshot::channel();
+                let connection = Connection::spawn(tcp_stream, handler, Some(connection_ready_tx));
+
+                // Wait for the connection to upgrade and handshake.
+                if let Err(_e) = await!(connection_ready_rx) {
+                    // Connection dropped the sender.
+                    debug!("Ready failed.");
+                    await!(backoff.snooze())?;
+                    continue;
+                }
+
+                backoff.reset();
+                if let Some(ready_tx) = ready_tx.take() {
+                    if let Err(e) = ready_tx.send(()) {
+                        warn!("No one listening for ready anymore. error={:?}", e);
+                        return Ok(());
+                    }
+                }
+
+                loop {
+                    match await!(event_rx.next()) {
+                        Some(Ok(internal_event)) => {
+                            if let Err(e) = connection.send(internal_event) {
+                                debug!(
+                                    "Connection no longer running. Will reconnect. error={:?}",
+                                    e
+                                );
+                                await!(backoff.snooze())?;
+                                break;
+                            }
+                        }
+                        Some(Err(_)) | None => {
+                            debug!("Client hung up. Closing connection.");
+                            let _result = connection.close();
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                debug!("Connection closed with error. error={:?}", e);
+                await!(backoff.snooze())?;
+            }
+        }
     }
 }
