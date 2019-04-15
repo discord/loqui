@@ -9,8 +9,10 @@ use crate::frames::{
     Response,
 };
 
+/// Codec for loqui.
 #[derive(Debug)]
 pub struct Codec {
+    /// The maximum size the payload part of a frame can be.
     pub max_payload_size_in_bytes: u32,
 }
 
