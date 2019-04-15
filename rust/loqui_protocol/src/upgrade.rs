@@ -4,6 +4,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use tokio_codec::{Decoder, Encoder};
 
+/// Codec for reading and writing the HTTP upgrade request.
 #[derive(Debug)]
 pub struct Codec {
     pub max_payload_size_in_bytes: u32,
@@ -23,10 +24,10 @@ pub enum UpgradeFrame {
     Response,
 }
 
-const REQUEST: &str =
-    "GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
-const RESPONSE: &str =
-    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
+const REQUEST: &[u8; 77] =
+    b"GET /_rpc HTTP/1.1\r\nHost: 127.0.0.1 \r\nUpgrade: loqui\r\nConnection: upgrade\r\n\r\n";
+const RESPONSE: &[u8; 73] =
+    b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: loqui\r\nConnection: Upgrade\r\n\r\n";
 
 impl Encoder for Codec {
     type Item = UpgradeFrame;
@@ -34,8 +35,8 @@ impl Encoder for Codec {
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         match item {
-            UpgradeFrame::Request => dst.extend_from_slice(REQUEST.as_bytes()),
-            UpgradeFrame::Response => dst.extend_from_slice(RESPONSE.as_bytes()),
+            UpgradeFrame::Request => dst.extend_from_slice(REQUEST),
+            UpgradeFrame::Response => dst.extend_from_slice(RESPONSE),
         };
         Ok(())
     }
@@ -114,11 +115,11 @@ mod tests {
 
     #[test]
     fn it_round_trips_request() {
-        test_round_trip(REQUEST.to_string().as_bytes(), UpgradeFrame::Request)
+        test_round_trip(REQUEST, UpgradeFrame::Request)
     }
 
     #[test]
     fn it_round_trips_response() {
-        test_round_trip(RESPONSE.to_string().as_bytes(), UpgradeFrame::Response)
+        test_round_trip(RESPONSE, UpgradeFrame::Response)
     }
 }

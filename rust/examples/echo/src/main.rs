@@ -144,7 +144,8 @@ fn spawn_server() {
                 ping_interval: Duration::from_secs(5),
             };
             let server = Server::new(config);
-            let result = await!(server.listen_and_serve(ADDRESS.to_string()));
+            let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
+            let result = await!(server.listen_and_serve(address));
             println!("Run result={:?}", result);
         },
     );

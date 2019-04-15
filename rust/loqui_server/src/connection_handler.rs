@@ -27,6 +27,7 @@ impl<R: RequestHandler> ConnectionHandler<R> {
 
 impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     type EncoderFactory = R::EncoderFactory;
+    // Server doesn't have any internal events.
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
@@ -112,48 +113,6 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
 
     fn handle_ping(&mut self) {}
 }
-
-async fn handle_push<R: RequestHandler>(
-    config: Arc<Config<R>>,
-    push: Push,
-    encoder: ArcEncoder<R::EncoderFactory>,
-) {
-    let Push {
-        payload,
-        flags: _flags,
-    } = push;
-    match encoder.decode(payload) {
-        Ok(request) => {
-            config.request_handler.handle_push(request);
-        }
-        Err(e) => {
-            error!("Failed to decode payload. error={:?}", e);
-        }
-    }
-}
-
-async fn handle_request<R: RequestHandler>(
-    config: Arc<Config<R>>,
-    request: Request,
-    encoder: ArcEncoder<R::EncoderFactory>,
-) -> Result<Response, (Error, u32)> {
-    let Request {
-        payload,
-        flags: _flags,
-        sequence_id,
-    } = request;
-    let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
-
-    let response = await!(config.request_handler.handle_request(request));
-
-    let payload = encoder.encode(response).map_err(|e| (e, sequence_id))?;
-    Ok(Response {
-        flags: 0,
-        sequence_id,
-        payload,
-    })
-}
-
 impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
@@ -212,4 +171,45 @@ impl<R: RequestHandler> ConnectionHandler<R> {
         }
         Err(LoquiError::NoCommonEncoding.into())
     }
+}
+
+async fn handle_push<R: RequestHandler>(
+    config: Arc<Config<R>>,
+    push: Push,
+    encoder: ArcEncoder<R::EncoderFactory>,
+) {
+    let Push {
+        payload,
+        flags: _flags,
+    } = push;
+    match encoder.decode(payload) {
+        Ok(request) => {
+            config.request_handler.handle_push(request);
+        }
+        Err(e) => {
+            error!("Failed to decode payload. error={:?}", e);
+        }
+    }
+}
+
+async fn handle_request<R: RequestHandler>(
+    config: Arc<Config<R>>,
+    request: Request,
+    encoder: ArcEncoder<R::EncoderFactory>,
+) -> Result<Response, (Error, u32)> {
+    let Request {
+        payload,
+        flags: _flags,
+        sequence_id,
+    } = request;
+    let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
+
+    let response = await!(config.request_handler.handle_request(request));
+
+    let payload = encoder.encode(response).map_err(|e| (e, sequence_id))?;
+    Ok(Response {
+        flags: 0,
+        sequence_id,
+        payload,
+    })
 }

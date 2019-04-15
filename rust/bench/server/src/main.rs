@@ -1,7 +1,7 @@
 #![feature(await_macro, async_await, futures_api, existential_type)]
 
 use bytesize::ByteSize;
-use loqui_bench_common::{BenchEncoderFactory, ADDRESS};
+use loqui_bench_common::{make_socket_address, BenchEncoderFactory};
 use loqui_server::{Config, RequestHandler, Server};
 use std::future::Future;
 use std::time::Duration;
@@ -31,7 +31,7 @@ fn main() {
                 ping_interval: Duration::from_secs(5),
             };
             let server = Server::new(config);
-            let result = await!(server.listen_and_serve(ADDRESS.to_string()));
+            let result = await!(server.listen_and_serve(make_socket_address()));
             println!("Run result={:?}", result);
         },
     );

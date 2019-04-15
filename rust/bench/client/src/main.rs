@@ -6,9 +6,8 @@ use failure::Error;
 use fern;
 #[macro_use]
 extern crate log;
-use loqui_bench_common::{BenchEncoderFactory, ADDRESS};
+use loqui_bench_common::{make_socket_address, BenchEncoderFactory};
 use loqui_client::{Client, Config};
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -124,8 +123,8 @@ fn main() -> Result<(), Error> {
                 request_timeout: Duration::from_secs(5),
                 request_queue_size: 1_000,
             };
-            let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-            let client = await!(Client::connect(address, config)).expect("Failed to connect");
+            let client =
+                await!(Client::connect(make_socket_address(), config)).expect("Failed to connect");
             for _ in 0..100 {
                 tokio::spawn_async(work_loop(client.clone(), state.clone()));
             }

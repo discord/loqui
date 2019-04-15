@@ -1,7 +1,7 @@
+use crate::error::ProtocolError;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{BufMut, BytesMut};
-
-use crate::error::ProtocolError;
+use std::str::from_utf8;
 
 type DecodeResult<T> = Result<Option<T>, ProtocolError>;
 
@@ -43,7 +43,7 @@ pub trait Frame: Sized + 'static {
     ///
     fn read_payload_size(buf: &mut BytesMut) -> u32;
     ///
-    /// Given a buf that is a complete frame, parse and return the Frame.
+    /// Given a buf that is a complete frame, parse and return the `Frame`.
     ///
     fn from_buf(buf: &BytesMut) -> DecodeResult<Self>;
 }
@@ -86,10 +86,9 @@ impl Frame for Hello {
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let version = buf[2];
-        let payload =
-            ::std::str::from_utf8(&buf[7..]).map_err(|_| ProtocolError::InvalidPayload {
-                reason: "Failed to decode as string".into(),
-            })?;
+        let payload = from_utf8(&buf[7..]).map_err(|_| ProtocolError::InvalidPayload {
+            reason: "Failed to decode as string".into(),
+        })?;
 
         let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {
@@ -159,10 +158,9 @@ impl Frame for HelloAck {
         let flags = buf[1];
         let ping_interval_ms = BigEndian::read_u32(&buf[2..6]);
 
-        let payload =
-            ::std::str::from_utf8(&buf[10..]).map_err(|_| ProtocolError::InvalidPayload {
-                reason: "Failed to decode as string".into(),
-            })?;
+        let payload = from_utf8(&buf[10..]).map_err(|_| ProtocolError::InvalidPayload {
+            reason: "Failed to decode as string".into(),
+        })?;
 
         let settings: Vec<&str> = payload.split('|').collect();
         if settings.len() != 2 {

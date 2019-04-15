@@ -19,13 +19,13 @@ impl<R: RequestHandler> Server<R> {
     }
 
     fn handle_connection(&self, tcp_stream: TcpStream) {
+        info!("Accepted connection. {:?}", tcp_stream.peer_addr());
         let connection_handler = ConnectionHandler::new(self.config.clone());
         let _connection = Connection::spawn(tcp_stream, connection_handler, None);
     }
 
-    pub async fn listen_and_serve(&self, address: String) -> Result<(), Error> {
-        let addr: SocketAddr = address.parse()?;
-        let listener = TcpListener::bind(&addr)?;
+    pub async fn listen_and_serve(&self, address: SocketAddr) -> Result<(), Error> {
+        let listener = TcpListener::bind(&address)?;
         info!("Starting {:?} ...", address);
         let mut incoming = listener.incoming();
         loop {
