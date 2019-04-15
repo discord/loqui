@@ -4,6 +4,7 @@ use failure::Error;
 use futures::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use loqui_protocol::frames::Response;
 
+/// A Sender for sending messages to a `Connection`.
 #[derive(Debug)]
 pub struct Sender<T: Send + 'static> {
     tx: UnboundedSender<Event<T>>,
