@@ -68,6 +68,7 @@ impl Decoder for Codec {
     }
 }
 
+/// Encodes a frame into the byte buffer. Delegates most of the work to the `Frame` trait.
 fn encode<F: Frame>(frame: F, dst: &mut BytesMut) {
     dst.reserve(F::HEADER_SIZE_IN_BYTES);
     frame.put_header(dst);
@@ -77,6 +78,7 @@ fn encode<F: Frame>(frame: F, dst: &mut BytesMut) {
     }
 }
 
+/// Decodes a frame from the byte buffer.
 fn decode<F: Frame + Into<LoquiFrame>>(
     codec: &mut Codec,
     buf: &mut BytesMut,
