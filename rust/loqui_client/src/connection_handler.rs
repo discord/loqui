@@ -19,7 +19,6 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-#[derive(Debug)]
 pub enum InternalEvent<Encoded, Decoded>
 where
     Encoded: Serialize + Send,

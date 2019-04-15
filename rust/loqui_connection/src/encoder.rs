@@ -1,15 +1,14 @@
 use failure::Error;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 use std::sync::Arc;
 
 /// Interface for encoding and decoding. Used by the connection to hand back proper `Decoded`
 /// and `Encoded` structs from a vector of bytes.
 pub trait Encoder: Send + Sync {
     /// The resulting type when a `Vec<u8>` is decoded.
-    type Decoded: DeserializeOwned + Send + Debug;
+    type Decoded: DeserializeOwned + Send;
     /// The type that is encoded into a `Vec<u8>`.
-    type Encoded: Serialize + Send + Debug;
+    type Encoded: Serialize + Send;
 
     /// Decode a `Vec<u8>` into a struct.
     fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error>;
@@ -18,11 +17,11 @@ pub trait Encoder: Send + Sync {
 }
 
 /// Trait for creating encoders based on the encoding that was selected for the connection.
-pub trait Factory: Send + Sync + 'static {
+pub trait Factory: 'static {
     /// The resulting type when a `Vec<u8>` is decoded.
-    type Decoded: DeserializeOwned + Send + Debug;
+    type Decoded: DeserializeOwned + Send;
     /// The type that is encoded into a `Vec<u8>`.
-    type Encoded: Serialize + Send + Debug;
+    type Encoded: Serialize + Send;
 
     /// Encodings supported.
     const ENCODINGS: &'static [&'static str];
