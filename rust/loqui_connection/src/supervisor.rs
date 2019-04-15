@@ -70,7 +70,7 @@ impl<H: Handler> Supervisor<H> {
     }
 }
 
-pub async fn run<C, H: Handler>(
+async fn run<C, H: Handler>(
     address: SocketAddr,
     handler_creator: C,
     mut event_rx: Receiver<H::InternalEvent>,
