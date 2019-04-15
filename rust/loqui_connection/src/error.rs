@@ -77,6 +77,8 @@ impl LoquiError {
             LoquiError::InvalidEncoding => LoquiErrorCode::InvalidEncoding,
             LoquiError::InvalidCompression => LoquiErrorCode::InvalidCompression,
             LoquiError::PingTimeout => LoquiErrorCode::PingTimeout,
+            // Normal close.
+            LoquiError::ConnectionCloseRequested => LoquiErrorCode::Normal,
             _ => LoquiErrorCode::InternalServerError,
         }
     }

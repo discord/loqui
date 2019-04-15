@@ -153,5 +153,4 @@ impl<H: Handler> EventHandler<H> {
     fn handle_close(&mut self) -> MaybeFrameResult {
         Err(LoquiError::ConnectionCloseRequested.into())
     }
-
 }

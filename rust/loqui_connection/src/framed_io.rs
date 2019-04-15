@@ -18,10 +18,17 @@ pub type Reader = SplitStream<Framed<TcpStream, Codec>>;
 /// Used to write frames to the tcp socket.
 pub struct Writer {
     inner: SplitSink<Framed<TcpStream, Codec>>,
+    /// If true, send a go away when the socket is closed.
     send_go_away: bool,
 }
 
 impl Writer {
+    /// Create a new `Writer` that can write frames to a tcp socket.
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - framed sink
+    /// * `send_go_away` - whether or not to send a go away when the connection closes
     pub fn new(writer: SplitSink<Framed<TcpStream, Codec>>, send_go_away: bool) -> Self {
         Self {
             inner: writer,
@@ -59,6 +66,11 @@ impl Writer {
     }
 }
 
+/// Determines the go away code that should be sent.
+///
+/// # Arguments
+///
+/// * `error` - optional error to determine the code from
 fn go_away_code(error: Option<&Error>) -> LoquiErrorCode {
     match error {
         None => LoquiErrorCode::Normal,
@@ -85,6 +97,13 @@ pub struct ReaderWriter {
 }
 
 impl ReaderWriter {
+    /// Create a new `ReaderWriter` that can read and write frames to a tcp socket.
+    ///
+    /// # Arguments
+    ///
+    /// * `tcp_stream` - raw tcp socket
+    /// * `max_payload_size` - the maximum bytes a frame payload can be
+    /// * `send_go_away` - whether or not to send a go away when the connection closes
     pub fn new(tcp_stream: TcpStream, max_payload_size: ByteSize, send_go_away: bool) -> Self {
         let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
         let (writer, reader) = framed_socket.split();
@@ -103,6 +122,7 @@ impl ReaderWriter {
         }
     }
 
+    /// Split this `ReaderWriter`, returning the `Reader` and `Writer` parts.
     pub fn split(self) -> (Reader, Writer) {
         let ReaderWriter { reader, writer } = self;
         (reader, writer)
