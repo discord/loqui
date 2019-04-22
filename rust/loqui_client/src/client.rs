@@ -18,35 +18,25 @@ pub struct Client<F: EncoderFactory> {
 
 impl<F: EncoderFactory> Client<F> {
     pub async fn connect(address: SocketAddr, config: Config) -> Result<Client<F>, Error> {
-        let deadline = Instant::now() + config.connect_timeout;
+        let deadline = Instant::now() + config.handshake_timeout;
 
-        let connect_future = TcpStream::connect(&address).timeout_at(deadline.clone());
-        match await!(connect_future) {
-            Ok(tcp_stream) => {
-                info!("Connected to {}", address);
+        let tcp_stream = await!(TcpStream::connect(&address).timeout_at(deadline.clone()))?;
+        info!("Connected to {}", address);
 
-                let (ready_tx, ready_rx) = oneshot::channel();
-                let awaitable = ready_rx
-                    .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-                    .timeout_at(deadline.clone())
-                    .map_err(convert_timeout_error);
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let awaitable = ready_rx
+            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
+            .timeout_at(deadline)
+            .map_err(convert_timeout_error);
 
-                let request_timeout = config.request_timeout;
-                let handler = ConnectionHandler::new(config);
-                let connection = Connection::spawn(tcp_stream, handler, deadline, Some(ready_tx));
-                match await!(awaitable) {
-                    Ok(()) => {
-                        let client = Self {
-                            connection,
-                            request_timeout,
-                        };
-                        Ok(client)
-                    }
-                    Err(e) => Err(e.into()),
-                }
-            }
-            Err(e) => Err(e.into()),
-        }
+        let request_timeout = config.request_timeout;
+        let handler = ConnectionHandler::new(config);
+        let connection = Connection::spawn(tcp_stream, handler, deadline, Some(ready_tx));
+        let _result = await!(awaitable)?;
+        Ok(Self {
+            connection,
+            request_timeout,
+        })
     }
 
     /// Send a request to the server.

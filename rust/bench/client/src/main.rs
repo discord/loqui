@@ -104,7 +104,7 @@ fn main() -> Result<(), Error> {
             let config = Config {
                 max_payload_size: ByteSize::kb(5000),
                 request_timeout: Duration::from_secs(5),
-                connect_timeout: Duration::from_secs(5),
+                handshake_timeout: Duration::from_secs(5),
             };
             let client = Arc::new(
                 await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),

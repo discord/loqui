@@ -8,6 +8,6 @@ pub struct Config {
     /// The duration of time from when a client makes a request to when we stop waiting for a response
     /// from the server.
     pub request_timeout: Duration,
-    /// The duration of time from when a client starts a connect to when we stop trying to connect.
-    pub connect_timeout: Duration,
+    /// The duration of time from when a client starts a connect to when we stop trying to handshake.
+    pub handshake_timeout: Duration,
 }
