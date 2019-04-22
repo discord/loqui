@@ -7,6 +7,7 @@ use loqui_protocol::{
     error::ProtocolError,
     frames::{GoAway, LoquiFrame},
 };
+use std::net::Shutdown;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -48,7 +49,7 @@ impl Writer {
     }
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
-    pub async fn close(self, error: Option<&Error>) {
+    pub async fn close(self, error: Option<&Error>, reader: Option<Reader>) {
         if !self.send_go_away {
             debug!("Closing. Not sending GoAway. error={:?}", error);
             return;
@@ -60,8 +61,19 @@ impl Writer {
             payload: vec![],
         };
         debug!("Closing. Sending GoAway. go_away={:?}", go_away);
-        if let Err(error) = await!(self.write(go_away)) {
-            error!("Error when writing close frame. error={:?}", error);
+        match await!(self.inner.send(go_away.into())) {
+            Ok(new_inner) => {
+                if let Some(reader) = reader {
+                    if let Ok(tcp_stream) =
+                        new_inner.reunite(reader).map(|framed| framed.into_inner())
+                    {
+                        let _result = tcp_stream.shutdown(Shutdown::Both);
+                    }
+                }
+            }
+            Err(_error) => {
+                error!("Error when writing close frame. error={:?}", error);
+            }
         }
     }
 }
@@ -130,6 +142,6 @@ impl ReaderWriter {
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
     pub async fn close(self, error: Option<&Error>) {
-        await!(self.writer.close(error))
+        await!(self.writer.close(error, Some(self.reader)))
     }
 }

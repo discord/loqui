@@ -131,7 +131,7 @@ async fn run<H: Handler>(
             Ok(Some(frame)) => writer = await!(writer.write(frame))?,
             Ok(None) => {}
             Err(error) => {
-                await!(writer.close(Some(&error)));
+                await!(writer.close(Some(&error), None));
                 return Ok(());
             }
         }

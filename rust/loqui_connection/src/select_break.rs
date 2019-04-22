@@ -28,6 +28,16 @@ where
     }
 }
 
+impl<S1, S2> SelectBreak<S1, S2>
+where
+    S1: Stream,
+    S2: Stream<Item = S1::Item, Error = S1::Error>,
+{
+    fn split(self) -> (Fuse<S1>, Fuse<S2>) {
+        (self.stream1, self.stream2)
+    }
+}
+
 impl<S1, S2> Stream for SelectBreak<S1, S2>
 where
     S1: Stream,
