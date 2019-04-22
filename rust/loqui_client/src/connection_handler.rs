@@ -237,7 +237,7 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
                 waiter.notify(result);
             }
             None => {
-                warn!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
+                debug!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
             }
         }
     }
