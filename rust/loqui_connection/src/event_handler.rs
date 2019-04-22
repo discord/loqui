@@ -42,7 +42,7 @@ impl<H: Handler> EventHandler<H> {
     /// event comes in.
     pub fn handle_event(&mut self, event: Event<H::InternalEvent>) -> MaybeFrameResult {
         match event {
-            Event::Ping => self.handle_ping(),
+            Event::Ping => self.send_ping(),
             Event::SocketReceive(frame) => self.handle_frame(frame),
             Event::InternalEvent(internal_event) => self.handle_internal_event(internal_event),
             Event::ResponseComplete(response) => self.handle_response_complete(response),
@@ -52,7 +52,7 @@ impl<H: Handler> EventHandler<H> {
 
     /// Handles a request to ping the other side. Returns an `Error` if a `Pong` hasn't been
     /// received since the last ping.
-    fn handle_ping(&mut self) -> MaybeFrameResult {
+    fn send_ping(&mut self) -> MaybeFrameResult {
         if self.pong_received {
             let sequence_id = self.id_sequence.next();
             let ping = Ping {
