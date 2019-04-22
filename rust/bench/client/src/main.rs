@@ -1,12 +1,10 @@
 #![feature(await_macro, async_await, futures_api)]
 
 use bytesize::ByteSize;
-use chrono;
 use failure::Error;
-use fern;
 #[macro_use]
 extern crate log;
-use loqui_bench_common::{make_socket_address, BenchEncoderFactory};
+use loqui_bench_common::{configure_logging, make_socket_address, BenchEncoderFactory};
 use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -93,22 +91,7 @@ fn log_loop(state: Arc<State>) {
 fn main() -> Result<(), Error> {
     let state = Arc::new(State::default());
     let log_state = state.clone();
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}:{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-                record.level(),
-                record.target(),
-                record.line().unwrap_or(0),
-                message
-            ));
-        })
-        .level(log::LevelFilter::Debug)
-        .level_for("tokio_core", log::LevelFilter::Warn)
-        .level_for("tokio_reactor", log::LevelFilter::Warn)
-        .chain(std::io::stdout())
-        .apply()?;
+    configure_logging()?;
 
     tokio::run_async(
         async move {
@@ -121,6 +104,7 @@ fn main() -> Result<(), Error> {
             let config = Config {
                 max_payload_size: ByteSize::kb(5000),
                 request_timeout: Duration::from_secs(5),
+                connect_timeout: Duration::from_secs(5),
             };
             let client = Arc::new(
                 await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),

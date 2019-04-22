@@ -89,39 +89,6 @@ pub enum Event<InternalEvent: Send + 'static> {
     Close,
 }
 
-fn negotiate<H: Handler>(
-    tcp_stream: TcpStream,
-    mut handler: H,
-    handshake_deadline: Instant,
-    ready_tx: Option<oneshot::Sender<()>>,
-) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
-    Compat::new(
-        async move {
-            let tcp_stream = await!(handler.upgrade(tcp_stream))?;
-            let max_payload_size = handler.max_payload_size();
-            let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
-
-            match await!(handler.handshake(reader_writer)) {
-                Ok((ready, reader_writer)) => {
-                    if let Some(ready_tx) = ready_tx {
-                        ready_tx
-                            .send(())
-                            .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
-                    }
-                    Ok((ready, reader_writer, handler))
-                }
-                Err((error, reader_writer)) => {
-                    debug!("Not ready. e={:?}", error);
-                    if let Some(reader_writer) = reader_writer {
-                        await!(reader_writer.close(Some(&error)));
-                    }
-                    Err(error)
-                }
-            }
-        },
-    )
-}
-
 /// The core run loop for a connection.
 /// Negotiates the connection then handles events until the socket dies or there is an error.
 ///
@@ -143,8 +110,7 @@ async fn run<H: Handler>(
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
     let (ready, reader_writer, handler) =
-        await!(negotiate(tcp_stream, handler, handshake_deadline, ready_tx)
-            .timeout_at(handshake_deadline))?;
+        await!(negotiate(tcp_stream, handler, ready_tx).timeout_at(handshake_deadline))?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
     let encoder =
@@ -176,4 +142,43 @@ async fn run<H: Handler>(
     }
 
     Err(LoquiError::ConnectionClosed.into())
+}
+
+/// Negotiates the connection.
+///
+/// # Arguments
+///
+/// * `tcp_stream` - the tcp socket
+/// * `handler` - implements logic for the client or server specific things
+/// * `ready_tx` - a sender used to notify that the connection is ready for requests
+fn negotiate<H: Handler>(
+    tcp_stream: TcpStream,
+    mut handler: H,
+    ready_tx: Option<oneshot::Sender<()>>,
+) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
+    Compat::new(
+        async move {
+            let tcp_stream = await!(handler.upgrade(tcp_stream))?;
+            let max_payload_size = handler.max_payload_size();
+            let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
+
+            match await!(handler.handshake(reader_writer)) {
+                Ok((ready, reader_writer)) => {
+                    if let Some(ready_tx) = ready_tx {
+                        ready_tx
+                            .send(())
+                            .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
+                    }
+                    Ok((ready, reader_writer, handler))
+                }
+                Err((error, reader_writer)) => {
+                    debug!("Not ready. e={:?}", error);
+                    if let Some(reader_writer) = reader_writer {
+                        await!(reader_writer.close(Some(&error)));
+                    }
+                    Err(error)
+                }
+            }
+        },
+    )
 }

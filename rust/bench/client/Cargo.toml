@@ -11,5 +11,3 @@ loqui_bench_common = { path = "../common" }
 tokio = { version = "0.1.16", features = ["async-await-preview"] }
 bytesize = "1.0.0"
 log = "0.4"
-fern = "0.5"
-chrono = "0.4"

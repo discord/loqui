@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 failure = "0.1.1"
 loqui_client = { path = "../../loqui_client" }
+log = "0.4"
+fern = "0.5"
+chrono = "0.4"
