@@ -138,7 +138,7 @@ async fn run<H: Handler>(
     tcp_stream: TcpStream,
     self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
-    mut handler: H,
+    handler: H,
     handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
