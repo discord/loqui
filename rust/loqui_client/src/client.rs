@@ -20,7 +20,7 @@ impl<F: EncoderFactory> Client<F> {
     pub async fn connect(address: SocketAddr, config: Config) -> Result<Client<F>, Error> {
         let deadline = Instant::now() + config.handshake_timeout;
 
-        let tcp_stream = await!(TcpStream::connect(&address).timeout_at(deadline.clone()))?;
+        let tcp_stream = await!(TcpStream::connect(&address).timeout_at(deadline))?;
         info!("Connected to {}", address);
 
         let (ready_tx, ready_rx) = oneshot::channel();
