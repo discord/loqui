@@ -111,7 +111,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         None
     }
 
-    fn handle_ping(&mut self) {}
+    fn on_ping_received(&mut self) {}
 }
 impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_frame(

@@ -145,7 +145,7 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
         }
     }
 
-    fn handle_ping(&mut self) {
+    fn on_ping_received(&mut self) {
         // Use to sweep dead waiters.
         let now = Instant::now();
         self.waiters

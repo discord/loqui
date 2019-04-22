@@ -68,7 +68,7 @@ pub trait Handler: Send + 'static {
         encoder: ArcEncoder<Self::EncoderFactory>,
     ) -> Option<LoquiFrame>;
     /// Periodic callback that fires whenever a ping fires.
-    fn handle_ping(&mut self);
+    fn on_ping_received(&mut self);
 }
 
 impl From<Push> for DelegatedFrame {

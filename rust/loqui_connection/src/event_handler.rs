@@ -116,7 +116,7 @@ impl<H: Handler> EventHandler<H> {
             flags: ping.flags,
             sequence_id: ping.sequence_id,
         };
-        self.handler.handle_ping();
+        self.handler.on_ping_received();
         Ok(Some(pong.into()))
     }
 
