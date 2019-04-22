@@ -9,18 +9,8 @@ use std::time::{Duration, Instant};
 use tokio::await;
 
 pub struct Client<F: EncoderFactory> {
-    connection: Arc<SupervisedConnection<ConnectionHandler<F>>>,
+    connection: SupervisedConnection<ConnectionHandler<F>>,
     request_timeout: Duration,
-}
-
-// XXX: #[derive(Clone)] requires EncoderFactory to be Clone for some unknown reason.
-impl<F: EncoderFactory> Clone for Client<F> {
-    fn clone(&self) -> Self {
-        Self {
-            connection: self.connection.clone(),
-            request_timeout: self.request_timeout,
-        }
-    }
 }
 
 impl<F: EncoderFactory> Client<F> {
@@ -37,7 +27,7 @@ impl<F: EncoderFactory> Client<F> {
         ))?;
 
         let client = Self {
-            connection: Arc::new(connection),
+            connection,
             request_timeout,
         };
         Ok(client)

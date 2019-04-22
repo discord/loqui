@@ -108,7 +108,8 @@ async fn client_send_loop() {
     };
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-    let client = await!(Client::<Factory>::connect(address, config)).expect("Failed to connect");
+    let client =
+        Arc::new(await!(Client::<Factory>::connect(address, config)).expect("Failed to connect"));
 
     let messages = &["test", "test2", "test3"];
     loop {
