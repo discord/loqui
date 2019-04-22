@@ -36,6 +36,10 @@ impl<T: Send + 'static> Sender<T> {
             .unbounded_send(Event::Close)
             .map_err(|_e| LoquiError::ConnectionClosed.into())
     }
+
+    pub(crate) fn is_closed(&self) -> bool {
+        self.tx.is_closed()
+    }
 }
 
 impl<T: Send> Clone for Sender<T> {

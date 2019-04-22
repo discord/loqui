@@ -51,6 +51,10 @@ impl<H: Handler> Connection<H> {
     pub fn close(&self) -> Result<(), Error> {
         self.self_sender.close()
     }
+
+    pub fn is_closed(&self) -> bool {
+        self.self_sender.is_closed()
+    }
 }
 
 /// The events that can be received by the core connection loop once it begins running.

@@ -2,14 +2,16 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
-use loqui_connection::{EncoderFactory, Supervisor as SupervisedConnection};
+use futures::sync::oneshot;
+use loqui_connection::{Connection, EncoderFactory};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::await;
+use tokio::net::TcpStream;
 
 pub struct Client<F: EncoderFactory> {
-    connection: SupervisedConnection<ConnectionHandler<F>>,
+    connection: Connection<ConnectionHandler<F>>,
     request_timeout: Duration,
 }
 
@@ -18,19 +20,26 @@ impl<F: EncoderFactory> Client<F> {
         let request_timeout = config.request_timeout;
         let request_queue_size = config.request_queue_size;
 
-        let config = Arc::new(config);
-        let handler_creator = move || ConnectionHandler::new(config.clone());
-        let connection = await!(SupervisedConnection::connect(
-            address,
-            handler_creator,
-            request_queue_size
-        ))?;
-
-        let client = Self {
-            connection,
-            request_timeout,
-        };
-        Ok(client)
+        match await!(TcpStream::connect(&address)) {
+            Ok(tcp_stream) => {
+                info!("Connected to {}", address);
+                let (ready_tx, ready_rx) = oneshot::channel();
+                let config = Arc::new(config);
+                let handler = ConnectionHandler::new(config.clone());
+                let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
+                match await!(ready_rx) {
+                    Ok(()) => {
+                        let client = Self {
+                            connection,
+                            request_timeout,
+                        };
+                        Ok(client)
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Send a request to the server.
@@ -38,14 +47,13 @@ impl<F: EncoderFactory> Client<F> {
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
         let deadline = waiter.deadline;
         let request = InternalEvent::Request { payload, waiter };
-        await!(self.connection.send(request, deadline))?;
+        self.connection.send(request)?;
         await!(awaitable)
     }
 
     /// Send a push to the server.
     pub async fn push(&self, payload: F::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
-        let deadline = Instant::now() + self.request_timeout;
-        await!(self.connection.send(push, deadline))
+        self.connection.send(push)
     }
 }
