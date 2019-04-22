@@ -10,4 +10,6 @@ pub struct Config<R: RequestHandler> {
     pub max_payload_size: ByteSize,
     /// The duration between ping frames being sent.
     pub ping_interval: Duration,
+    /// The duration before we give up handshaking.
+    pub handshake_timeout: Duration,
 }

@@ -1,19 +1,22 @@
 use crate::encoder::Factory;
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
-use crate::handler::Handler;
+use crate::handler::{Handler, Ready};
 use crate::select_break::StreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
+use futures::future::Future;
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
+use std::time::Instant;
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
+use tokio_async_await::compat::backward::Compat;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -28,15 +31,28 @@ impl<H: Handler> Connection<H> {
     ///
     /// * `tcp_stream` - the tcp socket
     /// * `handler` - implements client or server specific logic
+    /// * `handshake_deadline` - how long until we fail due to handshake not completing
     /// * `ready_tx` - a sender used to notify that the connection is ready for requests
-    pub fn spawn(tcp_stream: TcpStream, handler: H, ready_tx: Option<oneshot::Sender<()>>) -> Self {
+    pub fn spawn(
+        tcp_stream: TcpStream,
+        handler: H,
+        handshake_deadline: Instant,
+        ready_tx: Option<oneshot::Sender<()>>,
+    ) -> Self {
         let (self_sender, self_rx) = Sender::new();
         let connection = Self {
             self_sender: self_sender.clone(),
         };
         tokio::spawn_async(
             async move {
-                let result = await!(run(tcp_stream, self_sender, self_rx, handler, ready_tx));
+                let result = await!(run(
+                    tcp_stream,
+                    self_sender,
+                    self_rx,
+                    handler,
+                    handshake_deadline,
+                    ready_tx
+                ));
                 if let Err(e) = result {
                     error!("Connection closed. error={:?}", e)
                 }
@@ -73,6 +89,39 @@ pub enum Event<InternalEvent: Send + 'static> {
     Close,
 }
 
+fn negotiate<H: Handler>(
+    tcp_stream: TcpStream,
+    mut handler: H,
+    handshake_deadline: Instant,
+    ready_tx: Option<oneshot::Sender<()>>,
+) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
+    Compat::new(
+        async move {
+            let tcp_stream = await!(handler.upgrade(tcp_stream))?;
+            let max_payload_size = handler.max_payload_size();
+            let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
+
+            match await!(handler.handshake(reader_writer)) {
+                Ok((ready, reader_writer)) => {
+                    if let Some(ready_tx) = ready_tx {
+                        ready_tx
+                            .send(())
+                            .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
+                    }
+                    Ok((ready, reader_writer, handler))
+                }
+                Err((error, reader_writer)) => {
+                    debug!("Not ready. e={:?}", error);
+                    if let Some(reader_writer) = reader_writer {
+                        await!(reader_writer.close(Some(&error)));
+                    }
+                    Err(error)
+                }
+            }
+        },
+    )
+}
+
 /// The core run loop for a connection.
 /// Negotiates the connection then handles events until the socket dies or there is an error.
 ///
@@ -83,37 +132,21 @@ pub enum Event<InternalEvent: Send + 'static> {
 ///                   This is used when a response for a request is computed asynchronously in a task.
 /// * `self_rx` - a receiver that InternalEvents will be sent over
 /// * `handler` - implements logic for the client or server specific things
+/// * `handshake_deadline` - how long until we fail due to handshake not completing
 /// * `ready_tx` - a sender used to notify that the connection is ready for requests
 async fn run<H: Handler>(
     tcp_stream: TcpStream,
     self_sender: Sender<H::InternalEvent>,
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
     mut handler: H,
+    handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> Result<(), Error> {
-    let tcp_stream = await!(handler.upgrade(tcp_stream))?;
-    let max_payload_size = handler.max_payload_size();
-    let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
-
-    let (ready, reader_writer) = match await!(handler.handshake(reader_writer)) {
-        Ok((ready, reader_writer)) => (ready, reader_writer),
-        Err((error, reader_writer)) => {
-            debug!("Not ready. e={:?}", error);
-            if let Some(reader_writer) = reader_writer {
-                await!(reader_writer.close(Some(&error)));
-            }
-            return Err(error);
-        }
-    };
-
-    let (reader, mut writer) = reader_writer.split();
+    let (ready, reader_writer, handler) =
+        await!(negotiate(tcp_stream, handler, handshake_deadline, ready_tx)
+            .timeout_at(handshake_deadline))?;
     debug!("Ready. {:?}", ready);
-    if let Some(ready_tx) = ready_tx {
-        ready_tx
-            .send(())
-            .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
-    }
-
+    let (reader, mut writer) = reader_writer.split();
     let encoder =
         H::EncoderFactory::make(ready.encoding).ok_or_else(|| LoquiError::InvalidEncoding)?;
 

@@ -28,12 +28,12 @@ impl<F: EncoderFactory> Client<F> {
                 let (ready_tx, ready_rx) = oneshot::channel();
                 let awaitable = ready_rx
                     .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-                    .timeout_at(deadline)
+                    .timeout_at(deadline.clone())
                     .map_err(convert_timeout_error);
 
                 let request_timeout = config.request_timeout;
                 let handler = ConnectionHandler::new(config);
-                let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
+                let connection = Connection::spawn(tcp_stream, handler, deadline, Some(ready_tx));
                 match await!(awaitable) {
                     Ok(()) => {
                         let client = Self {

@@ -319,6 +319,7 @@ dependencies = [
  "loqui_protocol 0.0.1",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-async-await 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

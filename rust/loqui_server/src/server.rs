@@ -4,6 +4,7 @@ use failure::Error;
 use loqui_connection::Connection;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
@@ -21,7 +22,9 @@ impl<R: RequestHandler> Server<R> {
     fn handle_connection(&self, tcp_stream: TcpStream) {
         info!("Accepted connection. {:?}", tcp_stream.peer_addr());
         let connection_handler = ConnectionHandler::new(self.config.clone());
-        let _connection = Connection::spawn(tcp_stream, connection_handler, None);
+        let handshake_deadline = Instant::now() + self.config.handshake_timeout;
+        let _connection =
+            Connection::spawn(tcp_stream, connection_handler, handshake_deadline, None);
     }
 
     pub async fn listen_and_serve(&self, address: SocketAddr) -> Result<(), Error> {

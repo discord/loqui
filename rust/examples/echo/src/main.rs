@@ -143,6 +143,7 @@ fn spawn_server() {
                 request_handler: EchoHandler {},
                 max_payload_size: ByteSize::kb(5000),
                 ping_interval: Duration::from_secs(5),
+                handshake_timeout: Duration::from_secs(5),
             };
             let server = Server::new(config);
             let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
