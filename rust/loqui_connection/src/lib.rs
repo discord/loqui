@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate log;
 
-mod async_backoff;
 mod connection;
 mod encoder;
 mod error;

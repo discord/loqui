@@ -2,8 +2,10 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
+use futures::future::Future;
 use futures::sync::oneshot;
-use loqui_connection::{Connection, EncoderFactory};
+use futures_timer::FutureExt;
+use loqui_connection::{convert_timeout_error, Connection, EncoderFactory, LoquiError};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -17,17 +19,24 @@ pub struct Client<F: EncoderFactory> {
 
 impl<F: EncoderFactory> Client<F> {
     pub async fn connect(address: SocketAddr, config: Config) -> Result<Client<F>, Error> {
-        let request_timeout = config.request_timeout;
-        let request_queue_size = config.request_queue_size;
+        let deadline = Instant::now() + config.connect_timeout;
 
-        match await!(TcpStream::connect(&address)) {
+        let connect_future = TcpStream::connect(&address).timeout_at(deadline.clone());
+        match await!(connect_future) {
             Ok(tcp_stream) => {
                 info!("Connected to {}", address);
+
                 let (ready_tx, ready_rx) = oneshot::channel();
+                let awaitable = ready_rx
+                    .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
+                    .timeout_at(deadline)
+                    .map_err(convert_timeout_error);
+
+                let request_timeout = config.request_timeout;
                 let config = Arc::new(config);
                 let handler = ConnectionHandler::new(config.clone());
                 let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
-                match await!(ready_rx) {
+                match await!(awaitable) {
                     Ok(()) => {
                         let client = Self {
                             connection,
@@ -45,7 +54,6 @@ impl<F: EncoderFactory> Client<F> {
     /// Send a request to the server.
     pub async fn request(&self, payload: F::Encoded) -> Result<F::Decoded, Error> {
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
-        let deadline = waiter.deadline;
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
         await!(awaitable)
@@ -55,5 +63,9 @@ impl<F: EncoderFactory> Client<F> {
     pub async fn push(&self, payload: F::Encoded) -> Result<(), Error> {
         let push = InternalEvent::Push { payload };
         self.connection.send(push)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.connection.is_closed()
     }
 }

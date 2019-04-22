@@ -121,7 +121,6 @@ fn main() -> Result<(), Error> {
             let config = Config {
                 max_payload_size: ByteSize::kb(5000),
                 request_timeout: Duration::from_secs(5),
-                request_queue_size: 1_000,
             };
             let client = Arc::new(
                 await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),

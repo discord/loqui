@@ -8,7 +8,6 @@ pub struct Config {
     /// The duration of time from when a client makes a request to when we stop waiting for a response
     /// from the server.
     pub request_timeout: Duration,
-    /// The number of requests the supervisor will buffer before back pressuring the client.
-    /// The supervisor buffer begins filling up while it is reconnecting to the server.
-    pub request_queue_size: usize,
+    /// The duration of time from when a client starts a connect to when we stop trying to connect.
+    pub connect_timeout: Duration,
 }
