@@ -7,7 +7,6 @@ use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use loqui_connection::{convert_timeout_error, Connection, EncoderFactory, LoquiError};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::await;
 use tokio::net::TcpStream;
@@ -33,8 +32,7 @@ impl<F: EncoderFactory> Client<F> {
                     .map_err(convert_timeout_error);
 
                 let request_timeout = config.request_timeout;
-                let config = Arc::new(config);
-                let handler = ConnectionHandler::new(config.clone());
+                let handler = ConnectionHandler::new(config);
                 let connection = Connection::spawn(tcp_stream, handler, Some(ready_tx));
                 match await!(awaitable) {
                     Ok(()) => {

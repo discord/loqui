@@ -8,6 +8,7 @@ use crate::LoquiError;
 use failure::Error;
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot;
+use futures_timer::FutureExt;
 use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
 use tokio::await;

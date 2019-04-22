@@ -35,11 +35,11 @@ where
 
 pub struct ConnectionHandler<F: EncoderFactory> {
     waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
-    config: Arc<Config>,
+    config: Config,
 }
 
 impl<F: EncoderFactory> ConnectionHandler<F> {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             waiters: HashMap::new(),
             config,
