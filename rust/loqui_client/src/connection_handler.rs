@@ -139,9 +139,9 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
         match event {
             InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.handle_request(payload, sequence_id, waiter, encoder)
+                self.send_request(payload, sequence_id, waiter, encoder)
             }
-            InternalEvent::Push { payload } => self.handle_push(payload, encoder),
+            InternalEvent::Push { payload } => self.send_push(payload, encoder),
         }
     }
 
@@ -154,7 +154,7 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
 }
 
 impl<F: EncoderFactory> ConnectionHandler<F> {
-    fn handle_push(
+    fn send_push(
         &mut self,
         payload: F::Encoded,
         encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
@@ -171,7 +171,7 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         }
     }
 
-    fn handle_request(
+    fn send_request(
         &mut self,
         payload: F::Encoded,
         sequence_id: u32,
