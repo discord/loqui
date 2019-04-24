@@ -59,17 +59,13 @@ mod tests {
     #[test]
     fn it_receives_ok() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
-        let result = block_on_all(
-            async {
-                spawn(
-                    async {
-                        waiter.notify(Ok(()));
-                        Ok(())
-                    },
-                );
-                await!(awaitable)
-            },
-        );
+        let result = block_on_all(async {
+            spawn(async {
+                waiter.notify(Ok(()));
+                Ok(())
+            });
+            await!(awaitable)
+        });
         assert!(result.is_ok())
     }
 
@@ -77,17 +73,13 @@ mod tests {
     fn it_receives_error() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
 
-        let result: Result<(), Error> = block_on_all(
-            async {
-                spawn(
-                    async {
-                        waiter.notify(Err(LoquiError::ConnectionClosed.into()));
-                        Ok(())
-                    },
-                );
-                await!(awaitable)
-            },
-        );
+        let result: Result<(), Error> = block_on_all(async {
+            spawn(async {
+                waiter.notify(Err(LoquiError::ConnectionClosed.into()));
+                Ok(())
+            });
+            await!(awaitable)
+        });
         assert!(result.is_err())
     }
 
@@ -95,18 +87,14 @@ mod tests {
     fn it_times_out() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_millis(1));
 
-        let result = block_on_all(
-            async {
-                spawn(
-                    async {
-                        await!(Delay::new(Duration::from_millis(50))).unwrap();
-                        waiter.notify(Ok(()));
-                        Ok(())
-                    },
-                );
-                await!(awaitable)
-            },
-        );
+        let result = block_on_all(async {
+            spawn(async {
+                await!(Delay::new(Duration::from_millis(50))).unwrap();
+                waiter.notify(Ok(()));
+                Ok(())
+            });
+            await!(awaitable)
+        });
         assert!(result.is_err())
     }
 

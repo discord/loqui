@@ -25,18 +25,16 @@ impl RequestHandler for EchoHandler {
 
 fn main() -> Result<(), Error> {
     configure_logging()?;
-    tokio::run_async(
-        async {
-            let config = Config {
-                request_handler: EchoHandler {},
-                max_payload_size: ByteSize::kb(5000),
-                ping_interval: Duration::from_secs(5),
-                handshake_timeout: Duration::from_secs(5),
-            };
-            let server = Server::new(config);
-            let result = await!(server.listen_and_serve(make_socket_address()));
-            println!("Run result={:?}", result);
-        },
-    );
+    tokio::run_async(async {
+        let config = Config {
+            request_handler: EchoHandler {},
+            max_payload_size: ByteSize::kb(5000),
+            ping_interval: Duration::from_secs(5),
+            handshake_timeout: Duration::from_secs(5),
+        };
+        let server = Server::new(config);
+        let result = await!(server.listen_and_serve(make_socket_address()));
+        println!("Run result={:?}", result);
+    });
     Ok(())
 }

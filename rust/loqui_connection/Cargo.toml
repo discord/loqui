@@ -9,8 +9,8 @@ failure = "0.1.1"
 log = "0.4"
 futures = "0.1.25"
 loqui_protocol = { path = "../loqui_protocol" }
-tokio = { version = "0.1.16", features = ["async-await-preview"] }
-tokio-async-await = "0.1.6"
+tokio = { version = "0.1.19", features = ["async-await-preview"] }
+tokio-async-await = "0.1.7"
 tokio-codec = "0.1"
 futures-timer = "0.1"
 serde = "1.0.27"

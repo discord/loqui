@@ -89,14 +89,12 @@ impl Encoder for JsonEncoder {
 
 fn main() -> Result<(), Error> {
     configure_logging()?;
-    tokio::run_async(
-        async {
-            spawn_server();
-            // Wait for server to start.
-            thread::sleep(Duration::from_secs(1));
-            await!(client_send_loop());
-        },
-    );
+    tokio::run_async(async {
+        spawn_server();
+        // Wait for server to start.
+        thread::sleep(Duration::from_secs(1));
+        await!(client_send_loop());
+    });
     Ok(())
 }
 
@@ -115,21 +113,19 @@ async fn client_send_loop() {
     loop {
         for message in messages {
             let client = client.clone();
-            tokio::spawn_async(
-                async move {
-                    if let Err(e) = await!(client.push(message.to_string())) {
-                        error!("Push failed. error={:?}", e);
+            tokio::spawn_async(async move {
+                if let Err(e) = await!(client.push(message.to_string())) {
+                    error!("Push failed. error={:?}", e);
+                }
+                match await!(client.request(message.to_string())) {
+                    Ok(response) => {
+                        info!("Received response: {}", response);
                     }
-                    match await!(client.request(message.to_string())) {
-                        Ok(response) => {
-                            info!("Received response: {}", response);
-                        }
-                        Err(e) => {
-                            error!("Request failed. error={}", e);
-                        }
+                    Err(e) => {
+                        error!("Request failed. error={}", e);
                     }
-                },
-            );
+                }
+            });
         }
 
         await!(Delay::new(Duration::from_secs(1))).expect("Failed to delay.");
@@ -137,20 +133,18 @@ async fn client_send_loop() {
 }
 
 fn spawn_server() {
-    tokio::spawn_async(
-        async {
-            let config = ServerConfig {
-                request_handler: EchoHandler {},
-                max_payload_size: ByteSize::kb(5000),
-                ping_interval: Duration::from_secs(5),
-                handshake_timeout: Duration::from_secs(5),
-            };
-            let server = Server::new(config);
-            let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-            let result = await!(server.listen_and_serve(address));
-            println!("Run result={:?}", result);
-        },
-    );
+    tokio::spawn_async(async {
+        let config = ServerConfig {
+            request_handler: EchoHandler {},
+            max_payload_size: ByteSize::kb(5000),
+            ping_interval: Duration::from_secs(5),
+            handshake_timeout: Duration::from_secs(5),
+        };
+        let server = Server::new(config);
+        let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
+        let result = await!(server.listen_and_serve(address));
+        println!("Run result={:?}", result);
+    });
 }
 
 fn configure_logging() -> Result<(), Error> {

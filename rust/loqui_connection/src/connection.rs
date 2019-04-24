@@ -43,21 +43,19 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        tokio::spawn_async(
-            async move {
-                let result = await!(run(
-                    tcp_stream,
-                    self_sender,
-                    self_rx,
-                    handler,
-                    handshake_deadline,
-                    ready_tx
-                ));
-                if let Err(e) = result {
-                    error!("Connection closed. error={:?}", e)
-                }
-            },
-        );
+        tokio::spawn_async(async move {
+            let result = await!(run(
+                tcp_stream,
+                self_sender,
+                self_rx,
+                handler,
+                handshake_deadline,
+                ready_tx
+            ));
+            if let Err(e) = result {
+                error!("Connection closed. error={:?}", e)
+            }
+        });
         connection
     }
 
@@ -156,29 +154,27 @@ fn negotiate<H: Handler>(
     mut handler: H,
     ready_tx: Option<oneshot::Sender<()>>,
 ) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
-    Compat::new(
-        async move {
-            let tcp_stream = await!(handler.upgrade(tcp_stream))?;
-            let max_payload_size = handler.max_payload_size();
-            let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
+    Compat::new(async move {
+        let tcp_stream = await!(handler.upgrade(tcp_stream))?;
+        let max_payload_size = handler.max_payload_size();
+        let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
-            match await!(handler.handshake(reader_writer)) {
-                Ok((ready, reader_writer)) => {
-                    if let Some(ready_tx) = ready_tx {
-                        ready_tx
-                            .send(())
-                            .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
-                    }
-                    Ok((ready, reader_writer, handler))
+        match await!(handler.handshake(reader_writer)) {
+            Ok((ready, reader_writer)) => {
+                if let Some(ready_tx) = ready_tx {
+                    ready_tx
+                        .send(())
+                        .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
                 }
-                Err((error, reader_writer)) => {
-                    debug!("Not ready. e={:?}", error);
-                    if let Some(reader_writer) = reader_writer {
-                        await!(reader_writer.close(Some(&error)));
-                    }
-                    Err(error)
-                }
+                Ok((ready, reader_writer, handler))
             }
-        },
-    )
+            Err((error, reader_writer)) => {
+                debug!("Not ready. e={:?}", error);
+                if let Some(reader_writer) = reader_writer {
+                    await!(reader_writer.close(Some(&error)));
+                }
+                Err(error)
+            }
+        }
+    })
 }

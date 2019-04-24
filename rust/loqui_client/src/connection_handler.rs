@@ -114,18 +114,16 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
                 self.handle_error(error);
                 None
             }
-            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(
-                async move {
-                    Err((
-                        LoquiError::InvalidOpcode {
-                            actual: Request::OPCODE,
-                            expected: None,
-                        }
-                        .into(),
-                        0,
-                    ))
-                },
-            ),
+            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(async move {
+                Err((
+                    LoquiError::InvalidOpcode {
+                        actual: Request::OPCODE,
+                        expected: None,
+                    }
+                    .into(),
+                    0,
+                ))
+            }),
         }
     }
 
@@ -327,10 +325,10 @@ mod test {
         let config = Config {
             max_payload_size: ByteSize::b(5000),
             request_timeout: Duration::from_secs(5),
-            request_queue_size: 50,
+            handshake_timeout: Duration::from_secs(10),
         };
 
-        ConnectionHandler::new(Arc::new(config))
+        ConnectionHandler::new(config)
     }
 
     #[test]

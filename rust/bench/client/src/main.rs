@@ -93,26 +93,22 @@ fn main() -> Result<(), Error> {
     let log_state = state.clone();
     configure_logging()?;
 
-    tokio::run_async(
-        async move {
-            tokio::spawn_async(
-                async move {
-                    log_loop(log_state.clone());
-                },
-            );
+    tokio::run_async(async move {
+        tokio::spawn_async(async move {
+            log_loop(log_state.clone());
+        });
 
-            let config = Config {
-                max_payload_size: ByteSize::kb(5000),
-                request_timeout: Duration::from_secs(5),
-                handshake_timeout: Duration::from_secs(5),
-            };
-            let client = Arc::new(
-                await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),
-            );
-            for _ in 0..100 {
-                tokio::spawn_async(work_loop(client.clone(), state.clone()));
-            }
-        },
-    );
+        let config = Config {
+            max_payload_size: ByteSize::kb(5000),
+            request_timeout: Duration::from_secs(5),
+            handshake_timeout: Duration::from_secs(5),
+        };
+        let client = Arc::new(
+            await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),
+        );
+        for _ in 0..100 {
+            tokio::spawn_async(work_loop(client.clone(), state.clone()));
+        }
+    });
     Ok(())
 }
