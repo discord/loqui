@@ -60,14 +60,12 @@ impl Frame for Hello {
     const OPCODE: u8 = 1;
     const HEADER_SIZE_IN_BYTES: usize = 7;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u8(self.version);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         let payload = format!(
             "{}|{}",
@@ -77,12 +75,10 @@ impl Frame for Hello {
         Some(payload.as_bytes().to_vec())
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[3..7])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let version = buf[2];
@@ -128,14 +124,12 @@ impl Frame for HelloAck {
     const OPCODE: u8 = 2;
     const HEADER_SIZE_IN_BYTES: usize = 10;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.ping_interval_ms);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(
             format!(
@@ -148,12 +142,10 @@ impl Frame for HelloAck {
         )
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[6..10])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> DecodeResult<Self> {
         let flags = buf[1];
         let ping_interval_ms = BigEndian::read_u32(&buf[2..6]);
@@ -195,24 +187,20 @@ impl Frame for Ping {
     const OPCODE: u8 = 3;
     const HEADER_SIZE_IN_BYTES: usize = 6;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         None
     }
 
-    #[inline]
     fn read_payload_size(_buf: &mut BytesMut) -> u32 {
         0
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let sequence_id = BigEndian::read_u32(&buf[2..6]);
@@ -230,24 +218,20 @@ impl Frame for Pong {
     const OPCODE: u8 = 4;
     const HEADER_SIZE_IN_BYTES: usize = 6;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         None
     }
 
-    #[inline]
     fn read_payload_size(_buf: &mut BytesMut) -> u32 {
         0
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let sequence_id = BigEndian::read_u32(&buf[2..6]);
@@ -266,24 +250,20 @@ impl Frame for Request {
     const OPCODE: u8 = 5;
     const HEADER_SIZE_IN_BYTES: usize = 10;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(self.payload)
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[6..10])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> DecodeResult<Self> {
         let flags = buf[1];
         let sequence_id = BigEndian::read_u32(&buf[2..6]);
@@ -307,24 +287,20 @@ impl Frame for Response {
     const OPCODE: u8 = 6;
     const HEADER_SIZE_IN_BYTES: usize = 10;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u32_be(self.sequence_id);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(self.payload)
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[6..10])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let sequence_id = BigEndian::read_u32(&buf[2..6]);
@@ -347,23 +323,19 @@ impl Frame for Push {
     const OPCODE: u8 = 7;
     const HEADER_SIZE_IN_BYTES: usize = 6;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(self.payload)
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[2..6])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let payload = buf[6..].to_vec();
@@ -382,24 +354,20 @@ impl Frame for GoAway {
     const OPCODE: u8 = 8;
     const HEADER_SIZE_IN_BYTES: usize = 8;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
         dst.put_u16_be(self.code);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(self.payload)
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[4..8])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let code = BigEndian::read_u16(&buf[2..4]);
@@ -425,7 +393,6 @@ impl Frame for Error {
     const OPCODE: u8 = 9;
     const HEADER_SIZE_IN_BYTES: usize = 12;
 
-    #[inline]
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
@@ -433,17 +400,14 @@ impl Frame for Error {
         dst.put_u16_be(self.code);
     }
 
-    #[inline]
     fn payload(self) -> Option<Vec<u8>> {
         Some(self.payload)
     }
 
-    #[inline]
     fn read_payload_size(buf: &mut BytesMut) -> u32 {
         BigEndian::read_u32(&buf[8..12])
     }
 
-    #[inline]
     fn from_buf(buf: &BytesMut) -> Result<Option<Self>, ProtocolError> {
         let flags = buf[1];
         let sequence_id = BigEndian::read_u32(&buf[2..6]);
