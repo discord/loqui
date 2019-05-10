@@ -13,6 +13,5 @@ tokio = { version = "0.1.19", features = ["async-await-preview"] }
 tokio-async-await = "0.1.7"
 tokio-codec = "0.1"
 futures-timer = "0.1"
-serde = "1.0.27"
 backoff = "0.1.2"
 bytesize = "1.0.0"
