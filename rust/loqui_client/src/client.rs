@@ -3,7 +3,7 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
 use futures::future::Future;
-use futures::sync::mpsc::{unbounded, UnboundedSender};
+use futures::sync::mpsc::{channel, Sender};
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use loqui_connection::{Connection, LoquiError};
@@ -20,10 +20,12 @@ pub struct Client {
     request_timeout: Duration,
     handshake_deadline: Instant,
     ready: Arc<AtomicBool>,
-    ready_waiter_tx: UnboundedSender<oneshot::Sender<()>>,
+    ready_waiter_tx: Sender<oneshot::Sender<()>>,
     // TODO: might be able to set this unsafe
     encoding: Arc<RwLock<Option<&'static str>>>,
 }
+
+const READY_CHAN_BUFFER_SIZE: usize = 100_000;
 
 impl Client {
     pub async fn start_connect(address: SocketAddr, config: Config) -> Result<Client, Error> {
@@ -37,8 +39,8 @@ impl Client {
         let awaitable = ready_rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
             .timeout_at(handshake_deadline);
-        // TODO: this probably shouldn't be unbounded
-        let (ready_waiter_tx, mut ready_waiter_rx) = unbounded::<oneshot::Sender<()>>();
+        let (ready_waiter_tx, mut ready_waiter_rx) =
+            channel::<oneshot::Sender<()>>(READY_CHAN_BUFFER_SIZE);
         let encoding = Arc::new(RwLock::new(None));
 
         let connection =
@@ -87,11 +89,9 @@ impl Client {
         if self.is_closed() {
             return Err(LoquiError::ConnectionClosed.into());
         }
-
         if !self.is_ready() {
             return Err(LoquiError::NotReady.into());
         }
-
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
@@ -103,18 +103,21 @@ impl Client {
         if self.is_closed() {
             return Err(LoquiError::ConnectionClosed.into());
         }
-
         if !self.is_ready() {
             return Err(LoquiError::NotReady.into());
         }
-
         let push = InternalEvent::Push { payload };
         self.connection.send(push)
     }
 
     pub async fn await_ready(&self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
-        self.ready_waiter_tx.clone().unbounded_send(tx)?;
+        await!(self
+            .ready_waiter_tx
+            .clone()
+            .send(tx)
+            .map_err(Error::from)
+            .timeout_at(self.handshake_deadline))?;
         let awaitable = rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
             .timeout_at(self.handshake_deadline);
