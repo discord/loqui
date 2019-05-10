@@ -1,4 +1,3 @@
-use crate::encoder::{ArcEncoder, Factory};
 use crate::framed_io::ReaderWriter;
 use crate::id_sequence::IdSequence;
 use bytesize::ByteSize;
@@ -28,8 +27,6 @@ pub struct Ready {
 /// A trait that handles the specific functionality of a connection. The client and server each
 /// implement this.
 pub trait Handler: Send + 'static {
-    /// Factory for creating encoders for this handler.
-    type EncoderFactory: Factory;
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
     type InternalEvent: Send;
@@ -57,7 +54,7 @@ pub trait Handler: Send + 'static {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: ArcEncoder<Self::EncoderFactory>,
+        encoding: &'static str,
     ) -> Option<Self::HandleFrameFuture>;
     /// Handle internal events for this connection. Completely opaque to the connection. Optionally
     /// return a `LoquiFrame` that will be sent back through the socket to the other side.
@@ -65,7 +62,6 @@ pub trait Handler: Send + 'static {
         &mut self,
         event: Self::InternalEvent,
         id_sequence: &mut IdSequence,
-        encoder: ArcEncoder<Self::EncoderFactory>,
     ) -> Option<LoquiFrame>;
     /// Periodic callback that fires whenever a ping fires.
     fn on_ping_received(&mut self);

@@ -4,12 +4,13 @@ use bytesize::ByteSize;
 use failure::Error;
 #[macro_use]
 extern crate log;
-use loqui_bench_common::{configure_logging, make_socket_address, BenchEncoderFactory};
+use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::await;
 
 #[derive(Default)]
 struct State {
@@ -24,7 +25,7 @@ fn make_message() -> Vec<u8> {
     b"hello world".to_vec()
 }
 
-async fn do_work(client: Arc<Client<BenchEncoderFactory>>, state: Arc<State>) {
+async fn do_work(client: Arc<Client>, state: Arc<State>) {
     let message = make_message();
     let start = Instant::now();
     state.in_flight.fetch_add(1, Ordering::SeqCst);
@@ -53,7 +54,7 @@ async fn do_work(client: Arc<Client<BenchEncoderFactory>>, state: Arc<State>) {
     state.in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
-async fn work_loop(client: Arc<Client<BenchEncoderFactory>>, state: Arc<State>) {
+async fn work_loop(client: Arc<Client>, state: Arc<State>) {
     loop {
         await!(do_work(client.clone(), state.clone()));
     }
@@ -102,10 +103,13 @@ fn main() -> Result<(), Error> {
             max_payload_size: ByteSize::kb(5000),
             request_timeout: Duration::from_secs(5),
             handshake_timeout: Duration::from_secs(5),
+            supported_encodings: &["msgpack", "identity"],
         };
         let client = Arc::new(
-            await!(Client::connect(make_socket_address(), config)).expect("Failed to connect"),
+            await!(Client::start_connect(make_socket_address(), config))
+                .expect("Failed to connect"),
         );
+        await!(client.await_ready()).expect("Ready failed");
         for _ in 0..100 {
             tokio::spawn_async(work_loop(client.clone(), state.clone()));
         }

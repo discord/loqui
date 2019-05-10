@@ -14,7 +14,6 @@ futures-timer = "0.1"
 tokio = { version = "0.1.19", features = ["async-await-preview"] }
 tokio-sync = "0.1.5"
 tokio-codec = "0.1"
-serde = "1.0.27"
 bytes = "0.4.9"
 bytesize = "1.0.0"
 

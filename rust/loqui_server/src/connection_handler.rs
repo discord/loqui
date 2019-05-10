@@ -2,8 +2,8 @@ use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
-use loqui_connection::ReaderWriter;
-use loqui_connection::{ArcEncoder, EncoderFactory, IdSequence, LoquiError};
+use loqui_connection::{find_encoding, ReaderWriter};
+use loqui_connection::{IdSequence, LoquiError};
 use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response};
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
@@ -26,7 +26,6 @@ impl<R: RequestHandler> ConnectionHandler<R> {
 }
 
 impl<R: RequestHandler> Handler for ConnectionHandler<R> {
-    type EncoderFactory = R::EncoderFactory;
     // Server doesn't have any internal events.
     type InternalEvent = ();
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
@@ -65,18 +64,21 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
 
     fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
         let ping_interval = self.config.ping_interval;
+        let supported_encodings = self.config.supported_encodings;
         async move {
             match await!(reader_writer.reader.next()) {
-                Some(Ok(frame)) => match Self::handle_handshake_frame(frame, ping_interval) {
-                    Ok((ready, hello_ack)) => {
-                        reader_writer = match await!(reader_writer.write(hello_ack)) {
-                            Ok(reader_writer) => reader_writer,
-                            Err(e) => return Err((e.into(), None)),
-                        };
-                        Ok((ready, reader_writer))
+                Some(Ok(frame)) => {
+                    match Self::handle_handshake_frame(frame, ping_interval, supported_encodings) {
+                        Ok((ready, hello_ack)) => {
+                            reader_writer = match await!(reader_writer.write(hello_ack)) {
+                                Ok(reader_writer) => reader_writer,
+                                Err(e) => return Err((e.into(), None)),
+                            };
+                            Ok((ready, reader_writer))
+                        }
+                        Err(e) => Err((e, Some(reader_writer))),
                     }
-                    Err(e) => Err((e, Some(reader_writer))),
-                },
+                }
                 Some(Err(e)) => Err((e, Some(reader_writer))),
                 None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
@@ -86,15 +88,15 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: ArcEncoder<R::EncoderFactory>,
+        encoding: &'static str,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
-                tokio::spawn_async(handle_push(self.config.clone(), push, encoder));
+                tokio::spawn_async(handle_push(self.config.clone(), push, encoding));
                 None
             }
             DelegatedFrame::Request(request) => {
-                let response_future = handle_request(self.config.clone(), request, encoder);
+                let response_future = handle_request(self.config.clone(), request, encoding);
                 Some(response_future)
             }
             DelegatedFrame::Error(_) => None,
@@ -106,7 +108,6 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         &mut self,
         _event: (),
         _id_sequence: &mut IdSequence,
-        _encoder: ArcEncoder<R::EncoderFactory>,
     ) -> Option<LoquiFrame> {
         None
     }
@@ -117,9 +118,12 @@ impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_frame(
         frame: LoquiFrame,
         ping_interval: Duration,
+        supported_encodings: &'static [&'static str],
     ) -> Result<(Ready, HelloAck), Error> {
         match frame {
-            LoquiFrame::Hello(hello) => Self::handle_handshake_hello(hello, ping_interval),
+            LoquiFrame::Hello(hello) => {
+                Self::handle_handshake_hello(hello, ping_interval, supported_encodings)
+            }
             LoquiFrame::GoAway(go_away) => Err(LoquiError::ToldToGoAway { go_away }.into()),
             frame => Err(LoquiError::InvalidOpcode {
                 actual: frame.opcode(),
@@ -132,6 +136,7 @@ impl<R: RequestHandler> ConnectionHandler<R> {
     fn handle_handshake_hello(
         hello: Hello,
         ping_interval: Duration,
+        supported_encodings: &'static [&'static str],
     ) -> Result<(Ready, HelloAck), Error> {
         let Hello {
             flags,
@@ -147,7 +152,7 @@ impl<R: RequestHandler> ConnectionHandler<R> {
             }
             .into());
         }
-        let encoding = Self::negotiate_encoding(&encodings)?;
+        let encoding = Self::negotiate_encoding(&encodings, supported_encodings)?;
         let hello_ack = HelloAck {
             flags,
             ping_interval_ms: ping_interval.as_millis() as u32,
@@ -161,11 +166,12 @@ impl<R: RequestHandler> ConnectionHandler<R> {
         Ok((ready, hello_ack))
     }
 
-    fn negotiate_encoding(client_encodings: &[String]) -> Result<&'static str, Error> {
+    fn negotiate_encoding(
+        client_encodings: &[String],
+        supported_encodings: &'static [&'static str],
+    ) -> Result<&'static str, Error> {
         for client_encoding in client_encodings {
-            if let Some(encoding) =
-                <R::EncoderFactory as EncoderFactory>::find_encoding(client_encoding)
-            {
+            if let Some(encoding) = find_encoding(client_encoding, supported_encodings) {
                 return Ok(encoding);
             }
         }
@@ -176,40 +182,31 @@ impl<R: RequestHandler> ConnectionHandler<R> {
 async fn handle_push<R: RequestHandler>(
     config: Arc<Config<R>>,
     push: Push,
-    encoder: ArcEncoder<R::EncoderFactory>,
+    encoding: &'static str,
 ) {
     let Push {
         payload,
         flags: _flags,
     } = push;
-    match encoder.decode(payload) {
-        Ok(request) => {
-            config.request_handler.handle_push(request);
-        }
-        Err(e) => {
-            error!("Failed to decode payload. error={:?}", e);
-        }
-    }
+    await!(config.request_handler.handle_push(payload, encoding))
 }
 
 async fn handle_request<R: RequestHandler>(
     config: Arc<Config<R>>,
     request: Request,
-    encoder: ArcEncoder<R::EncoderFactory>,
+    encoding: &'static str,
 ) -> Result<Response, (Error, u32)> {
     let Request {
-        payload,
+        payload: request_payload,
         flags: _flags,
         sequence_id,
     } = request;
-    let request = encoder.decode(payload).map_err(|e| (e, sequence_id))?;
-
-    let response = await!(config.request_handler.handle_request(request));
-
-    let payload = encoder.encode(response).map_err(|e| (e, sequence_id))?;
+    let response_payload = await!(config
+        .request_handler
+        .handle_request(request_payload, encoding));
     Ok(Response {
         flags: 0,
         sequence_id,
-        payload,
+        payload: response_payload,
     })
 }

@@ -10,4 +10,6 @@ pub struct Config {
     pub request_timeout: Duration,
     /// The duration of time from when a client starts a connect to when we stop trying to handshake.
     pub handshake_timeout: Duration,
+    /// Supported encodings.
+    pub supported_encodings: &'static [&'static str],
 }

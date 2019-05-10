@@ -1,4 +1,3 @@
-use crate::encoder::Factory;
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::{Handler, Ready};
@@ -12,6 +11,7 @@ use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
+use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::await;
 use tokio::net::TcpStream;
@@ -33,11 +33,48 @@ impl<H: Handler> Connection<H> {
     /// * `handler` - implements client or server specific logic
     /// * `handshake_deadline` - how long until we fail due to handshake not completing
     /// * `ready_tx` - a sender used to notify that the connection is ready for requests
+    pub fn spawn_from_address(
+        address: SocketAddr,
+        handler: H,
+        handshake_deadline: Instant,
+        ready_tx: Option<oneshot::Sender<&'static str>>,
+    ) -> Self {
+        let (self_sender, self_rx) = Sender::new();
+        let connection = Self {
+            self_sender: self_sender.clone(),
+        };
+        tokio::spawn_async(async move {
+            let tcp_stream = await!(TcpStream::connect(&address)).unwrap(); //.timeout_at(deadline))?;
+            info!("Connected to {}", address);
+            let result = await!(run(
+                tcp_stream,
+                self_sender,
+                self_rx,
+                handler,
+                handshake_deadline,
+                ready_tx,
+            ));
+            if let Err(e) = result {
+                error!("Connection closed. error={:?}", e)
+            }
+        });
+        connection
+    }
+
+    /// Spawn a new `Connection` that runs in a separate task. Returns a handle for sending to
+    /// the `Connection`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tcp_stream` - the tcp socket
+    /// * `handler` - implements client or server specific logic
+    /// * `handshake_deadline` - how long until we fail due to handshake not completing
+    /// * `ready_tx` - a sender used to notify that the connection is ready for requests
     pub fn spawn(
         tcp_stream: TcpStream,
         handler: H,
         handshake_deadline: Instant,
-        ready_tx: Option<oneshot::Sender<()>>,
+        ready_tx: Option<oneshot::Sender<&'static str>>,
     ) -> Self {
         let (self_sender, self_rx) = Sender::new();
         let connection = Self {
@@ -50,7 +87,7 @@ impl<H: Handler> Connection<H> {
                 self_rx,
                 handler,
                 handshake_deadline,
-                ready_tx
+                ready_tx,
             ));
             if let Err(e) = result {
                 error!("Connection closed. error={:?}", e)
@@ -105,17 +142,19 @@ async fn run<H: Handler>(
     self_rx: UnboundedReceiver<Event<H::InternalEvent>>,
     handler: H,
     handshake_deadline: Instant,
-    ready_tx: Option<oneshot::Sender<()>>,
+    ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> Result<(), Error> {
     let (ready, reader_writer, handler) =
         await!(negotiate(tcp_stream, handler, ready_tx).timeout_at(handshake_deadline))?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
-    let encoder =
-        H::EncoderFactory::make(ready.encoding).ok_or_else(|| LoquiError::InvalidEncoding)?;
 
+    let Ready {
+        ping_interval,
+        encoding,
+    } = ready;
     // Convert each stream into a Result<Event, Error> stream.
-    let ping_stream = Interval::new(ready.ping_interval)
+    let ping_stream = Interval::new(ping_interval)
         .map(|()| Event::Ping)
         .map_err(Error::from);
     let framed_reader = reader.map(Event::SocketReceive);
@@ -125,7 +164,7 @@ async fn run<H: Handler>(
         .select_break(self_rx)
         .select_break(ping_stream);
 
-    let mut event_handler = EventHandler::new(self_sender, handler, encoder);
+    let mut event_handler = EventHandler::new(self_sender, handler, encoding);
     while let Some(event) = await!(stream.next()) {
         let event = event?;
 
@@ -152,7 +191,7 @@ async fn run<H: Handler>(
 fn negotiate<H: Handler>(
     tcp_stream: TcpStream,
     mut handler: H,
-    ready_tx: Option<oneshot::Sender<()>>,
+    ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
     Compat::new(async move {
         let tcp_stream = await!(handler.upgrade(tcp_stream))?;
@@ -163,8 +202,8 @@ fn negotiate<H: Handler>(
             Ok((ready, reader_writer)) => {
                 if let Some(ready_tx) = ready_tx {
                     ready_tx
-                        .send(())
-                        .map_err(|()| Error::from(LoquiError::ReadySendFailed))?;
+                        .send(ready.encoding)
+                        .map_err(|_| Error::from(LoquiError::ReadySendFailed))?;
                 }
                 Ok((ready, reader_writer, handler))
             }
