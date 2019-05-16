@@ -3,7 +3,6 @@ use super::error::LoquiError;
 use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
-use crate::encoder::ArcEncoder;
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
@@ -14,7 +13,7 @@ pub struct EventHandler<H: Handler> {
     pong_received: bool,
     id_sequence: IdSequence,
     self_sender: Sender<H::InternalEvent>,
-    encoder: ArcEncoder<H::EncoderFactory>,
+    encoding: &'static str,
 }
 
 /// Standard return type for handler functions.
@@ -24,17 +23,13 @@ pub struct EventHandler<H: Handler> {
 type MaybeFrameResult = Result<Option<LoquiFrame>, Error>;
 
 impl<H: Handler> EventHandler<H> {
-    pub fn new(
-        self_sender: Sender<H::InternalEvent>,
-        handler: H,
-        encoder: ArcEncoder<H::EncoderFactory>,
-    ) -> Self {
+    pub fn new(self_sender: Sender<H::InternalEvent>, handler: H, encoding: &'static str) -> Self {
         Self {
             handler,
             pong_received: true,
             id_sequence: IdSequence::default(),
             self_sender,
-            encoder,
+            encoding,
         }
     }
 
@@ -93,9 +88,7 @@ impl<H: Handler> EventHandler<H> {
     /// Delegates a frame to the connection handler.
     fn delegate_frame<D: Into<DelegatedFrame>>(&mut self, delegated_frame: D) -> MaybeFrameResult {
         let delegated_frame = delegated_frame.into();
-        let maybe_future = self
-            .handler
-            .handle_frame(delegated_frame, self.encoder.clone());
+        let maybe_future = self.handler.handle_frame(delegated_frame, self.encoding);
         // If the connection handler returns a future, execute the future async and send it back
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
@@ -140,11 +133,9 @@ impl<H: Handler> EventHandler<H> {
     }
 
     fn handle_internal_event(&mut self, internal_event: H::InternalEvent) -> MaybeFrameResult {
-        Ok(self.handler.handle_internal_event(
-            internal_event,
-            &mut self.id_sequence,
-            self.encoder.clone(),
-        ))
+        Ok(self
+            .handler
+            .handle_internal_event(internal_event, &mut self.id_sequence))
     }
 
     /// Close requested. Return an `Error` to close the connection.

@@ -3,16 +3,15 @@ use futures::future::Future;
 use futures::sync::oneshot::{self, Sender};
 use futures_timer::FutureExt;
 use loqui_connection::{convert_timeout_error, LoquiError};
-use serde::de::DeserializeOwned;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
-pub struct ResponseWaiter<Decoded: DeserializeOwned + Send> {
-    tx: Sender<Result<Decoded, Error>>,
+pub struct ResponseWaiter {
+    tx: Sender<Result<Vec<u8>, Error>>,
     pub deadline: Instant,
 }
 
-impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
+impl ResponseWaiter {
     /// Creates a new response waiter that will wait until the specified timeout.
     /// The returned future will resolve when someone calls waiter.notify().
     ///
@@ -24,7 +23,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
     ///
     /// `LoquiError::RequestTimeout` or some other error from the server.
     ///
-    pub fn new(timeout: Duration) -> (Self, impl Future<Item = Decoded, Error = Error>) {
+    pub fn new(timeout: Duration) -> (Self, impl Future<Item = Vec<u8>, Error = Error>) {
         let (tx, rx) = oneshot::channel();
 
         let deadline = Instant::now() + timeout;
@@ -40,7 +39,7 @@ impl<Decoded: DeserializeOwned + Send> ResponseWaiter<Decoded> {
     }
 
     /// Notify the waiter that a result was received.
-    pub fn notify(self, result: Result<Decoded, Error>) {
+    pub fn notify(self, result: Result<Vec<u8>, Error>) {
         if let Err(_e) = self.tx.send(result) {
             if self.deadline > Instant::now() {
                 warn!("Waiter is no longer listening.")
@@ -61,7 +60,7 @@ mod tests {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
         let result = block_on_all(async {
             spawn(async {
-                waiter.notify(Ok(()));
+                waiter.notify(Ok(vec![]));
                 Ok(())
             });
             await!(awaitable)
@@ -73,7 +72,7 @@ mod tests {
     fn it_receives_error() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
 
-        let result: Result<(), Error> = block_on_all(async {
+        let result: Result<Vec<u8>, Error> = block_on_all(async {
             spawn(async {
                 waiter.notify(Err(LoquiError::ConnectionClosed.into()));
                 Ok(())
@@ -90,7 +89,7 @@ mod tests {
         let result = block_on_all(async {
             spawn(async {
                 await!(Delay::new(Duration::from_millis(50))).unwrap();
-                waiter.notify(Ok(()));
+                waiter.notify(Ok(vec![]));
                 Ok(())
             });
             await!(awaitable)

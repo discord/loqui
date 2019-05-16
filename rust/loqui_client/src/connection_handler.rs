@@ -2,43 +2,38 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
+use loqui_connection::find_encoding;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
-use loqui_connection::{Encoder, EncoderFactory, IdSequence, LoquiError, ReaderWriter};
+use loqui_connection::{IdSequence, LoquiError, ReaderWriter};
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
-use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
 
-pub enum InternalEvent<Encoded, Decoded>
-where
-    Encoded: Serialize + Send,
-    Decoded: DeserializeOwned + Send,
-{
+pub enum InternalEvent {
     Request {
-        payload: Encoded,
-        waiter: ResponseWaiter<Decoded>,
+        payload: Vec<u8>,
+        waiter: ResponseWaiter,
     },
     Push {
-        payload: Encoded,
+        payload: Vec<u8>,
     },
 }
 
-pub struct ConnectionHandler<F: EncoderFactory> {
-    waiters: HashMap<u32, ResponseWaiter<F::Decoded>>,
+pub struct ConnectionHandler {
+    waiters: HashMap<u32, ResponseWaiter>,
     config: Config,
 }
 
-impl<F: EncoderFactory> ConnectionHandler<F> {
+impl ConnectionHandler {
     pub fn new(config: Config) -> Self {
         Self {
             waiters: HashMap::new(),
@@ -47,9 +42,8 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
     }
 }
 
-impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
-    type EncoderFactory = F;
-    type InternalEvent = InternalEvent<F::Encoded, F::Decoded>;
+impl Handler for ConnectionHandler {
+    type InternalEvent = InternalEvent;
     existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
     existential type HandshakeFuture: Send
         + Future<
@@ -82,15 +76,16 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
     }
 
     fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
+        let hello = self.make_hello();
+        let supported_encodings = self.config.supported_encodings;
         async move {
-            let hello = Self::make_hello();
             reader_writer = match await!(reader_writer.write(hello)) {
                 Ok(read_writer) => read_writer,
                 Err(e) => return Err((e.into(), None)),
             };
 
             match await!(reader_writer.reader.next()) {
-                Some(Ok(frame)) => match Self::handle_handshake_frame(frame) {
+                Some(Ok(frame)) => match Self::handle_handshake_frame(frame, supported_encodings) {
                     Ok(ready) => Ok((ready, reader_writer)),
                     Err(e) => Err((e, Some(reader_writer))),
                 },
@@ -103,11 +98,11 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
-        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
+        _encoding: &'static str,
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Response(response) => {
-                self.handle_response(response, encoder);
+                self.handle_response(response);
                 None
             }
             DelegatedFrame::Error(error) => {
@@ -129,17 +124,16 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
 
     fn handle_internal_event(
         &mut self,
-        event: InternalEvent<F::Encoded, F::Decoded>,
+        event: InternalEvent,
         id_sequence: &mut IdSequence,
-        encoder: Arc<Box<Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
     ) -> Option<LoquiFrame> {
         // Forward Request and Push events to the connection so it can send them to the server.
         match event {
             InternalEvent::Request { payload, waiter } => {
                 let sequence_id = id_sequence.next();
-                self.send_request(payload, sequence_id, waiter, encoder)
+                self.send_request(payload, sequence_id, waiter)
             }
-            InternalEvent::Push { payload } => self.send_push(payload, encoder),
+            InternalEvent::Push { payload } => self.send_push(payload),
         }
     }
 
@@ -151,59 +145,34 @@ impl<F: EncoderFactory> Handler for ConnectionHandler<F> {
     }
 }
 
-impl<F: EncoderFactory> ConnectionHandler<F> {
-    fn send_push(
-        &mut self,
-        payload: F::Encoded,
-        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
-    ) -> Option<LoquiFrame> {
-        match encoder.encode(payload) {
-            Ok(payload) => {
-                let push = Push { payload, flags: 0 };
-                Some(push.into())
-            }
-            Err(e) => {
-                error!("Failed to encode payload. error={:?}", e);
-                None
-            }
-        }
+impl ConnectionHandler {
+    fn send_push(&mut self, payload: Vec<u8>) -> Option<LoquiFrame> {
+        let push = Push { payload, flags: 0 };
+        Some(push.into())
     }
 
     fn send_request(
         &mut self,
-        payload: F::Encoded,
+        payload: Vec<u8>,
         sequence_id: u32,
-        waiter: ResponseWaiter<F::Decoded>,
-        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
+        waiter: ResponseWaiter,
     ) -> Option<LoquiFrame> {
         if waiter.deadline <= Instant::now() {
             waiter.notify(Err(LoquiError::RequestTimeout.into()));
             return None;
         }
 
-        match encoder.encode(payload) {
-            Ok(payload) => {
-                // Store the waiter so we can notify it when we get a response.
-                self.waiters.insert(sequence_id, waiter);
-                let request = Request {
-                    payload,
-                    sequence_id,
-                    flags: 0,
-                };
-                Some(request.into())
-            }
-            Err(error) => {
-                waiter.notify(Err(error));
-                None
-            }
-        }
+        // Store the waiter so we can notify it when we get a response.
+        self.waiters.insert(sequence_id, waiter);
+        let request = Request {
+            payload,
+            sequence_id,
+            flags: 0,
+        };
+        Some(request.into())
     }
 
-    fn handle_response(
-        &mut self,
-        response: Response,
-        encoder: Arc<Box<dyn Encoder<Encoded = F::Encoded, Decoded = F::Decoded>>>,
-    ) {
+    fn handle_response(&mut self, response: Response) {
         let Response {
             flags: _flags,
             sequence_id,
@@ -211,8 +180,7 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         } = response;
         match self.waiters.remove(&sequence_id) {
             Some(waiter) => {
-                let response = encoder.decode(payload);
-                waiter.notify(response);
+                waiter.notify(Ok(payload));
             }
             None => {
                 debug!("No waiter for sequence_id. sequence_id={:?}", sequence_id);
@@ -240,11 +208,13 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         }
     }
 
-    fn make_hello() -> Hello {
+    fn make_hello(&self) -> Hello {
         Hello {
             flags: 0,
             version: VERSION,
-            encodings: F::ENCODINGS
+            encodings: self
+                .config
+                .supported_encodings
                 .to_owned()
                 .into_iter()
                 .map(String::from)
@@ -254,9 +224,14 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         }
     }
 
-    fn handle_handshake_frame(frame: LoquiFrame) -> Result<Ready, Error> {
+    fn handle_handshake_frame(
+        frame: LoquiFrame,
+        supported_encodings: &'static [&'static str],
+    ) -> Result<Ready, Error> {
         match frame {
-            LoquiFrame::HelloAck(hello_ack) => Self::handle_handshake_hello_ack(hello_ack),
+            LoquiFrame::HelloAck(hello_ack) => {
+                Self::handle_handshake_hello_ack(hello_ack, supported_encodings)
+            }
             LoquiFrame::GoAway(go_away) => Err(LoquiError::ToldToGoAway { go_away }.into()),
             frame => Err(LoquiError::InvalidOpcode {
                 actual: frame.opcode(),
@@ -266,9 +241,12 @@ impl<F: EncoderFactory> ConnectionHandler<F> {
         }
     }
 
-    fn handle_handshake_hello_ack(hello_ack: HelloAck) -> Result<Ready, Error> {
+    fn handle_handshake_hello_ack(
+        hello_ack: HelloAck,
+        supported_encodings: &'static [&'static str],
+    ) -> Result<Ready, Error> {
         // Validate the settings and convert them to &'static str.
-        let encoding = match F::find_encoding(hello_ack.encoding) {
+        let encoding = match find_encoding(hello_ack.encoding, supported_encodings) {
             Some(encoding) => encoding,
             None => return Err(LoquiError::InvalidEncoding.into()),
         };
@@ -291,41 +269,14 @@ mod test {
     use crate::future_utils::block_on_all;
     use tokio::await;
 
-    pub struct TestEncoderFactory {}
+    const ENCODING: &str = "identity";
 
-    impl EncoderFactory for TestEncoderFactory {
-        type Decoded = Vec<u8>;
-        type Encoded = Vec<u8>;
-
-        const ENCODINGS: &'static [&'static str] = &["identity"];
-
-        fn make(
-            _encoding: &'static str,
-        ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>> {
-            Some(Arc::new(Box::new(IdentityEncoder {})))
-        }
-    }
-
-    struct IdentityEncoder {}
-
-    impl Encoder for IdentityEncoder {
-        type Decoded = Vec<u8>;
-        type Encoded = Vec<u8>;
-
-        fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
-            Ok(payload)
-        }
-
-        fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
-            Ok(payload)
-        }
-    }
-
-    fn make_handler() -> ConnectionHandler<TestEncoderFactory> {
+    fn make_handler() -> ConnectionHandler {
         let config = Config {
             max_payload_size: ByteSize::b(5000),
             request_timeout: Duration::from_secs(5),
             handshake_timeout: Duration::from_secs(10),
+            supported_encodings: &[ENCODING],
         };
 
         ConnectionHandler::new(config)
@@ -334,7 +285,6 @@ mod test {
     #[test]
     fn it_handles_request_response() {
         let mut handler = make_handler();
-        let encoder = TestEncoderFactory::make(&"identity").expect("failed to make encoder");
         let mut id_sequence = IdSequence::default();
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
         let payload = b"hello".to_vec();
@@ -345,7 +295,6 @@ mod test {
                     waiter,
                 },
                 &mut id_sequence,
-                encoder.clone(),
             )
             .expect("no request");
         match request {
@@ -355,7 +304,7 @@ mod test {
                     flags: 0,
                     payload: payload.clone(),
                 };
-                let frame = handler.handle_frame(response.into(), encoder.clone());
+                let frame = handler.handle_frame(response.into(), ENCODING);
                 assert!(frame.is_none())
             }
             _other => panic!("request not returned"),
@@ -367,7 +316,6 @@ mod test {
     #[test]
     fn it_handles_request_response_diff_sequence_id() {
         let mut handler = make_handler();
-        let encoder = TestEncoderFactory::make(&"identity").expect("failed to make encoder");
         let mut id_sequence = IdSequence::default();
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(1));
         let _request = handler
@@ -377,7 +325,6 @@ mod test {
                     waiter,
                 },
                 &mut id_sequence,
-                encoder.clone(),
             )
             .expect("no request");
         let response = Response {
@@ -385,7 +332,7 @@ mod test {
             flags: 0,
             payload: vec![],
         };
-        let _frame = handler.handle_frame(response.into(), encoder.clone());
+        let _frame = handler.handle_frame(response.into(), ENCODING);
         let result = block_on_all(async { await!(awaitable) });
         assert!(result.is_err())
     }

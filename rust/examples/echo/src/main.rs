@@ -10,8 +10,7 @@ use failure::Error;
 use fern;
 use futures_timer::Delay;
 use loqui_client::{Client, Config as ClientConfig};
-use loqui_server::{Config as ServerConfig, Encoder, EncoderFactory, RequestHandler, Server};
-use serde_json;
+use loqui_server::{Config as ServerConfig, RequestHandler, Server};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -23,67 +22,19 @@ const ADDRESS: &str = "127.0.0.1:8080";
 struct EchoHandler {}
 
 impl RequestHandler for EchoHandler {
-    type EncoderFactory = Factory;
-    existential type RequestFuture: Future<Output = String>;
+    existential type RequestFuture: Future<Output = Vec<u8>>;
     existential type PushFuture: Send + Future<Output = ()>;
 
-    fn handle_request(&self, request: String) -> Self::RequestFuture {
+    fn handle_request(&self, payload: Vec<u8>, _encoding: &'static str) -> Self::RequestFuture {
+        let request: String = String::from_utf8(payload).expect("Failed to decode.");
         debug!("Handling request: {}", request);
-        async { request }
+        async move { request.as_bytes().to_vec() }
     }
 
-    fn handle_push(&self, push: String) -> Self::PushFuture {
-        debug!("Handling push: {}", push);
+    fn handle_push(&self, payload: Vec<u8>, _encoding: &'static str) -> Self::PushFuture {
+        let request: String = String::from_utf8(payload).expect("Failed to decode.");
+        debug!("Handling push: {}", request);
         async {}
-    }
-}
-
-struct Factory {}
-
-impl EncoderFactory for Factory {
-    type Decoded = String;
-    type Encoded = String;
-
-    const ENCODINGS: &'static [&'static str] = &["json", "utf8"];
-
-    fn make(
-        encoding: &'static str,
-    ) -> Option<Arc<Box<Encoder<Encoded = Self::Encoded, Decoded = Self::Decoded>>>> {
-        match encoding {
-            "utf8" => Some(Arc::new(Box::new(UTF8Encoder {}))),
-            "json" => Some(Arc::new(Box::new(JsonEncoder {}))),
-            _ => None,
-        }
-    }
-}
-
-struct UTF8Encoder {}
-
-impl Encoder for UTF8Encoder {
-    type Decoded = String;
-    type Encoded = String;
-
-    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
-        String::from_utf8(payload).map_err(Error::from)
-    }
-
-    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
-        Ok(payload.as_bytes().to_vec())
-    }
-}
-
-struct JsonEncoder {}
-
-impl Encoder for JsonEncoder {
-    type Decoded = String;
-    type Encoded = String;
-
-    fn decode(&self, payload: Vec<u8>) -> Result<Self::Decoded, Error> {
-        serde_json::from_slice(&payload).map_err(Error::from)
-    }
-
-    fn encode(&self, payload: Self::Encoded) -> Result<Vec<u8>, Error> {
-        serde_json::to_vec(&payload).map_err(Error::from)
     }
 }
 
@@ -98,28 +49,35 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
+const SUPPORTED_ENCODINGS: &[&str] = &["string"];
+
 async fn client_send_loop() {
     let config = ClientConfig {
         max_payload_size: ByteSize::kb(5000),
         request_timeout: Duration::from_secs(5),
         handshake_timeout: Duration::from_secs(5),
+        supported_encodings: SUPPORTED_ENCODINGS,
     };
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
     let client =
-        Arc::new(await!(Client::<Factory>::connect(address, config)).expect("Failed to connect"));
+        Arc::new(await!(Client::start_connect(address, config)).expect("Failed to connect"));
+    await!(client.await_ready()).expect("Ready failed");
 
     let messages = &["test", "test2", "test3"];
     loop {
         for message in messages {
             let client = client.clone();
             tokio::spawn_async(async move {
-                if let Err(e) = await!(client.push(message.to_string())) {
+                if let Err(e) = await!(client.push(message.as_bytes().to_vec())) {
                     error!("Push failed. error={:?}", e);
                 }
-                match await!(client.request(message.to_string())) {
+                match await!(client.request(message.as_bytes().to_vec())) {
                     Ok(response) => {
-                        info!("Received response: {}", response);
+                        info!(
+                            "Received response: {}",
+                            String::from_utf8(response).expect("Failed to decode")
+                        );
                     }
                     Err(e) => {
                         error!("Request failed. error={}", e);
@@ -139,6 +97,7 @@ fn spawn_server() {
             max_payload_size: ByteSize::kb(5000),
             ping_interval: Duration::from_secs(5),
             handshake_timeout: Duration::from_secs(5),
+            supported_encodings: SUPPORTED_ENCODINGS,
         };
         let server = Server::new(config);
         let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
