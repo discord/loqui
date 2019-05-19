@@ -1,5 +1,4 @@
 *.pyc
-*.c
 *.so
 .idea
 .cache
