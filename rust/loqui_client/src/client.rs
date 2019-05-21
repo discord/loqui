@@ -21,7 +21,6 @@ pub struct Client {
     handshake_deadline: Instant,
     ready: Arc<AtomicBool>,
     ready_waiter_tx: Sender<oneshot::Sender<()>>,
-    // TODO: might be able to set this unsafe
     encoding: Arc<RwLock<Option<&'static str>>>,
 }
 
