@@ -26,7 +26,7 @@ if cythonize:
 
 setup(
     name='loqui',
-    version='0.2.11',
+    version='0.2.12',
     author='Jake Heinz',
     author_email='jh@discordapp.com',
     url="http://github.com/discordapp/loqui",
