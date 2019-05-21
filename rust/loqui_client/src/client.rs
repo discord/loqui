@@ -3,44 +3,95 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
 use futures::future::Future;
+use futures::sync::mpsc::{channel, Sender};
 use futures::sync::oneshot;
 use futures_timer::FutureExt;
-use loqui_connection::{convert_timeout_error, Connection, EncoderFactory, LoquiError};
+use loqui_connection::{Connection, LoquiError};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use tokio::await;
-use tokio::net::TcpStream;
+use tokio::prelude::*;
 
-pub struct Client<F: EncoderFactory> {
-    connection: Connection<ConnectionHandler<F>>,
+pub struct Client {
+    connection: Connection<ConnectionHandler>,
     request_timeout: Duration,
+    handshake_deadline: Instant,
+    ready: Arc<AtomicBool>,
+    ready_waiter_tx: Sender<oneshot::Sender<()>>,
+    // TODO: might be able to set this unsafe
+    encoding: Arc<RwLock<Option<&'static str>>>,
 }
 
-impl<F: EncoderFactory> Client<F> {
-    pub async fn connect(address: SocketAddr, config: Config) -> Result<Client<F>, Error> {
-        let deadline = Instant::now() + config.handshake_timeout;
+const READY_CHAN_BUFFER_SIZE: usize = 100_000;
 
-        let tcp_stream = await!(TcpStream::connect(&address).timeout_at(deadline))?;
-        info!("Connected to {}", address);
+impl Client {
+    pub async fn start_connect(address: SocketAddr, config: Config) -> Result<Client, Error> {
+        let handshake_deadline = Instant::now() + config.handshake_timeout;
+        let request_timeout = config.request_timeout;
 
+        let handler = ConnectionHandler::new(config);
+
+        let ready = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = oneshot::channel();
         let awaitable = ready_rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(deadline)
-            .map_err(convert_timeout_error);
+            .timeout_at(handshake_deadline);
+        let (ready_waiter_tx, mut ready_waiter_rx) =
+            channel::<oneshot::Sender<()>>(READY_CHAN_BUFFER_SIZE);
+        let encoding = Arc::new(RwLock::new(None));
 
-        let request_timeout = config.request_timeout;
-        let handler = ConnectionHandler::new(config);
-        let connection = Connection::spawn(tcp_stream, handler, deadline, Some(ready_tx));
-        let _result = await!(awaitable)?;
+        let connection =
+            Connection::spawn_from_address(address, handler, handshake_deadline, Some(ready_tx));
+
+        let task_encoding = encoding.clone();
+        let task_ready = ready.clone();
+        tokio::spawn_async(async move {
+            if let Ok(ready_encoding) = await!(awaitable) {
+                *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);
+                task_ready.store(true, SeqCst);
+                while let Some(Ok(tx)) = await!(ready_waiter_rx.next()) {
+                    tx.send(()).ok();
+                }
+            }
+        });
+
         Ok(Self {
             connection,
+            handshake_deadline,
             request_timeout,
+            ready,
+            ready_waiter_tx,
+            encoding,
         })
     }
 
+    pub fn encoding(&self) -> Result<&'static str, Error> {
+        if !self.is_ready() {
+            return Err(LoquiError::NotReady.into());
+        }
+
+        self.encoding
+            .read()
+            .expect("Failed to read encoding.")
+            .clone()
+            .ok_or_else(|| Error::from(LoquiError::NoClientEncoding))
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(SeqCst)
+    }
+
     /// Send a request to the server.
-    pub async fn request(&self, payload: F::Encoded) -> Result<F::Decoded, Error> {
+    pub async fn request(&self, payload: Vec<u8>) -> Result<Vec<u8>, Error> {
+        if self.is_closed() {
+            return Err(LoquiError::ConnectionClosed.into());
+        }
+        if !self.is_ready() {
+            return Err(LoquiError::NotReady.into());
+        }
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
@@ -48,9 +99,29 @@ impl<F: EncoderFactory> Client<F> {
     }
 
     /// Send a push to the server.
-    pub async fn push(&self, payload: F::Encoded) -> Result<(), Error> {
+    pub async fn push(&self, payload: Vec<u8>) -> Result<(), Error> {
+        if self.is_closed() {
+            return Err(LoquiError::ConnectionClosed.into());
+        }
+        if !self.is_ready() {
+            return Err(LoquiError::NotReady.into());
+        }
         let push = InternalEvent::Push { payload };
         self.connection.send(push)
+    }
+
+    pub async fn await_ready(&self) -> Result<(), Error> {
+        let (tx, rx) = oneshot::channel();
+        await!(self
+            .ready_waiter_tx
+            .clone()
+            .send(tx)
+            .map_err(Error::from)
+            .timeout_at(self.handshake_deadline))?;
+        let awaitable = rx
+            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
+            .timeout_at(self.handshake_deadline);
+        await!(awaitable)
     }
 
     pub fn is_closed(&self) -> bool {

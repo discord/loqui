@@ -47,6 +47,8 @@ pub enum LoquiError {
     RequestTimeout,
     #[fail(display = "Reached max backoff elapsed time.")]
     ReachedMaxBackoffElapsedTime,
+    #[fail(display = "No client encoding.")]
+    NoClientEncoding,
 }
 
 pub enum LoquiErrorCode {

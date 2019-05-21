@@ -12,4 +12,6 @@ pub struct Config<R: RequestHandler> {
     pub ping_interval: Duration,
     /// The duration before we give up handshaking.
     pub handshake_timeout: Duration,
+    /// Supported encodings.
+    pub supported_encodings: &'static [&'static str],
 }
