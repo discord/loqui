@@ -44,19 +44,25 @@ impl<H: Handler> Connection<H> {
             self_sender: self_sender.clone(),
         };
         tokio::spawn_async(async move {
-            let tcp_stream = await!(TcpStream::connect(&address)).unwrap(); //.timeout_at(deadline))?;
-            info!("Connected to {}", address);
-            let result = await!(run(
-                tcp_stream,
-                self_sender,
-                self_rx,
-                handler,
-                handshake_deadline,
-                ready_tx,
-            ));
-            if let Err(e) = result {
-                error!("Connection closed. error={:?}", e)
-            }
+            match await!(TcpStream::connect(&address).timeout_at(handshake_deadline)) {
+                Ok(tcp_stream) => {
+                    info!("Connected to {}", address);
+                    let result = await!(run(
+                        tcp_stream,
+                        self_sender,
+                        self_rx,
+                        handler,
+                        handshake_deadline,
+                        ready_tx,
+                    ));
+                    if let Err(e) = result {
+                        error!("Connection closed. error={:?}", e)
+                    }
+                }
+                Err(e) => {
+                    error!("Connect failed. error={:?}", e)
+                }
+            };
         });
         connection
     }
