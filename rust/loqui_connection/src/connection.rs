@@ -56,7 +56,7 @@ impl<H: Handler> Connection<H> {
                         ready_tx,
                     ));
                     if let Err(e) = result {
-                        error!("Connection closed. error={:?}", e)
+                        warn!("Connection closed. ip={:?} error={:?}", address, e)
                     }
                 }
                 Err(e) => error!("Connect failed. error={:?}", e),
