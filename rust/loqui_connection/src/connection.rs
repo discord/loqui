@@ -59,9 +59,7 @@ impl<H: Handler> Connection<H> {
                         error!("Connection closed. error={:?}", e)
                     }
                 }
-                Err(e) => {
-                    error!("Connect failed. error={:?}", e)
-                }
+                Err(e) => error!("Connect failed. error={:?}", e),
             };
         });
         connection
@@ -87,6 +85,7 @@ impl<H: Handler> Connection<H> {
             self_sender: self_sender.clone(),
         };
         tokio::spawn_async(async move {
+            let ip = tcp_stream.peer_addr();
             let result = await!(run(
                 tcp_stream,
                 self_sender,
@@ -96,7 +95,7 @@ impl<H: Handler> Connection<H> {
                 ready_tx,
             ));
             if let Err(e) = result {
-                error!("Connection closed. error={:?}", e)
+                warn!("Connection closed. ip={:?}, error={:?}", ip, e)
             }
         });
         connection
