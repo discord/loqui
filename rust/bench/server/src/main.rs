@@ -6,7 +6,7 @@ use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_server::{Config, RequestHandler, Server};
 use std::future::Future;
 use std::time::Duration;
-use tokio_futures::compat::{infallible_into_01};
+use tokio_futures::compat::infallible_into_01;
 
 struct EchoHandler {}
 

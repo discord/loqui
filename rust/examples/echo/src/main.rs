@@ -60,7 +60,11 @@ async fn client_send_loop() {
     };
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-    let client = Arc::new(Client::start_connect(address, config).await.expect("Failed to connect"));
+    let client = Arc::new(
+        Client::start_connect(address, config)
+            .await
+            .expect("Failed to connect"),
+    );
     client.await_ready().await.expect("Ready failed");
 
     let messages = &["test", "test2", "test3"];

@@ -1,9 +1,11 @@
 use failure::Error;
-use futures::future::Future;
+use futures::future::Future as OldFuture;
 use futures::sync::oneshot::{self, Sender};
 use futures_timer::FutureExt;
 use loqui_connection::{convert_timeout_error, LoquiError};
+use std::future::Future;
 use std::time::{Duration, Instant};
+use tokio_futures::compat::forward::IntoAwaitable;
 
 #[derive(Debug)]
 pub struct ResponseWaiter {
@@ -23,7 +25,7 @@ impl ResponseWaiter {
     ///
     /// `LoquiError::RequestTimeout` or some other error from the server.
     ///
-    pub fn new(timeout: Duration) -> (Self, impl Future<Item = Vec<u8>, Error = Error>) {
+    pub fn new(timeout: Duration) -> (Self, impl Future<Output = Result<Vec<u8>, Error>>) {
         let (tx, rx) = oneshot::channel();
 
         let deadline = Instant::now() + timeout;
@@ -33,7 +35,8 @@ impl ResponseWaiter {
             .timeout_at(deadline)
             .map_err(convert_timeout_error)
             // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
-            .then(|result| result.unwrap_or_else(Err));
+            .then(|result| result.unwrap_or_else(Err))
+            .into_awaitable();
 
         (Self { tx, deadline }, awaitable)
     }
@@ -53,6 +56,7 @@ mod tests {
     use super::*;
     use crate::future_utils::{block_on_all, spawn};
     use futures_timer::Delay;
+    use tokio_futures::compat::forward::IntoAwaitable;
 
     #[test]
     fn it_receives_ok() {

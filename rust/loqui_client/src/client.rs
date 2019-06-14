@@ -96,7 +96,7 @@ impl Client {
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
-        awaitable.into_awaitable().await
+        awaitable.await
     }
 
     /// Send a push to the server.
