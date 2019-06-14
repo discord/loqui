@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, futures_api)]
+#![feature(await_macro, async_await)]
 
 use bytesize::ByteSize;
 use failure::Error;
@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tokio::await;
+use tokio_futures::compat::infallible_into_01;
 
 #[derive(Default)]
 struct State {
@@ -30,7 +30,7 @@ async fn do_work(client: Arc<Client>, state: Arc<State>) {
     let start = Instant::now();
     state.in_flight.fetch_add(1, Ordering::SeqCst);
 
-    match await!(client.request(message)) {
+    match client.request(message).await {
         Ok(payload) => {
             if &payload[..] != b"hello world" {
                 state.failed_requests.fetch_add(1, Ordering::SeqCst);
@@ -56,7 +56,7 @@ async fn do_work(client: Arc<Client>, state: Arc<State>) {
 
 async fn work_loop(client: Arc<Client>, state: Arc<State>) {
     loop {
-        await!(do_work(client.clone(), state.clone()));
+        do_work(client.clone(), state.clone()).await;
     }
 }
 
@@ -94,10 +94,10 @@ fn main() -> Result<(), Error> {
     let log_state = state.clone();
     configure_logging()?;
 
-    tokio::run_async(async move {
-        tokio::spawn_async(async move {
+    tokio::run(infallible_into_01(async move {
+        tokio::spawn(infallible_into_01(async move {
             log_loop(log_state.clone());
-        });
+        }));
 
         let config = Config {
             max_payload_size: ByteSize::kb(5000),
@@ -106,13 +106,14 @@ fn main() -> Result<(), Error> {
             supported_encodings: &["msgpack", "identity"],
         };
         let client = Arc::new(
-            await!(Client::start_connect(make_socket_address(), config))
+            Client::start_connect(make_socket_address(), config)
+                .await
                 .expect("Failed to connect"),
         );
-        await!(client.await_ready()).expect("Ready failed");
+        client.await_ready().await.expect("Ready failed");
         for _ in 0..100 {
-            tokio::spawn_async(work_loop(client.clone(), state.clone()));
+            tokio::spawn(infallible_into_01(work_loop(client.clone(), state.clone())));
         }
-    });
+    }));
     Ok(())
 }

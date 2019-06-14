@@ -9,6 +9,7 @@ failure = "0.1.1"
 loqui_client = { path = "../../loqui_client" }
 loqui_server = { path = "../../loqui_server" }
 tokio = { version = "0.1.21"}
+tokio-futures = { git = "https://github.com/tokio-rs/tokio", rev = "cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0", features = ["async-await-preview"] }
 log = "0.4"
 fern = "0.5"
 chrono = "0.4"

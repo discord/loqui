@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, futures_api, existential_type)]
+#![feature(await_macro, async_await, existential_type)]
 
 use bytesize::ByteSize;
 use failure::Error;
@@ -6,6 +6,7 @@ use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_server::{Config, RequestHandler, Server};
 use std::future::Future;
 use std::time::Duration;
+use tokio_futures::compat::{infallible_into_01};
 
 struct EchoHandler {}
 
@@ -24,7 +25,7 @@ impl RequestHandler for EchoHandler {
 
 fn main() -> Result<(), Error> {
     configure_logging()?;
-    tokio::run_async(async {
+    tokio::run(infallible_into_01(async {
         let config = Config {
             request_handler: EchoHandler {},
             max_payload_size: ByteSize::kb(5000),
@@ -35,6 +36,6 @@ fn main() -> Result<(), Error> {
         let server = Server::new(config);
         let result = await!(server.listen_and_serve(make_socket_address()));
         println!("Run result={:?}", result);
-    });
+    }));
     Ok(())
 }

@@ -259,6 +259,7 @@ dependencies = [
  "loqui_bench_common 0.0.1",
  "loqui_client 0.0.1",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-futures 0.2.0 (git+https://github.com/tokio-rs/tokio?rev=cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0)",
 ]
 
 [[package]]
@@ -281,6 +282,7 @@ dependencies = [
  "loqui_bench_common 0.0.1",
  "loqui_server 0.0.1",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-futures 0.2.0 (git+https://github.com/tokio-rs/tokio?rev=cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0)",
 ]
 
 [[package]]
@@ -331,6 +333,7 @@ dependencies = [
  "loqui_client 0.0.1",
  "loqui_server 0.0.1",
  "tokio 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-futures 0.2.0 (git+https://github.com/tokio-rs/tokio?rev=cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0)",
 ]
 
 [[package]]
