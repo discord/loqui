@@ -13,10 +13,11 @@ use loqui_protocol::VERSION;
 use std::collections::HashMap;
 use std::future::Future;
 use std::time::{Duration, Instant};
-use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
+use tokio_futures::compat::forward::IntoAwaitable;
+use tokio_futures::stream::StreamExt;
 
 pub enum InternalEvent {
     Request {
@@ -62,11 +63,11 @@ impl Handler for ConnectionHandler {
         async move {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
-            writer = match await!(writer.send(UpgradeFrame::Request)) {
+            writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
                 Ok(writer) => writer,
                 Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
             };
-            match await!(reader.next()) {
+            match reader.next().await {
                 Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
                 Some(Err(e)) => Err(e),
@@ -79,12 +80,12 @@ impl Handler for ConnectionHandler {
         let hello = self.make_hello();
         let supported_encodings = self.config.supported_encodings;
         async move {
-            reader_writer = match await!(reader_writer.write(hello)) {
+            reader_writer = match reader_writer.write(hello).await {
                 Ok(read_writer) => read_writer,
                 Err(e) => return Err((e.into(), None)),
             };
 
-            match await!(reader_writer.reader.next()) {
+            match reader_writer.reader.next().await {
                 Some(Ok(frame)) => match Self::handle_handshake_frame(frame, supported_encodings) {
                     Ok(ready) => Ok((ready, reader_writer)),
                     Err(e) => Err((e, Some(reader_writer))),
@@ -267,7 +268,6 @@ impl ConnectionHandler {
 mod test {
     use super::*;
     use crate::future_utils::block_on_all;
-    use tokio::await;
 
     const ENCODING: &str = "identity";
 
@@ -309,7 +309,7 @@ mod test {
             }
             _other => panic!("request not returned"),
         }
-        let result = block_on_all(async { await!(awaitable) }).unwrap();
+        let result = block_on_all(async { awaitable.await }).unwrap();
         assert_eq!(result, payload)
     }
 
@@ -333,7 +333,7 @@ mod test {
             payload: vec![],
         };
         let _frame = handler.handle_frame(response.into(), ENCODING);
-        let result = block_on_all(async { await!(awaitable) });
+        let result = block_on_all(async { awaitable.await });
         assert!(result.is_err())
     }
 

@@ -53,7 +53,6 @@ mod tests {
     use super::*;
     use crate::future_utils::{block_on_all, spawn};
     use futures_timer::Delay;
-    use tokio::await;
 
     #[test]
     fn it_receives_ok() {
@@ -63,7 +62,7 @@ mod tests {
                 waiter.notify(Ok(vec![]));
                 Ok(())
             });
-            await!(awaitable)
+            awaitable.await
         });
         assert!(result.is_ok())
     }
@@ -77,7 +76,7 @@ mod tests {
                 waiter.notify(Err(LoquiError::ConnectionClosed.into()));
                 Ok(())
             });
-            await!(awaitable)
+            awaitable.await
         });
         assert!(result.is_err())
     }
@@ -88,11 +87,14 @@ mod tests {
 
         let result = block_on_all(async {
             spawn(async {
-                await!(Delay::new(Duration::from_millis(50))).unwrap();
+                Delay::new(Duration::from_millis(50))
+                    .into_awaitable()
+                    .await
+                    .unwrap();
                 waiter.notify(Ok(vec![]));
                 Ok(())
             });
-            await!(awaitable)
+            awaitable.await
         });
         assert!(result.is_err())
     }
