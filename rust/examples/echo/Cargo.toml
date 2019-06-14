@@ -8,7 +8,7 @@ edition = "2018"
 failure = "0.1.1"
 loqui_client = { path = "../../loqui_client" }
 loqui_server = { path = "../../loqui_server" }
-tokio = { version = "0.1.16", features = ["async-await-preview"] }
+tokio = { version = "0.1.21"}
 log = "0.4"
 fern = "0.5"
 chrono = "0.4"

@@ -6,6 +6,7 @@ use super::sender::Sender;
 use crate::LoquiErrorCode;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
+use tokio_futures::compat::infallible_into_01;
 
 /// Main handler of connection `Event`s.
 pub struct EventHandler<H: Handler> {
@@ -93,11 +94,11 @@ impl<H: Handler> EventHandler<H> {
         // to the main event loop. The main event loop will send it through the socket.
         if let Some(future) = maybe_future {
             let connection_sender = self.self_sender.clone();
-            tokio::spawn_async(async move {
+            tokio::spawn(infallible_into_01(async move {
                 let response = await!(future);
                 // It's okay to ignore this result. The connection closed.
                 let _result = connection_sender.response_complete(response);
-            });
+            }));
         }
         Ok(None)
     }

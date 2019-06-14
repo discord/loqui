@@ -8,10 +8,10 @@ use loqui_protocol::{
     frames::{GoAway, LoquiFrame},
 };
 use std::net::Shutdown;
-use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
+use tokio_futures::compat::forward::IntoAwaitable;
 
 /// Used to read frames off the tcp socket.
 pub type Reader = SplitStream<Framed<TcpStream, Codec>>;
@@ -39,7 +39,7 @@ impl Writer {
 
     /// Tries to write a `LoquiFrame` to the socket. Returns an error if the socket has closed.
     pub async fn write<F: Into<LoquiFrame>>(mut self, frame: F) -> Result<Self, LoquiError> {
-        match await!(self.inner.send(frame.into())) {
+        match self.inner.send(frame.into()).into_awaitable().await {
             Ok(new_inner) => {
                 self.inner = new_inner;
                 Ok(self)
@@ -61,7 +61,7 @@ impl Writer {
             payload: vec![],
         };
         debug!("Closing. Sending GoAway. go_away={:?}", go_away);
-        match await!(self.inner.send(go_away.into())) {
+        match self.inner.send(go_away.into()).into_awaitable().await {
             Ok(new_inner) => {
                 if let Some(reader) = reader {
                     if let Ok(tcp_stream) =
