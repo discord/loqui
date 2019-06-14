@@ -1,7 +1,7 @@
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::{Handler, Ready};
-use crate::select_break::{StreamExt as SelectBreakStreamExt};
+use crate::select_break::StreamExt as SelectBreakStreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
@@ -11,12 +11,12 @@ use futures::sync::oneshot;
 use futures_timer::FutureExt;
 use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
-use tokio_futures::stream::StreamExt;
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio_futures::compat::{into_01, forward::IntoAwaitable, infallible_into_01};
+use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01, into_01};
+use tokio_futures::stream::StreamExt;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -153,8 +153,10 @@ async fn run<H: Handler>(
     handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> Result<(), Error> {
-    let (ready, reader_writer, handler) =
-        negotiate(tcp_stream, handler, ready_tx).timeout_at(handshake_deadline).into_awaitable().await?;
+    let (ready, reader_writer, handler) = negotiate(tcp_stream, handler, ready_tx)
+        .timeout_at(handshake_deadline)
+        .into_awaitable()
+        .await?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
 

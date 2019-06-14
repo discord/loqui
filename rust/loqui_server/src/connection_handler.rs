@@ -10,10 +10,11 @@ use loqui_protocol::VERSION;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_codec::Framed;
+use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
+use tokio_futures::stream::StreamExt;
 
 pub struct ConnectionHandler<R: RequestHandler> {
     config: Arc<Config<R>>,
@@ -47,9 +48,9 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
 
-            match await!(reader.next()) {
+            match reader.next().await {
                 Some(Ok(UpgradeFrame::Request)) => {
-                    writer = match await!(writer.send(UpgradeFrame::Response)) {
+                    writer = match writer.send(UpgradeFrame::Response).into_awaitable().await {
                         Ok(writer) => writer,
                         Err(e) => return Err(e),
                     };
@@ -66,11 +67,11 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         let ping_interval = self.config.ping_interval;
         let supported_encodings = self.config.supported_encodings;
         async move {
-            match await!(reader_writer.reader.next()) {
+            match reader_writer.reader.next().await {
                 Some(Ok(frame)) => {
                     match Self::handle_handshake_frame(frame, ping_interval, supported_encodings) {
                         Ok((ready, hello_ack)) => {
-                            reader_writer = match await!(reader_writer.write(hello_ack)) {
+                            reader_writer = match reader_writer.write(hello_ack).await {
                                 Ok(reader_writer) => reader_writer,
                                 Err(e) => return Err((e.into(), None)),
                             };
@@ -92,7 +93,11 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     ) -> Option<Self::HandleFrameFuture> {
         match frame {
             DelegatedFrame::Push(push) => {
-                tokio::spawn_async(handle_push(self.config.clone(), push, encoding));
+                tokio::spawn(infallible_into_01(handle_push(
+                    self.config.clone(),
+                    push,
+                    encoding,
+                )));
                 None
             }
             DelegatedFrame::Request(request) => {
@@ -188,7 +193,7 @@ async fn handle_push<R: RequestHandler>(
         payload,
         flags: _flags,
     } = push;
-    await!(config.request_handler.handle_push(payload, encoding))
+    config.request_handler.handle_push(payload, encoding).await
 }
 
 async fn handle_request<R: RequestHandler>(

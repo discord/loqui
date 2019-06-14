@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::*;
+use tokio_futures::stream::StreamExt;
 
 pub struct Server<R: RequestHandler> {
     config: Arc<Config<R>>,
