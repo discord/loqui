@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, futures_api, existential_type)]
+#![feature(await_macro, async_await, existential_type)]
 
 #[macro_use]
 extern crate log;

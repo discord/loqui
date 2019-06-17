@@ -1,7 +1,7 @@
 use crate::event_handler::EventHandler;
 use crate::framed_io::ReaderWriter;
 use crate::handler::{Handler, Ready};
-use crate::select_break::StreamExt;
+use crate::select_break::StreamExt as SelectBreakStreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
@@ -13,10 +13,10 @@ use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use std::time::Instant;
-use tokio::await;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio_async_await::compat::backward::Compat;
+use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01, into_01};
+use tokio_futures::stream::StreamExt;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -43,8 +43,12 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        tokio::spawn_async(async move {
-            match await!(TcpStream::connect(&address).timeout_at(handshake_deadline)) {
+        tokio::spawn(infallible_into_01(async move {
+            match TcpStream::connect(&address)
+                .timeout_at(handshake_deadline)
+                .into_awaitable()
+                .await
+            {
                 Ok(tcp_stream) => {
                     info!("Connected to {}", address);
                     let result = await!(run(
@@ -61,7 +65,7 @@ impl<H: Handler> Connection<H> {
                 }
                 Err(e) => error!("Connect failed. error={:?}", e),
             };
-        });
+        }));
         connection
     }
 
@@ -84,7 +88,7 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        tokio::spawn_async(async move {
+        tokio::spawn(infallible_into_01(async move {
             let ip = tcp_stream.peer_addr();
             let result = await!(run(
                 tcp_stream,
@@ -97,7 +101,7 @@ impl<H: Handler> Connection<H> {
             if let Err(e) = result {
                 warn!("Connection closed. ip={:?} error={:?}", ip, e)
             }
-        });
+        }));
         connection
     }
 
@@ -149,8 +153,10 @@ async fn run<H: Handler>(
     handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> Result<(), Error> {
-    let (ready, reader_writer, handler) =
-        await!(negotiate(tcp_stream, handler, ready_tx).timeout_at(handshake_deadline))?;
+    let (ready, reader_writer, handler) = negotiate(tcp_stream, handler, ready_tx)
+        .timeout_at(handshake_deadline)
+        .into_awaitable()
+        .await?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
 
@@ -170,7 +176,7 @@ async fn run<H: Handler>(
         .select_break(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoding);
-    while let Some(event) = await!(stream.next()) {
+    while let Some(event) = stream.next().await {
         let event = event?;
 
         match event_handler.handle_event(event) {
@@ -198,7 +204,7 @@ fn negotiate<H: Handler>(
     mut handler: H,
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
-    Compat::new(async move {
+    into_01(async move {
         let tcp_stream = await!(handler.upgrade(tcp_stream))?;
         let max_payload_size = handler.max_payload_size();
         let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);

@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, futures_api)]
+#![feature(await_macro, async_await)]
 #![feature(existential_type)]
 
 #[macro_use]
@@ -15,7 +15,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::{thread, time::Duration};
-use tokio::await;
+use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
 
 const ADDRESS: &str = "127.0.0.1:8080";
 
@@ -40,12 +40,12 @@ impl RequestHandler for EchoHandler {
 
 fn main() -> Result<(), Error> {
     configure_logging()?;
-    tokio::run_async(async {
+    tokio::run(infallible_into_01(async {
         spawn_server();
         // Wait for server to start.
         thread::sleep(Duration::from_secs(1));
-        await!(client_send_loop());
-    });
+        client_send_loop().await;
+    }));
     Ok(())
 }
 
@@ -60,19 +60,22 @@ async fn client_send_loop() {
     };
 
     let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-    let client =
-        Arc::new(await!(Client::start_connect(address, config)).expect("Failed to connect"));
-    await!(client.await_ready()).expect("Ready failed");
+    let client = Arc::new(
+        Client::start_connect(address, config)
+            .await
+            .expect("Failed to connect"),
+    );
+    client.await_ready().await.expect("Ready failed");
 
     let messages = &["test", "test2", "test3"];
     loop {
         for message in messages {
             let client = client.clone();
-            tokio::spawn_async(async move {
-                if let Err(e) = await!(client.push(message.as_bytes().to_vec())) {
+            tokio::spawn(infallible_into_01(async move {
+                if let Err(e) = client.push(message.as_bytes().to_vec()).await {
                     error!("Push failed. error={:?}", e);
                 }
-                match await!(client.request(message.as_bytes().to_vec())) {
+                match client.request(message.as_bytes().to_vec()).await {
                     Ok(response) => {
                         info!(
                             "Received response: {}",
@@ -83,15 +86,18 @@ async fn client_send_loop() {
                         error!("Request failed. error={}", e);
                     }
                 }
-            });
+            }));
         }
 
-        await!(Delay::new(Duration::from_secs(1))).expect("Failed to delay.");
+        Delay::new(Duration::from_secs(1))
+            .into_awaitable()
+            .await
+            .expect("Failed to delay.");
     }
 }
 
 fn spawn_server() {
-    tokio::spawn_async(async {
+    tokio::spawn(infallible_into_01(async {
         let config = ServerConfig {
             request_handler: EchoHandler {},
             max_payload_size: ByteSize::kb(5000),
@@ -103,7 +109,7 @@ fn spawn_server() {
         let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
         let result = await!(server.listen_and_serve(address));
         println!("Run result={:?}", result);
-    });
+    }));
 }
 
 fn configure_logging() -> Result<(), Error> {

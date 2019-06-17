@@ -39,13 +39,13 @@ where
     fn poll(&mut self) -> Poll<Option<S1::Item>, S1::Error> {
         let (a, b) = if self.flag {
             (
-                &mut self.stream2 as &mut Stream<Item = _, Error = _>,
-                &mut self.stream1 as &mut Stream<Item = _, Error = _>,
+                &mut self.stream2 as &mut dyn Stream<Item = _, Error = _>,
+                &mut self.stream1 as &mut dyn Stream<Item = _, Error = _>,
             )
         } else {
             (
-                &mut self.stream1 as &mut Stream<Item = _, Error = _>,
-                &mut self.stream2 as &mut Stream<Item = _, Error = _>,
+                &mut self.stream1 as &mut dyn Stream<Item = _, Error = _>,
+                &mut self.stream2 as &mut dyn Stream<Item = _, Error = _>,
             )
         };
 

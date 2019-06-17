@@ -9,7 +9,7 @@ failure = "0.1.1"
 log = "0.4"
 loqui_protocol = { path = "../loqui_protocol" }
 loqui_connection = { path = "../loqui_connection" }
-tokio = { version = "0.1.19", features = ["async-await-preview"] }
-tokio-sync = "0.1.5"
+tokio = { version = "0.1.21"}
 bytesize = "1.0.0"
+tokio-futures = { git = "https://github.com/tokio-rs/tokio", rev = "cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0", features = ["async-await-preview"] }
 tokio-codec = "0.1"

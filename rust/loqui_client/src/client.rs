@@ -12,8 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
-use tokio::await;
 use tokio::prelude::*;
+use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
+use tokio_futures::stream::StreamExt;
 
 pub struct Client {
     connection: Connection<ConnectionHandler>,
@@ -37,7 +38,8 @@ impl Client {
         let (ready_tx, ready_rx) = oneshot::channel();
         let awaitable = ready_rx
             .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(handshake_deadline);
+            .timeout_at(handshake_deadline)
+            .into_awaitable();
         let (ready_waiter_tx, mut ready_waiter_rx) =
             channel::<oneshot::Sender<()>>(READY_CHAN_BUFFER_SIZE);
         let encoding = Arc::new(RwLock::new(None));
@@ -47,15 +49,15 @@ impl Client {
 
         let task_encoding = encoding.clone();
         let task_ready = ready.clone();
-        tokio::spawn_async(async move {
-            if let Ok(ready_encoding) = await!(awaitable) {
+        tokio::spawn(infallible_into_01(async move {
+            if let Ok(ready_encoding) = awaitable.await {
                 *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);
                 task_ready.store(true, SeqCst);
-                while let Some(Ok(tx)) = await!(ready_waiter_rx.next()) {
+                while let Some(Ok(tx)) = ready_waiter_rx.next().await {
                     tx.send(()).ok();
                 }
             }
-        });
+        }));
 
         Ok(Self {
             connection,
@@ -94,7 +96,7 @@ impl Client {
         let (waiter, awaitable) = ResponseWaiter::new(self.request_timeout);
         let request = InternalEvent::Request { payload, waiter };
         self.connection.send(request)?;
-        await!(awaitable)
+        awaitable.await
     }
 
     /// Send a push to the server.
@@ -111,16 +113,19 @@ impl Client {
 
     pub async fn await_ready(&self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
-        await!(self
+
+        let _result = self
             .ready_waiter_tx
             .clone()
             .send(tx)
             .map_err(Error::from)
-            .timeout_at(self.handshake_deadline))?;
-        let awaitable = rx
-            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(self.handshake_deadline);
-        await!(awaitable)
+            .timeout_at(self.handshake_deadline)
+            .into_awaitable()
+            .await?;
+        rx.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
+            .timeout_at(self.handshake_deadline)
+            .into_awaitable()
+            .await
     }
 
     pub fn is_closed(&self) -> bool {
