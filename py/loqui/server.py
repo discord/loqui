@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import socket
 from gevent.server import StreamServer
 
@@ -20,7 +22,7 @@ class LoquiServer:
         self.server.stop()
 
     def _handle_connection(self, sock, addr):
-        print 'handling connection from', sock
+        print('handling connection from', sock)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(False)
         session = LoquiSocketSession(sock, self._encoders, False, self.handle_request, self.handle_push)

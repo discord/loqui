@@ -1,4 +1,5 @@
-from client_bench_base import run_client_bench
+from __future__ import absolute_import
+from .client_bench_base import run_client_bench
 from gevent.monkey import patch_all
 patch_all()
 

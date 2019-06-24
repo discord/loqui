@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import time
 
 import gevent
@@ -17,9 +19,9 @@ def log_loop():
         elapsed = now - last
         req_sec = (i - last_i) / elapsed
 
-        print '%s total requests (%.2f/sec). last log %.2f sec ago.' % (
+        print('%s total requests (%.2f/sec). last log %.2f sec ago.' % (
             i, req_sec, elapsed
-        )
+        ))
         last_i = i
         last = now
 
@@ -34,7 +36,7 @@ class Server(LoquiServer):
         return 'm' * 1024
 
     def handle_push(self, push, session):
-        print 'pushed', push.data
+        print('pushed', push.data)
         return
 
 

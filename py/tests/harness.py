@@ -1,4 +1,6 @@
+from __future__ import absolute_import
 import struct
+import six
 
 uint8_t = lambda v: ('B', v)
 uint16_t = lambda v: ('H', v)
@@ -31,9 +33,9 @@ def pack(*struct_types):
         fmt.append(fmt_char)
         values.append(value)
 
-    val = struct.pack(b''.join(fmt), *values)
+    val = struct.pack(six.ensure_binary(''.join(fmt)), *values)
     if extra:
-        val += ''.join(extra)
+        val += b''.join(extra)
 
     return val
 

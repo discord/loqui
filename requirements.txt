@@ -1,3 +1,4 @@
-gevent==1.1.1
+gevent==1.4.0
 msgpack==0.6.1
-erlpack==0.3.2
+-egit+https://github.com/discordapp/erlpack.git@0acb09b505e26e591ea04e547a19f4138f92c417#egg=erlpack
+six==1.12.0

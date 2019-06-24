@@ -1,4 +1,5 @@
-import harness
+from __future__ import absolute_import
+from . import harness
 from loqui.stream_handler import LoquiStreamHandler
 
 
@@ -12,15 +13,15 @@ def _test_encoder(encode_fn, expected_result):
 
 def test_encode_op_hello():
     _test_encoder(
-        lambda h: h.send_hello(15, ["msgpack", "json"], ["gzip"]),
-        harness.encode_hello(15, 1, "msgpack,json|gzip")
+        lambda h: h.send_hello(15, [b"msgpack", b"json"], [b"gzip"]),
+        harness.encode_hello(15, 1, b"msgpack,json|gzip")
     )
 
 
 def test_encode_op_hello_ack():
     _test_encoder(
-        lambda h: h.send_hello_ack(15, 32000, "msgpack", "gzip"),
-        harness.encode_hello_ack(15, 32000, "msgpack|gzip")
+        lambda h: h.send_hello_ack(15, 32000, b"msgpack", b"gzip"),
+        harness.encode_hello_ack(15, 32000, b"msgpack|gzip")
     )
 
 
@@ -40,34 +41,34 @@ def test_encode_op_pong():
 
 def test_encode_request():
     _test_encoder(
-        lambda h: h.send_request(31, "hello this is my data"),
-        harness.encode_request(31, 1, "hello this is my data")
+        lambda h: h.send_request(31, b"hello this is my data"),
+        harness.encode_request(31, 1, b"hello this is my data")
     )
 
 
 def test_encode_response():
     _test_encoder(
-        lambda h: h.send_response(31, 3000, "hello this is my data"),
-        harness.encode_response(31, 3000, "hello this is my data")
+        lambda h: h.send_response(31, 3000, b"hello this is my data"),
+        harness.encode_response(31, 3000, b"hello this is my data")
     )
 
 
 def test_encode_push():
     _test_encoder(
-        lambda h: h.send_push(91, "hello this is my push"),
-        harness.encode_push(91, "hello this is my push")
+        lambda h: h.send_push(91, b"hello this is my push"),
+        harness.encode_push(91, b"hello this is my push")
     )
 
 
 def test_encode_go_away():
     _test_encoder(
-        lambda h: h.send_goaway(151, 9001, "go away pls"),
-        harness.encode_go_away(151, 9001, "go away pls")
+        lambda h: h.send_goaway(151, 9001, b"go away pls"),
+        harness.encode_go_away(151, 9001, b"go away pls")
     )
 
 
 def test_encode_error():
     _test_encoder(
-        lambda h: h.send_error(151, 1444, 900100, "errrror!"),
-        harness.encode_error(151, 1444, 900100, "errrror!")
+        lambda h: h.send_error(151, 1444, 900100, b"errrror!"),
+        harness.encode_error(151, 1444, 900100, b"errrror!")
     )

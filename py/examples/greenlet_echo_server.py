@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import gevent
 from gevent.monkey import patch_all
 patch_all()
