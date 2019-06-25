@@ -20,7 +20,7 @@ Each frame starts with the opcode as an unsigned 8 bit integer (`uint8`). The op
 | `REQUEST`         | `5`   | Client           | Yes           |
 | `RESPONSE`        | `6`   | Server           | Yes           |
 | `PUSH`            | `7`   | Both             | Yes           |
-| `GOAWAY`          | `8`   | Both             | Yes           |
+| `GOAWAY`          | `8`   | Server           | Yes           |
 | `ERROR`           | `9`   | Server           | Yes           |
 
 Following the opcode is the frame header - and then if applicable - the payload.
@@ -85,7 +85,7 @@ the service that do not need to be acknowledged.
 | `6`    | binary   | Payload Data     |
 
 ## `Go Away`
-The client or server is getting ready to shut down the connection. It sends this opcode to tell the other end to finish sending
+The server is getting ready to shut down the connection. It sends this opcode to tell the client end to finish sending
 requests and to disconnect. The payload data can be empty, or a string with an error message. Or whatever else you want it to be.
 
 | Offset | Type     | Description      |
