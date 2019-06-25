@@ -1,21 +1,25 @@
+from __future__ import absolute_import
 import itertools
-import harness
+from . import harness
 
 from loqui.stream_handler import LoquiStreamHandler
 from loqui.opcodes import Request
 
+import six
+from six.moves import range
+
 
 def chunker(chunk_size, byt):
     biter = iter(byt)
-    return lambda: b''.join(itertools.islice(biter, 0, chunk_size))
+    return lambda: six.ensure_binary(''.join([chr(x) if isinstance(x, int) else x for x in itertools.islice(biter, 0, chunk_size)]))
 
 
 def test_stream_handler_encode_requests():
-    for chunk_size in xrange(1, 500):
+    for chunk_size in range(1, 500):
 
         handler = LoquiStreamHandler()
         expected_data = []
-        for i in xrange(1024):
+        for i in range(1024):
             data = b'hello world - %i' % i
 
             assert handler.current_seq() == i
@@ -35,13 +39,13 @@ def test_stream_handler_encode_requests():
 
 
 def test_stream_handler_encode_requests_interspersed():
-    for chunk_size in xrange(1, 500):
+    for chunk_size in range(1, 500):
 
         handler = LoquiStreamHandler()
         expected_data = []
         read_data = []
 
-        for i in xrange(1024):
+        for i in range(1024):
             data = b'hello world - %i' % i
 
             assert handler.current_seq() == i
@@ -83,8 +87,7 @@ def test_stream_handler_decode_full():
 def test_stream_handler_decode_byte_by_byte():
     payload = harness.encode_request(0, 1, b'this is a test') + harness.encode_request(5, 2, b'this is a test 2')
 
-    for i in xrange(1, len(payload)):
-
+    for i in range(1, len(payload)):
         handler = LoquiStreamHandler()
         chunk_get = chunker(i, payload)
         responses = []

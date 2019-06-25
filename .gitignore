@@ -4,6 +4,10 @@
 .cache
 build
 __pycache__
+.eggs
+.pytest_cache
+loqui.egg-info
+
 
 # ex
 /_build

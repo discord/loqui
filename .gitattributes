@@ -1,0 +1,4 @@
+py/loqui/client.c linguist-generated=true
+py/loqui/opcodes.c linguist-generated=true
+py/loqui/socket_session.c linguist-generated=true
+py/loqui/stream_handler.c linguist-generated=true

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from loqui.server import LoquiServer
 
 sessions = {}

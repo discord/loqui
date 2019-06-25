@@ -1,6 +1,6 @@
 import os
-from distutils.core import setup
-from distutils.extension import Extension
+from setuptools import setup
+from setuptools.extension import Extension
 import glob
 
 try:
@@ -14,7 +14,6 @@ except ImportError:
 extensions = []
 for file in glob.glob('py/loqui/*.%s' % ext):
     package = os.path.splitext(os.path.basename(file))[0]
-    print package
     extensions.append(Extension(
         'loqui.%s' % package,
         [file],
@@ -37,4 +36,6 @@ setup(
     },
     packages=['loqui'],
     ext_modules=extensions,
+    tests_require=['pytest'],
+    setup_requires=['pytest-runner']
 )

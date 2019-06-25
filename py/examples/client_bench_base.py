@@ -1,6 +1,9 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import time
 from gevent import GreenletExit
 from traceback import print_exc
+from six.moves import range
 
 i = 0
 max_age = 0.0
@@ -51,16 +54,16 @@ def run_client_bench(client, concurrency):
                 avg_time = 0
 
             # max_age = max(now - r.start_time for r in in_flight) if in_flight else 0
-            print '%s total requests (%.2f/sec). last log %.2f sec ago. %s failed, %s in flight, %.2f ms max, %.2f ms avg response time' % (
+            print('%s total requests (%.2f/sec). last log %.2f sec ago. %s failed, %s in flight, %.2f ms max, %.2f ms avg response time' % (
                 i, req_sec, elapsed, failed_requests, in_flight, max_age * 1000, avg_time * 1000
-            )
+            ))
             last_i = i
             last = now
             max_age = 0
             request_time = 0
 
     def work_loop():
-        print 'spawning work loop'
+        print('spawning work loop')
         global i, last
 
         while True:
@@ -69,7 +72,7 @@ def run_client_bench(client, concurrency):
     import gevent
     client.send_request('hi')
     greenlets = [gevent.spawn(log_loop)]
-    for _ in xrange(concurrency):
+    for _ in range(concurrency):
         greenlets.append(gevent.spawn(work_loop))
 
     import signal
@@ -77,4 +80,4 @@ def run_client_bench(client, concurrency):
     signal.signal(signal.SIGINT, lambda *_: gevent.killall(greenlets, block=False))
 
     gevent.joinall(greenlets)
-    print 'All greenlets have exited.'
+    print('All greenlets have exited.')
