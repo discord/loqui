@@ -1,8 +1,8 @@
-import Queue
 import socket
 
 import gevent
 import time
+import six.moves.queue
 from gevent.lock import RLock
 from gevent.event import AsyncResult
 
@@ -32,7 +32,7 @@ cdef class LoquiClient:
         self._connect_timeout = connect_timeout
         self._push_handler = push_handler
         self._connect_greenlet = None
-        self._push_queue = Queue.deque(maxlen=max_push_queue_len)
+        self._push_queue = six.moves.queue.deque(maxlen=max_push_queue_len)
         self._backoff = Backoff(min_delay=0.25, max_delay=2)
 
     cpdef set_push_handler(self, object push_handler):
