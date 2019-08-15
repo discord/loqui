@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await)]
+#![feature(async_await)]
 
 use bytesize::ByteSize;
 use failure::Error;

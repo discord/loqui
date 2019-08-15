@@ -125,7 +125,7 @@ impl ReaderWriter {
 
     /// Tries to write a `LoquiFrame` to the socket. Returns an error if the socket has closed.
     pub async fn write<F: Into<LoquiFrame>>(mut self, frame: F) -> Result<Self, LoquiError> {
-        match await!(self.writer.write(frame.into())) {
+        match self.writer.write(frame.into()).await {
             Ok(new_writer) => {
                 self.writer = new_writer;
                 Ok(self)
@@ -142,6 +142,6 @@ impl ReaderWriter {
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
     pub async fn close(self, error: Option<&Error>) {
-        await!(self.writer.close(error, Some(self.reader)))
+        self.writer.close(error, Some(self.reader)).await
     }
 }

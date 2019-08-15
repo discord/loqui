@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, existential_type)]
+#![feature(async_await, existential_type)]
 
 use bytesize::ByteSize;
 use failure::Error;
@@ -34,7 +34,7 @@ fn main() -> Result<(), Error> {
             supported_encodings: &["msgpack", "identity"],
         };
         let server = Server::new(config);
-        let result = await!(server.listen_and_serve(make_socket_address()));
+        let result = server.listen_and_serve(make_socket_address()).await;
         println!("Run result={:?}", result);
     }));
     Ok(())

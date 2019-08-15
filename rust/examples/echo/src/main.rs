@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await)]
+#![feature(async_await)]
 #![feature(existential_type)]
 
 #[macro_use]
@@ -107,7 +107,7 @@ fn spawn_server() {
         };
         let server = Server::new(config);
         let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
-        let result = await!(server.listen_and_serve(address));
+        let result = server.listen_and_serve(address).await;
         println!("Run result={:?}", result);
     }));
 }

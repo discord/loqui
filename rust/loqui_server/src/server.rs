@@ -32,7 +32,7 @@ impl<R: RequestHandler> Server<R> {
         info!("Starting {:?} ...", address);
         let mut incoming = listener.incoming();
         loop {
-            match await!(incoming.next()) {
+            match incoming.next().await {
                 Some(Ok(tcp_stream)) => {
                     self.handle_connection(tcp_stream);
                 }
