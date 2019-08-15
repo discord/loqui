@@ -8,6 +8,6 @@ edition = "2018"
 failure = "0.1.1"
 loqui_server = { path = "../../loqui_server" }
 tokio = { version = "0.1.21"}
-tokio-futures = { git = "https://github.com/tokio-rs/tokio", rev = "cb4aea394e6851ae8cc45a68beeaf2c93cc9a0c0", features = ["async-await-preview"] }
+tokio-futures = { git = "https://github.com/discordapp/tokio", rev = "0506fb8018d3090ef1417d3db17f22a951c0c530", features = ["async-await-preview"] }
 bytesize = "1.0.0"
 loqui_bench_common = { path = "../common" }

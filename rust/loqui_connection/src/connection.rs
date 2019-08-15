@@ -51,14 +51,14 @@ impl<H: Handler> Connection<H> {
             {
                 Ok(tcp_stream) => {
                     info!("Connected to {}", address);
-                    let result = await!(run(
+                    let result = run(
                         tcp_stream,
                         self_sender,
                         self_rx,
                         handler,
                         handshake_deadline,
                         ready_tx,
-                    ));
+                    ).await;
                     if let Err(e) = result {
                         warn!("Connection closed. ip={:?} error={:?}", address, e)
                     }
@@ -90,14 +90,14 @@ impl<H: Handler> Connection<H> {
         };
         tokio::spawn(infallible_into_01(async move {
             let ip = tcp_stream.peer_addr();
-            let result = await!(run(
+            let result = run(
                 tcp_stream,
                 self_sender,
                 self_rx,
                 handler,
                 handshake_deadline,
                 ready_tx,
-            ));
+            ).await;
             if let Err(e) = result {
                 warn!("Connection closed. ip={:?} error={:?}", ip, e)
             }
@@ -180,10 +180,10 @@ async fn run<H: Handler>(
         let event = event?;
 
         match event_handler.handle_event(event) {
-            Ok(Some(frame)) => writer = await!(writer.write(frame))?,
+            Ok(Some(frame)) => writer = writer.write(frame).await?,
             Ok(None) => {}
             Err(error) => {
-                await!(writer.close(Some(&error), None));
+                writer.close(Some(&error), None).await;
                 return Ok(());
             }
         }
@@ -205,11 +205,11 @@ fn negotiate<H: Handler>(
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
     into_01(async move {
-        let tcp_stream = await!(handler.upgrade(tcp_stream))?;
+        let tcp_stream = handler.upgrade(tcp_stream).await?;
         let max_payload_size = handler.max_payload_size();
         let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
 
-        match await!(handler.handshake(reader_writer)) {
+        match handler.handshake(reader_writer).await {
             Ok((ready, reader_writer)) => {
                 if let Some(ready_tx) = ready_tx {
                     ready_tx
@@ -221,7 +221,7 @@ fn negotiate<H: Handler>(
             Err((error, reader_writer)) => {
                 debug!("Not ready. e={:?}", error);
                 if let Some(reader_writer) = reader_writer {
-                    await!(reader_writer.close(Some(&error)));
+                    reader_writer.close(Some(&error)).await;
                 }
                 Err(error)
             }

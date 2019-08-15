@@ -95,7 +95,7 @@ impl<H: Handler> EventHandler<H> {
         if let Some(future) = maybe_future {
             let connection_sender = self.self_sender.clone();
             tokio::spawn(infallible_into_01(async move {
-                let response = await!(future);
+                let response = future.await;
                 // It's okay to ignore this result. The connection closed.
                 let _result = connection_sender.response_complete(response);
             }));

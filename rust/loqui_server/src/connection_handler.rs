@@ -206,9 +206,9 @@ async fn handle_request<R: RequestHandler>(
         flags: _flags,
         sequence_id,
     } = request;
-    let response_payload = await!(config
+    let response_payload = config
         .request_handler
-        .handle_request(request_payload, encoding));
+        .handle_request(request_payload, encoding).await;
     Ok(Response {
         flags: 0,
         sequence_id,

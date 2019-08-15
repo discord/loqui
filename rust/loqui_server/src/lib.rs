@@ -1,4 +1,4 @@
-#![feature(await_macro, async_await, existential_type)]
+#![feature(async_await, existential_type)]
 
 #[macro_use]
 extern crate log;
