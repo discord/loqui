@@ -1,5 +1,4 @@
 #![feature(async_await)]
-#![feature(existential_type)]
 
 #[macro_use]
 extern crate log;
@@ -14,6 +13,7 @@ use loqui_server::{Config as ServerConfig, RequestHandler, Server};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use async_trait::async_trait;
 use std::{thread, time::Duration};
 use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
 
