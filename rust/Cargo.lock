@@ -364,6 +364,7 @@ dependencies = [
 name = "loqui_server"
 version = "0.0.1"
 dependencies = [
+ "async-trait 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",

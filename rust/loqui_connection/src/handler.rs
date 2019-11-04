@@ -1,13 +1,13 @@
 use crate::framed_io::ReaderWriter;
-use async_trait::async_trait;
 use crate::id_sequence::IdSequence;
+use async_trait::async_trait;
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
 use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use std::pin::Pin;
 
 /// Specific types of loqui frames that are delegated to a connection handler.  The rest of the
 /// frames will be handled by the connection itself.
@@ -41,7 +41,10 @@ pub trait Handler: Send + 'static {
     /// Takes a tcp stream and completes an HTTP upgrade.
     async fn upgrade(&self, tcp_stream: TcpStream) -> Result<TcpStream, Error>;
     /// Hello/HelloAck handshake.
-    async fn handshake(&mut self, reader_writer: ReaderWriter) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>;
+    async fn handshake(
+        &mut self,
+        reader_writer: ReaderWriter,
+    ) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>;
     /// Handle a single delegated frame. Optionally returns a future that resolves to a
     /// Response. The Response will be sent back through the socket to the other side.
     fn handle_frame(

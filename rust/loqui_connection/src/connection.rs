@@ -58,7 +58,8 @@ impl<H: Handler> Connection<H> {
                         handler,
                         handshake_deadline,
                         ready_tx,
-                    ).await;
+                    )
+                    .await;
                     if let Err(e) = result {
                         warn!("Connection closed. ip={:?} error={:?}", address, e)
                     }
@@ -97,7 +98,8 @@ impl<H: Handler> Connection<H> {
                 handler,
                 handshake_deadline,
                 ready_tx,
-            ).await;
+            )
+            .await;
             if let Err(e) = result {
                 warn!("Connection closed. ip={:?} error={:?}", ip, e)
             }

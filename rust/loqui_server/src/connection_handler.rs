@@ -1,4 +1,5 @@
 use crate::{Config, RequestHandler};
+use async_trait::async_trait;
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
@@ -8,6 +9,7 @@ use loqui_protocol::frames::{Frame, Hello, HelloAck, LoquiFrame, Push, Request, 
 use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -26,15 +28,10 @@ impl<R: RequestHandler> ConnectionHandler<R> {
     }
 }
 
+#[async_trait]
 impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     // Server doesn't have any internal events.
     type InternalEvent = ();
-    existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
-    existential type HandshakeFuture: Send
-        + Future<
-            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
-        >;
-    existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
     const SEND_GO_AWAY: bool = true;
 
@@ -42,47 +39,46 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         self.config.max_payload_size
     }
 
-    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture {
+    async fn upgrade(&self, tcp_stream: TcpStream) -> Result<TcpStream, Error> {
         let max_payload_size = self.max_payload_size();
-        async move {
-            let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
-            let (mut writer, mut reader) = framed_socket.split();
+        let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
+        let (mut writer, mut reader) = framed_socket.split();
 
-            match reader.next().await {
-                Some(Ok(UpgradeFrame::Request)) => {
-                    writer = match writer.send(UpgradeFrame::Response).into_awaitable().await {
-                        Ok(writer) => writer,
-                        Err(e) => return Err(e),
-                    };
-                    Ok(writer.reunite(reader)?.into_inner())
-                }
-                Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
-                Some(Err(e)) => Err(e),
-                None => Err(LoquiError::TcpStreamClosed.into()),
+        match reader.next().await {
+            Some(Ok(UpgradeFrame::Request)) => {
+                writer = match writer.send(UpgradeFrame::Response).into_awaitable().await {
+                    Ok(writer) => writer,
+                    Err(e) => return Err(e),
+                };
+                Ok(writer.reunite(reader)?.into_inner())
             }
+            Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
+            Some(Err(e)) => Err(e),
+            None => Err(LoquiError::TcpStreamClosed.into()),
         }
     }
 
-    fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
+    async fn handshake(
+        &mut self,
+        mut reader_writer: ReaderWriter,
+    ) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)> {
         let ping_interval = self.config.ping_interval;
         let supported_encodings = self.config.supported_encodings;
-        async move {
-            match reader_writer.reader.next().await {
-                Some(Ok(frame)) => {
-                    match Self::handle_handshake_frame(frame, ping_interval, supported_encodings) {
-                        Ok((ready, hello_ack)) => {
-                            reader_writer = match reader_writer.write(hello_ack).await {
-                                Ok(reader_writer) => reader_writer,
-                                Err(e) => return Err((e.into(), None)),
-                            };
-                            Ok((ready, reader_writer))
-                        }
-                        Err(e) => Err((e, Some(reader_writer))),
+        match reader_writer.reader.next().await {
+            Some(Ok(frame)) => {
+                match Self::handle_handshake_frame(frame, ping_interval, supported_encodings) {
+                    Ok((ready, hello_ack)) => {
+                        reader_writer = match reader_writer.write(hello_ack).await {
+                            Ok(reader_writer) => reader_writer,
+                            Err(e) => return Err((e.into(), None)),
+                        };
+                        Ok((ready, reader_writer))
                     }
+                    Err(e) => Err((e, Some(reader_writer))),
                 }
-                Some(Err(e)) => Err((e, Some(reader_writer))),
-                None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
+            Some(Err(e)) => Err((e, Some(reader_writer))),
+            None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
         }
     }
 
@@ -90,7 +86,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         &mut self,
         frame: DelegatedFrame,
         encoding: &'static str,
-    ) -> Option<Self::HandleFrameFuture> {
+    ) -> Option<Pin<Box<dyn Send + Future<Output = Result<Response, (Error, u32)>>>>> {
         match frame {
             DelegatedFrame::Push(push) => {
                 tokio::spawn(infallible_into_01(handle_push(
@@ -102,7 +98,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
             }
             DelegatedFrame::Request(request) => {
                 let response_future = handle_request(self.config.clone(), request, encoding);
-                Some(response_future)
+                Some(Box::pin(response_future))
             }
             DelegatedFrame::Error(_) => None,
             DelegatedFrame::Response(_) => None,
@@ -208,7 +204,8 @@ async fn handle_request<R: RequestHandler>(
     } = request;
     let response_payload = config
         .request_handler
-        .handle_request(request_payload, encoding).await;
+        .handle_request(request_payload, encoding)
+        .await;
     Ok(Response {
         flags: 0,
         sequence_id,
