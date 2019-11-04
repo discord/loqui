@@ -5,6 +5,7 @@ use failure::{err_msg, Error};
 use loqui_connection::find_encoding;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::{IdSequence, LoquiError, ReaderWriter};
+use std::pin::Pin;
 use loqui_protocol::frames::{
     Error as ErrorFrame, Frame, Hello, HelloAck, LoquiFrame, Push, Request, Response,
 };
@@ -18,6 +19,7 @@ use tokio::prelude::*;
 use tokio_codec::Framed;
 use tokio_futures::compat::forward::IntoAwaitable;
 use tokio_futures::stream::StreamExt;
+use async_trait::async_trait;
 
 pub enum InternalEvent {
     Request {
@@ -43,14 +45,15 @@ impl ConnectionHandler {
     }
 }
 
+#[async_trait]
 impl Handler for ConnectionHandler {
     type InternalEvent = InternalEvent;
-    existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
-    existential type HandshakeFuture: Send
-        + Future<
-            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
-        >;
-    existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
+    //existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
+    //existential type HandshakeFuture: Send
+    //    + Future<
+    //        Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
+    //    >;
+    //existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
 
     const SEND_GO_AWAY: bool = false;
 
@@ -58,9 +61,9 @@ impl Handler for ConnectionHandler {
         self.config.max_payload_size
     }
 
-    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture {
+    async fn upgrade(&self, tcp_stream: TcpStream) -> Result<TcpStream, Error> {
         let max_payload_size = self.max_payload_size();
-        async move {
+        //async move {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
             writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
@@ -73,13 +76,12 @@ impl Handler for ConnectionHandler {
                 Some(Err(e)) => Err(e),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
-        }
+        //}
     }
 
-    fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
+    async fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)> {
         let hello = self.make_hello();
         let supported_encodings = self.config.supported_encodings;
-        async move {
             reader_writer = match reader_writer.write(hello).await {
                 Ok(read_writer) => read_writer,
                 Err(e) => return Err((e.into(), None)),
@@ -93,14 +95,13 @@ impl Handler for ConnectionHandler {
                 Some(Err(e)) => Err((e, Some(reader_writer))),
                 None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
-        }
     }
 
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
         _encoding: &'static str,
-    ) -> Option<Self::HandleFrameFuture> {
+    ) -> Option<Pin<Box<dyn Send + Future<Output = Result<Response, (Error, u32)>>>>> {
         match frame {
             DelegatedFrame::Response(response) => {
                 self.handle_response(response);
@@ -110,7 +111,7 @@ impl Handler for ConnectionHandler {
                 self.handle_error(error);
                 None
             }
-            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(async move {
+            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(Box::pin(async move {
                 Err((
                     LoquiError::InvalidOpcode {
                         actual: Request::OPCODE,
@@ -119,7 +120,7 @@ impl Handler for ConnectionHandler {
                     .into(),
                     0,
                 ))
-            }),
+            })),
         }
     }
 
