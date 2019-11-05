@@ -16,7 +16,6 @@ tokio-futures = { git = "https://github.com/discordapp/tokio", rev = "0506fb8018
 tokio-codec = "0.1"
 bytes = "0.4.9"
 bytesize = "1.0.0"
-async-trait = "0.1.17"
 
 [dev-dependencies]
 tokio-async-await = "0.1.7"

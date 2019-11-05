@@ -1,6 +1,5 @@
 use crate::waiter::ResponseWaiter;
 use crate::Config;
-use async_trait::async_trait;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
 use loqui_connection::find_encoding;
@@ -45,7 +44,6 @@ impl ConnectionHandler {
     }
 }
 
-#[async_trait]
 impl Handler for ConnectionHandler {
     type InternalEvent = InternalEvent;
     const SEND_GO_AWAY: bool = false;
@@ -54,43 +52,53 @@ impl Handler for ConnectionHandler {
         self.config.max_payload_size
     }
 
-    async fn upgrade(&self, tcp_stream: TcpStream) -> Result<TcpStream, Error> {
+    fn upgrade(
+        &self,
+        tcp_stream: TcpStream,
+    ) -> Pin<Box<dyn Future<Output = Result<TcpStream, Error>> + Send>> {
         let max_payload_size = self.max_payload_size();
-        //async move {
-        let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
-        let (mut writer, mut reader) = framed_socket.split();
-        writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
-            Ok(writer) => writer,
-            Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
-        };
-        match reader.next().await {
-            Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
-            Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
-            Some(Err(e)) => Err(e),
-            None => Err(LoquiError::TcpStreamClosed.into()),
-        }
-        //}
+        Box::pin(async move {
+            let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
+            let (mut writer, mut reader) = framed_socket.split();
+            writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
+                Ok(writer) => writer,
+                Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
+            };
+            match reader.next().await {
+                Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
+                Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
+                Some(Err(e)) => Err(e),
+                None => Err(LoquiError::TcpStreamClosed.into()),
+            }
+        })
     }
 
-    async fn handshake(
+    fn handshake(
         &mut self,
         mut reader_writer: ReaderWriter,
-    ) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)> {
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>>
+                + Send,
+        >,
+    > {
         let hello = self.make_hello();
         let supported_encodings = self.config.supported_encodings;
-        reader_writer = match reader_writer.write(hello).await {
-            Ok(read_writer) => read_writer,
-            Err(e) => return Err((e.into(), None)),
-        };
+        Box::pin(async move {
+            reader_writer = match reader_writer.write(hello).await {
+                Ok(read_writer) => read_writer,
+                Err(e) => return Err((e.into(), None)),
+            };
 
-        match reader_writer.reader.next().await {
-            Some(Ok(frame)) => match Self::handle_handshake_frame(frame, supported_encodings) {
-                Ok(ready) => Ok((ready, reader_writer)),
-                Err(e) => Err((e, Some(reader_writer))),
-            },
-            Some(Err(e)) => Err((e, Some(reader_writer))),
-            None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
-        }
+            match reader_writer.reader.next().await {
+                Some(Ok(frame)) => match Self::handle_handshake_frame(frame, supported_encodings) {
+                    Ok(ready) => Ok((ready, reader_writer)),
+                    Err(e) => Err((e, Some(reader_writer))),
+                },
+                Some(Err(e)) => Err((e, Some(reader_writer))),
+                None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
+            }
+        })
     }
 
     fn handle_frame(

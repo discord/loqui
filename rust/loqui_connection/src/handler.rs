@@ -1,6 +1,5 @@
 use crate::framed_io::ReaderWriter;
 use crate::id_sequence::IdSequence;
-use async_trait::async_trait;
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
@@ -28,7 +27,6 @@ pub struct Ready {
 
 /// A trait that handles the specific functionality of a connection. The client and server each
 /// implement this.
-#[async_trait]
 pub trait Handler: Send + 'static {
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
@@ -39,12 +37,20 @@ pub trait Handler: Send + 'static {
     /// The maximum payload size this connection can handle.
     fn max_payload_size(&self) -> ByteSize;
     /// Takes a tcp stream and completes an HTTP upgrade.
-    async fn upgrade(&self, tcp_stream: TcpStream) -> Result<TcpStream, Error>;
+    fn upgrade(
+        &self,
+        tcp_stream: TcpStream,
+    ) -> Pin<Box<dyn Future<Output = Result<TcpStream, Error>> + Send>>;
     /// Hello/HelloAck handshake.
-    async fn handshake(
+    fn handshake(
         &mut self,
         reader_writer: ReaderWriter,
-    ) -> Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>;
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>>
+                + Send,
+        >,
+    >;
     /// Handle a single delegated frame. Optionally returns a future that resolves to a
     /// Response. The Response will be sent back through the socket to the other side.
     fn handle_frame(
