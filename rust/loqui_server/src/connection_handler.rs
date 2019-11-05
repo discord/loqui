@@ -96,7 +96,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         &mut self,
         frame: DelegatedFrame,
         encoding: &'static str,
-    ) -> Option<Pin<Box<dyn Send + Future<Output = Result<Response, (Error, u32)>>>>> {
+    ) -> Option<Pin<Box<dyn Future<Output = Result<Response, (Error, u32)>> + Send>>> {
         match frame {
             DelegatedFrame::Push(push) => {
                 tokio::spawn(infallible_into_01(handle_push(

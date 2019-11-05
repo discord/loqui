@@ -57,7 +57,7 @@ pub trait Handler: Send + 'static {
         &mut self,
         frame: DelegatedFrame,
         encoding: &'static str,
-    ) -> Option<Pin<Box<dyn Send + Future<Output = Result<Response, (Error, u32)>>>>>;
+    ) -> Option<Pin<Box<dyn Future<Output = Result<Response, (Error, u32)>> + Send>>>;
     /// Handle internal events for this connection. Completely opaque to the connection. Optionally
     /// return a `LoquiFrame` that will be sent back through the socket to the other side.
     fn handle_internal_event(
