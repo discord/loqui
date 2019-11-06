@@ -1,5 +1,4 @@
 #![feature(async_await)]
-#![feature(existential_type)]
 
 #[macro_use]
 extern crate log;
@@ -13,6 +12,7 @@ use loqui_client::{Client, Config as ClientConfig};
 use loqui_server::{Config as ServerConfig, RequestHandler, Server};
 use std::future::Future;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{thread, time::Duration};
 use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
@@ -22,19 +22,24 @@ const ADDRESS: &str = "127.0.0.1:8080";
 struct EchoHandler {}
 
 impl RequestHandler for EchoHandler {
-    existential type RequestFuture: Future<Output = Vec<u8>>;
-    existential type PushFuture: Send + Future<Output = ()>;
-
-    fn handle_request(&self, payload: Vec<u8>, _encoding: &'static str) -> Self::RequestFuture {
+    fn handle_request(
+        &self,
+        payload: Vec<u8>,
+        _encoding: &'static str,
+    ) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {
         let request: String = String::from_utf8(payload).expect("Failed to decode.");
         debug!("Handling request: {}", request);
-        async move { request.as_bytes().to_vec() }
+        Box::pin(async move { request.as_bytes().to_vec() })
     }
 
-    fn handle_push(&self, payload: Vec<u8>, _encoding: &'static str) -> Self::PushFuture {
+    fn handle_push(
+        &self,
+        payload: Vec<u8>,
+        _encoding: &'static str,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let request: String = String::from_utf8(payload).expect("Failed to decode.");
         debug!("Handling push: {}", request);
-        async {}
+        Box::pin(async move {})
     }
 }
 

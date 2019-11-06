@@ -4,6 +4,7 @@ use bytesize::ByteSize;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Push, Request, Response};
 use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 use tokio::net::TcpStream;
 
@@ -30,32 +31,33 @@ pub trait Handler: Send + 'static {
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
     type InternalEvent: Send;
-    /// Result of upgrading. Needs to be a type so we don't have to box the future.
-    type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
-    /// Result of handshaking. Needs to be a type so we don't have to box the future.
-    type HandshakeFuture: Send
-        + Future<
-            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
-        >;
-    /// Result of handling a frame. Needs to be a type so we don't have to box the future.
-    type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
-
     // Whether or not the connection should send a GoAway frame on close.
     const SEND_GO_AWAY: bool;
 
     /// The maximum payload size this connection can handle.
     fn max_payload_size(&self) -> ByteSize;
     /// Takes a tcp stream and completes an HTTP upgrade.
-    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture;
+    fn upgrade(
+        &self,
+        tcp_stream: TcpStream,
+    ) -> Pin<Box<dyn Future<Output = Result<TcpStream, Error>> + Send>>;
     /// Hello/HelloAck handshake.
-    fn handshake(&mut self, reader_writer: ReaderWriter) -> Self::HandshakeFuture;
+    fn handshake(
+        &mut self,
+        reader_writer: ReaderWriter,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>>
+                + Send,
+        >,
+    >;
     /// Handle a single delegated frame. Optionally returns a future that resolves to a
     /// Response. The Response will be sent back through the socket to the other side.
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
         encoding: &'static str,
-    ) -> Option<Self::HandleFrameFuture>;
+    ) -> Option<Pin<Box<dyn Future<Output = Result<Response, (Error, u32)>> + Send>>>;
     /// Handle internal events for this connection. Completely opaque to the connection. Optionally
     /// return a `LoquiFrame` that will be sent back through the socket to the other side.
     fn handle_internal_event(

@@ -12,6 +12,7 @@ use loqui_protocol::upgrade::{Codec, UpgradeFrame};
 use loqui_protocol::VERSION;
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -45,22 +46,18 @@ impl ConnectionHandler {
 
 impl Handler for ConnectionHandler {
     type InternalEvent = InternalEvent;
-    existential type UpgradeFuture: Send + Future<Output = Result<TcpStream, Error>>;
-    existential type HandshakeFuture: Send
-        + Future<
-            Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>,
-        >;
-    existential type HandleFrameFuture: Send + Future<Output = Result<Response, (Error, u32)>>;
-
     const SEND_GO_AWAY: bool = false;
 
     fn max_payload_size(&self) -> ByteSize {
         self.config.max_payload_size
     }
 
-    fn upgrade(&self, tcp_stream: TcpStream) -> Self::UpgradeFuture {
+    fn upgrade(
+        &self,
+        tcp_stream: TcpStream,
+    ) -> Pin<Box<dyn Future<Output = Result<TcpStream, Error>> + Send>> {
         let max_payload_size = self.max_payload_size();
-        async move {
+        Box::pin(async move {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
             writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
@@ -73,13 +70,21 @@ impl Handler for ConnectionHandler {
                 Some(Err(e)) => Err(e),
                 None => Err(LoquiError::TcpStreamClosed.into()),
             }
-        }
+        })
     }
 
-    fn handshake(&mut self, mut reader_writer: ReaderWriter) -> Self::HandshakeFuture {
+    fn handshake(
+        &mut self,
+        mut reader_writer: ReaderWriter,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<(Ready, ReaderWriter), (Error, Option<ReaderWriter>)>>
+                + Send,
+        >,
+    > {
         let hello = self.make_hello();
         let supported_encodings = self.config.supported_encodings;
-        async move {
+        Box::pin(async move {
             reader_writer = match reader_writer.write(hello).await {
                 Ok(read_writer) => read_writer,
                 Err(e) => return Err((e.into(), None)),
@@ -93,14 +98,14 @@ impl Handler for ConnectionHandler {
                 Some(Err(e)) => Err((e, Some(reader_writer))),
                 None => Err((LoquiError::TcpStreamClosed.into(), Some(reader_writer))),
             }
-        }
+        })
     }
 
     fn handle_frame(
         &mut self,
         frame: DelegatedFrame,
         _encoding: &'static str,
-    ) -> Option<Self::HandleFrameFuture> {
+    ) -> Option<Pin<Box<dyn Send + Future<Output = Result<Response, (Error, u32)>>>>> {
         match frame {
             DelegatedFrame::Response(response) => {
                 self.handle_response(response);
@@ -110,7 +115,7 @@ impl Handler for ConnectionHandler {
                 self.handle_error(error);
                 None
             }
-            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(async move {
+            DelegatedFrame::Push(_) | DelegatedFrame::Request(_) => Some(Box::pin(async move {
                 Err((
                     LoquiError::InvalidOpcode {
                         actual: Request::OPCODE,
@@ -119,7 +124,7 @@ impl Handler for ConnectionHandler {
                     .into(),
                     0,
                 ))
-            }),
+            })),
         }
     }
 
@@ -336,5 +341,4 @@ mod test {
         let result = block_on_all(async { awaitable.await });
         assert!(result.is_err())
     }
-
 }
