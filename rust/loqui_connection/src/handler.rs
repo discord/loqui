@@ -27,7 +27,7 @@ pub struct Ready {
 
 /// A trait that handles the specific functionality of a connection. The client and server each
 /// implement this.
-pub trait Handler: Send + 'static {
+pub trait Handler: Send + Sync + 'static {
     /// Events specific to the implementing connection handler. They will be passed through to the
     /// handle_internal_event callback.
     type InternalEvent: Send;

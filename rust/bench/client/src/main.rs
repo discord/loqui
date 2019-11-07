@@ -1,5 +1,3 @@
-#![feature(async_await)]
-
 use bytesize::ByteSize;
 use failure::Error;
 #[macro_use]
