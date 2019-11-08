@@ -1,5 +1,3 @@
-#![feature(async_await)]
-
 use bytesize::ByteSize;
 use failure::Error;
 use loqui_bench_common::{configure_logging, make_socket_address};
