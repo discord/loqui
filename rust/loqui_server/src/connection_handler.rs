@@ -1,6 +1,8 @@
 use crate::{Config, RequestHandler};
 use bytesize::ByteSize;
 use failure::Error;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::{find_encoding, ReaderWriter};
 use loqui_connection::{IdSequence, LoquiError};
@@ -12,10 +14,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::prelude::*;
-use tokio_codec::Framed;
-use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
-use tokio_futures::stream::StreamExt;
+use tokio::task;
+use tokio_util::codec::Framed;
 
 pub struct ConnectionHandler<R: RequestHandler> {
     config: Arc<Config<R>>,
@@ -48,10 +48,9 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
         Box::pin(async move {
             match reader.next().await {
                 Some(Ok(UpgradeFrame::Request)) => {
-                    writer = match writer.send(UpgradeFrame::Response).into_awaitable().await {
-                        Ok(writer) => writer,
-                        Err(e) => return Err(e),
-                    };
+                    if let Err(e) = writer.send(UpgradeFrame::Response).await {
+                        return Err(e);
+                    }
                     Ok(writer.reunite(reader)?.into_inner())
                 }
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),
@@ -99,11 +98,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     ) -> Option<Pin<Box<dyn Future<Output = Result<Response, (Error, u32)>> + Send>>> {
         match frame {
             DelegatedFrame::Push(push) => {
-                tokio::spawn(infallible_into_01(handle_push(
-                    self.config.clone(),
-                    push,
-                    encoding,
-                )));
+                task::spawn(handle_push(self.config.clone(), push, encoding));
                 None
             }
             DelegatedFrame::Request(request) => {

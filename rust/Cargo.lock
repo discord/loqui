@@ -301,6 +301,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "loqui_server"
+version = "0.0.1"
+dependencies = [
+ "bytesize 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "loqui_connection 0.0.1",
+ "loqui_protocol 0.0.1",
+ "tokio 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-util 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "memchr"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
