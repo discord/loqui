@@ -5,11 +5,10 @@ use futures::stream::{SplitSink, SplitStream};
 use loqui_protocol::{
     codec::Codec,
     error::ProtocolError,
-    frames::{GoAway, LoquiFrame, Frame},
+    frames::{GoAway, LoquiFrame},
 };
 use std::net::Shutdown;
 use tokio::net::TcpStream;
-use tokio::prelude::*;
 use tokio_util::codec::Framed;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;

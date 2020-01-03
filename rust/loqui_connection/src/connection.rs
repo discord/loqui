@@ -8,15 +8,15 @@ use failure::Error;
 use futures::future::Future;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
+// TODO: timeout
 //use futures_timer::FutureExt;
+// TODO: ping
 //use futures_timer::Interval;
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::net::TcpStream;
-use tokio::prelude::*;
 use tokio::task;
-//use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01, into_01};
 use futures::stream::StreamExt;
 
 #[derive(Debug)]
