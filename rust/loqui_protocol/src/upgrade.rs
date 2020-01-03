@@ -2,7 +2,7 @@ use crate::error::ProtocolError;
 use bytes::BytesMut;
 use bytesize::ByteSize;
 use failure::Error;
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 
 /// Codec for reading and writing the HTTP upgrade request.
 #[derive(Debug)]

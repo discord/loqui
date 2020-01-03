@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.2.4"
-bytes = "0.4.9"
+bytes = "0.5"
 bytesize = "1.0.0"
 failure = "0.1.1"
 log = "0.4"
-tokio-codec = "0.1"
+tokio-util = { version = "0.2.0", features=["codec"]}

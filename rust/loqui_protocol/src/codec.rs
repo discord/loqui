@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use bytesize::ByteSize;
 use failure::Error;
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::ProtocolError;
 use crate::frames::{
@@ -73,7 +73,7 @@ fn encode<F: Frame>(frame: F, dst: &mut BytesMut) {
     dst.reserve(F::HEADER_SIZE_IN_BYTES);
     frame.put_header(dst);
     if let Some(payload) = frame.payload() {
-        dst.put_u32_be(payload.len() as u32);
+        dst.put_u32(payload.len() as u32);
         dst.extend_from_slice(&payload[..]);
     }
 }
