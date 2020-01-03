@@ -5,20 +5,21 @@ use futures::stream::{SplitSink, SplitStream};
 use loqui_protocol::{
     codec::Codec,
     error::ProtocolError,
-    frames::{GoAway, LoquiFrame},
+    frames::{GoAway, LoquiFrame, Frame},
 };
 use std::net::Shutdown;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio_codec::Framed;
-use tokio_futures::compat::forward::IntoAwaitable;
+use tokio_util::codec::Framed;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 
 /// Used to read frames off the tcp socket.
 pub type Reader = SplitStream<Framed<TcpStream, Codec>>;
 
 /// Used to write frames to the tcp socket.
 pub struct Writer {
-    inner: SplitSink<Framed<TcpStream, Codec>>,
+    inner: SplitSink<Framed<TcpStream, Codec>, LoquiFrame>,
     /// If true, send a go away when the socket is closed.
     send_go_away: bool,
 }
@@ -30,7 +31,7 @@ impl Writer {
     ///
     /// * `writer` - framed sink
     /// * `send_go_away` - whether or not to send a go away when the connection closes
-    pub fn new(writer: SplitSink<Framed<TcpStream, Codec>>, send_go_away: bool) -> Self {
+    pub fn new(writer: SplitSink<Framed<TcpStream, Codec>, LoquiFrame>, send_go_away: bool) -> Self {
         Self {
             inner: writer,
             send_go_away,
@@ -39,9 +40,8 @@ impl Writer {
 
     /// Tries to write a `LoquiFrame` to the socket. Returns an error if the socket has closed.
     pub async fn write<F: Into<LoquiFrame>>(mut self, frame: F) -> Result<Self, LoquiError> {
-        match self.inner.send(frame.into()).into_awaitable().await {
-            Ok(new_inner) => {
-                self.inner = new_inner;
+        match self.inner.send(frame.into()).await {
+            Ok(()) => {
                 Ok(self)
             }
             Err(_error) => Err(LoquiError::TcpStreamClosed),
@@ -49,7 +49,7 @@ impl Writer {
     }
 
     /// Gracefully closes the socket. Optionally sends a `GoAway` frame before closing.
-    pub async fn close(self, error: Option<&Error>, reader: Option<Reader>) {
+    pub async fn close(mut self, error: Option<&Error>, reader: Option<Reader>) {
         if !self.send_go_away {
             debug!("Closing. Not sending GoAway. error={:?}", error);
             return;
@@ -61,11 +61,11 @@ impl Writer {
             payload: vec![],
         };
         debug!("Closing. Sending GoAway. go_away={:?}", go_away);
-        match self.inner.send(go_away.into()).into_awaitable().await {
-            Ok(new_inner) => {
+        match self.inner.send(go_away.into()).await {
+            Ok(()) => {
                 if let Some(reader) = reader {
                     if let Ok(tcp_stream) =
-                        new_inner.reunite(reader).map(|framed| framed.into_inner())
+                        self.inner.reunite(reader).map(|framed| framed.into_inner())
                     {
                         let _result = tcp_stream.shutdown(Shutdown::Both);
                     }

@@ -1,11 +1,11 @@
-use futures::stream::{Fuse, Stream};
-use futures::{Async, Poll};
+use futures::stream::{Fuse, Stream, StreamExt as FuturesStreamExt};
+use std::task::{Poll, Context};
+use std::pin::Pin;
 
 /// An adapter for merging the output of two streams.
 ///
 /// The merged stream produces items from either of the underlying streams as
 /// they become available, and the streams are polled in a round-robin fashion.
-/// Errors, however, are not merged: you get at most one error at a time.
 ///
 /// Unlike normal select, the stream will stop once one of the streams ends.
 #[derive(Debug)]
@@ -19,7 +19,7 @@ pub struct SelectBreak<S1, S2> {
 fn new<S1, S2>(stream1: S1, stream2: S2) -> SelectBreak<S1, S2>
 where
     S1: Stream,
-    S2: Stream<Item = S1::Item, Error = S1::Error>,
+    S2: Stream<Item = S1::Item>,
 {
     SelectBreak {
         stream1: stream1.fuse(),
@@ -31,38 +31,39 @@ where
 impl<S1, S2> Stream for SelectBreak<S1, S2>
 where
     S1: Stream,
-    S2: Stream<Item = S1::Item, Error = S1::Error>,
+    S2: Stream<Item = S1::Item>,
 {
     type Item = S1::Item;
-    type Error = S1::Error;
 
-    fn poll(&mut self) -> Poll<Option<S1::Item>, S1::Error> {
-        let (a, b) = if self.flag {
-            (
-                &mut self.stream2 as &mut dyn Stream<Item = _, Error = _>,
-                &mut self.stream1 as &mut dyn Stream<Item = _, Error = _>,
-            )
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<S1::Item>> {
+        let SelectBreak { flag, stream1, stream2 } =
+            unsafe { self.get_unchecked_mut() };
+        let stream1 = unsafe { Pin::new_unchecked(stream1) };
+        let stream2 = unsafe { Pin::new_unchecked(stream2) };
+        if !*flag {
+            poll_inner(flag, stream1, stream2, cx)
         } else {
-            (
-                &mut self.stream1 as &mut dyn Stream<Item = _, Error = _>,
-                &mut self.stream2 as &mut dyn Stream<Item = _, Error = _>,
-            )
-        };
-
-        self.flag = !self.flag;
-
-        match a.poll()? {
-            Async::Ready(Some(item)) => return Ok(Some(item).into()),
-            Async::Ready(None) => return Ok(None.into()),
-            Async::NotReady => {}
-        };
-
-        match b.poll()? {
-            Async::Ready(Some(item)) => Ok(Some(item).into()),
-            Async::Ready(None) => Ok(None.into()),
-            Async::NotReady => Ok(Async::NotReady),
+            poll_inner(flag, stream2, stream1, cx)
         }
     }
+}
+
+fn poll_inner<S1, S2>(
+    flag: &mut bool,
+    a: Pin<&mut S1>,
+    b: Pin<&mut S2>,
+    cx: &mut Context<'_>
+) -> Poll<Option<S1::Item>>
+    where S1: Stream, S2: Stream<Item = S1::Item>
+{
+
+    *flag = !*flag;
+    match a.poll_next(cx) {
+        Poll::Pending => {}
+        other => return other,
+    };
+
+    b.poll_next(cx)
 }
 
 pub trait StreamExt: Stream + Sized {
@@ -70,12 +71,11 @@ pub trait StreamExt: Stream + Sized {
     ///
     /// The merged stream produces items from either of the underlying streams as
     /// they become available, and the streams are polled in a round-robin fashion.
-    /// Errors, however, are not merged: you get at most one error at a time.
     ///
     /// Unlike normal select, the stream will stop once one of the streams ends.
     fn select_break<S>(self, other: S) -> SelectBreak<Self, S>
     where
-        S: Stream<Item = Self::Item, Error = Self::Error>,
+        S: Stream<Item = Self::Item>,
         Self: Sized,
     {
         new(self, other)

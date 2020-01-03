@@ -1,7 +1,7 @@
 use crate::connection::Event;
 use crate::LoquiError;
 use failure::Error;
-use futures::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use loqui_protocol::frames::Response;
 
 /// A Sender for sending messages to a `Connection`.
