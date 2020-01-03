@@ -5,19 +5,19 @@ use crate::select_break::StreamExt as SelectBreakStreamExt;
 use crate::sender::Sender;
 use crate::LoquiError;
 use failure::Error;
-use futures::future::Future;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
+use futures::future::Future;
 // TODO: timeout
 //use futures_timer::FutureExt;
 // TODO: ping
 //use futures_timer::Interval;
+use futures::stream::StreamExt;
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::net::TcpStream;
 use tokio::task;
-use futures::stream::StreamExt;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -172,9 +172,8 @@ async fn run<H: Handler>(
     let framed_reader = reader.map(|result| result.map(Event::SocketReceive));
     let self_rx = self_rx.map(|event| Ok(event));
 
-    let mut stream = framed_reader
-        .select_break(self_rx);
-        //.select_break(ping_stream);
+    let mut stream = framed_reader.select_break(self_rx);
+    //.select_break(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoding);
     while let Some(event) = stream.next().await {

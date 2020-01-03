@@ -1,11 +1,9 @@
 use failure::Error;
-use futures::future::Future as OldFuture;
-use futures::sync::oneshot::{self, Sender};
-use futures_timer::FutureExt;
+use futures::channel::oneshot::{self, Sender};
+// TODO: use futures_timer::FutureExt;
 use loqui_connection::{convert_timeout_error, LoquiError};
 use std::future::Future;
 use std::time::{Duration, Instant};
-use tokio_futures::compat::forward::IntoAwaitable;
 
 #[derive(Debug)]
 pub struct ResponseWaiter {
@@ -30,13 +28,14 @@ impl ResponseWaiter {
 
         let deadline = Instant::now() + timeout;
 
-        let awaitable = rx
-            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(deadline)
-            .map_err(convert_timeout_error)
-            // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
-            .then(|result| result.unwrap_or_else(Err))
-            .into_awaitable();
+        let awaitable = async move {
+            // TODO: probably need a better error
+            // TODO: timeout
+            //    //.timeout_at(deadline)
+            //    //.map_err(convert_timeout_error)
+            rx.await
+                .unwrap_or_else(|_e| Err(LoquiError::RequestTimeout.into()))
+        };
 
         (Self { tx, deadline }, awaitable)
     }

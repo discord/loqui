@@ -1,6 +1,8 @@
 use crate::error::{LoquiError, LoquiErrorCode};
 use bytesize::ByteSize;
 use failure::Error;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use futures::stream::{SplitSink, SplitStream};
 use loqui_protocol::{
     codec::Codec,
@@ -10,8 +12,6 @@ use loqui_protocol::{
 use std::net::Shutdown;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
 
 /// Used to read frames off the tcp socket.
 pub type Reader = SplitStream<Framed<TcpStream, Codec>>;
@@ -30,7 +30,10 @@ impl Writer {
     ///
     /// * `writer` - framed sink
     /// * `send_go_away` - whether or not to send a go away when the connection closes
-    pub fn new(writer: SplitSink<Framed<TcpStream, Codec>, LoquiFrame>, send_go_away: bool) -> Self {
+    pub fn new(
+        writer: SplitSink<Framed<TcpStream, Codec>, LoquiFrame>,
+        send_go_away: bool,
+    ) -> Self {
         Self {
             inner: writer,
             send_go_away,
@@ -40,9 +43,7 @@ impl Writer {
     /// Tries to write a `LoquiFrame` to the socket. Returns an error if the socket has closed.
     pub async fn write<F: Into<LoquiFrame>>(mut self, frame: F) -> Result<Self, LoquiError> {
         match self.inner.send(frame.into()).await {
-            Ok(()) => {
-                Ok(self)
-            }
+            Ok(()) => Ok(self),
             Err(_error) => Err(LoquiError::TcpStreamClosed),
         }
     }

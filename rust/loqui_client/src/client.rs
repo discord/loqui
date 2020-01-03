@@ -2,19 +2,18 @@ use crate::connection_handler::{ConnectionHandler, InternalEvent};
 use crate::waiter::ResponseWaiter;
 use crate::Config;
 use failure::Error;
-use futures::future::Future;
-use futures::sync::mpsc::{channel, Sender};
-use futures::sync::oneshot;
-use futures_timer::FutureExt;
+use futures::channel::mpsc::{channel, Sender};
+use futures::channel::oneshot;
+// TODO: use futures_timer::FutureExt;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use loqui_connection::{Connection, LoquiError};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
-use tokio::prelude::*;
-use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
-use tokio_futures::stream::StreamExt;
+use tokio::task;
 
 pub struct Client {
     connection: Connection<ConnectionHandler>,
@@ -36,10 +35,10 @@ impl Client {
 
         let ready = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = oneshot::channel();
-        let awaitable = ready_rx
-            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(handshake_deadline)
-            .into_awaitable();
+        let awaitable = ready_rx;
+        //.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed));
+        //.timeout_at(handshake_deadline)
+        //.into_awaitable();
         let (ready_waiter_tx, mut ready_waiter_rx) =
             channel::<oneshot::Sender<()>>(READY_CHAN_BUFFER_SIZE);
         let encoding = Arc::new(RwLock::new(None));
@@ -49,15 +48,15 @@ impl Client {
 
         let task_encoding = encoding.clone();
         let task_ready = ready.clone();
-        tokio::spawn(infallible_into_01(async move {
+        task::spawn(async move {
             if let Ok(ready_encoding) = awaitable.await {
                 *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);
                 task_ready.store(true, SeqCst);
-                while let Some(Ok(tx)) = ready_waiter_rx.next().await {
+                while let Some(tx) = ready_waiter_rx.next().await {
                     tx.send(()).ok();
                 }
             }
-        }));
+        });
 
         Ok(Self {
             connection,
@@ -118,14 +117,17 @@ impl Client {
             .ready_waiter_tx
             .clone()
             .send(tx)
-            .map_err(Error::from)
-            .timeout_at(self.handshake_deadline)
-            .into_awaitable()
-            .await?;
-        rx.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(self.handshake_deadline)
-            .into_awaitable()
+            //.map_err(Error::from)
+            //.timeout_at(self.handshake_deadline)
+            //.into_awaitable()
             .await
+            .map_err(Error::from)?;
+        rx.await
+            .map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed))
+        //rx.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
+        //    .timeout_at(self.handshake_deadline)
+        //    .into_awaitable()
+        //    .await
     }
 
     pub fn is_closed(&self) -> bool {

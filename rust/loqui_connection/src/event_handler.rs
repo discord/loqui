@@ -4,9 +4,9 @@ use super::handler::{DelegatedFrame, Handler};
 use super::id_sequence::IdSequence;
 use super::sender::Sender;
 use crate::LoquiErrorCode;
-use tokio::task;
 use failure::Error;
 use loqui_protocol::frames::{Error as ErrorFrame, LoquiFrame, Ping, Pong, Response};
+use tokio::task;
 //use tokio_futures::compat::infallible_into_01;
 
 /// Main handler of connection `Event`s.

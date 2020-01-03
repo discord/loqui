@@ -2,6 +2,8 @@ use crate::waiter::ResponseWaiter;
 use crate::Config;
 use bytesize::ByteSize;
 use failure::{err_msg, Error};
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use loqui_connection::find_encoding;
 use loqui_connection::handler::{DelegatedFrame, Handler, Ready};
 use loqui_connection::{IdSequence, LoquiError, ReaderWriter};
@@ -15,10 +17,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
-use tokio::prelude::*;
-use tokio_codec::Framed;
-use tokio_futures::compat::forward::IntoAwaitable;
-use tokio_futures::stream::StreamExt;
+use tokio_util::codec::Framed;
 
 pub enum InternalEvent {
     Request {
@@ -60,10 +59,9 @@ impl Handler for ConnectionHandler {
         Box::pin(async move {
             let framed_socket = Framed::new(tcp_stream, Codec::new(max_payload_size));
             let (mut writer, mut reader) = framed_socket.split();
-            writer = match writer.send(UpgradeFrame::Request).into_awaitable().await {
-                Ok(writer) => writer,
-                Err(_e) => return Err(LoquiError::TcpStreamClosed.into()),
-            };
+            if let Err(_e) = writer.send(UpgradeFrame::Request).await {
+                return Err(LoquiError::TcpStreamClosed.into());
+            }
             match reader.next().await {
                 Some(Ok(UpgradeFrame::Response)) => Ok(writer.reunite(reader)?.into_inner()),
                 Some(Ok(frame)) => Err(LoquiError::InvalidUpgradeFrame { frame }.into()),

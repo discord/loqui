@@ -1,6 +1,6 @@
 use futures::stream::{Fuse, Stream, StreamExt as FuturesStreamExt};
-use std::task::{Poll, Context};
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
 /// An adapter for merging the output of two streams.
 ///
@@ -36,8 +36,11 @@ where
     type Item = S1::Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<S1::Item>> {
-        let SelectBreak { flag, stream1, stream2 } =
-            unsafe { self.get_unchecked_mut() };
+        let SelectBreak {
+            flag,
+            stream1,
+            stream2,
+        } = unsafe { self.get_unchecked_mut() };
         let stream1 = unsafe { Pin::new_unchecked(stream1) };
         let stream2 = unsafe { Pin::new_unchecked(stream2) };
         if !*flag {
@@ -52,11 +55,12 @@ fn poll_inner<S1, S2>(
     flag: &mut bool,
     a: Pin<&mut S1>,
     b: Pin<&mut S2>,
-    cx: &mut Context<'_>
+    cx: &mut Context<'_>,
 ) -> Poll<Option<S1::Item>>
-    where S1: Stream, S2: Stream<Item = S1::Item>
+where
+    S1: Stream,
+    S2: Stream<Item = S1::Item>,
 {
-
     *flag = !*flag;
     match a.poll_next(cx) {
         Poll::Pending => {}
