@@ -4,7 +4,7 @@ members = [
   "loqui_connection",
   "loqui_client",
   "loqui_server",
-  #"examples/echo",
+  "examples/echo",
   #"bench/server",
   #"bench/client",
   #"bench/common",

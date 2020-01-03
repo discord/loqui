@@ -5,7 +5,6 @@ use bytesize::ByteSize;
 use chrono;
 use failure::Error;
 use fern;
-use futures_timer::Delay;
 use loqui_client::{Client, Config as ClientConfig};
 use loqui_server::{Config as ServerConfig, RequestHandler, Server};
 use std::future::Future;
@@ -13,7 +12,8 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{thread, time::Duration};
-use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01};
+use tokio::task;
+use tokio::time::delay_for;
 
 const ADDRESS: &str = "127.0.0.1:8080";
 
@@ -41,14 +41,13 @@ impl RequestHandler for EchoHandler {
     }
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     configure_logging()?;
-    tokio::run(infallible_into_01(async {
-        spawn_server();
-        // Wait for server to start.
-        thread::sleep(Duration::from_secs(1));
-        client_send_loop().await;
-    }));
+    spawn_server();
+    // Wait for server to start.
+    thread::sleep(Duration::from_secs(1));
+    client_send_loop().await;
     Ok(())
 }
 
@@ -74,7 +73,7 @@ async fn client_send_loop() {
     loop {
         for message in messages {
             let client = client.clone();
-            tokio::spawn(infallible_into_01(async move {
+            task::spawn(async move {
                 if let Err(e) = client.push(message.as_bytes().to_vec()).await {
                     error!("Push failed. error={:?}", e);
                 }
@@ -89,18 +88,15 @@ async fn client_send_loop() {
                         error!("Request failed. error={}", e);
                     }
                 }
-            }));
+            });
         }
 
-        Delay::new(Duration::from_secs(1))
-            .into_awaitable()
-            .await
-            .expect("Failed to delay.");
+        delay_for(Duration::from_secs(1)).await;
     }
 }
 
 fn spawn_server() {
-    tokio::spawn(infallible_into_01(async {
+    task::spawn(async {
         let config = ServerConfig {
             request_handler: EchoHandler {},
             max_payload_size: ByteSize::kb(5000),
@@ -112,7 +108,7 @@ fn spawn_server() {
         let address: SocketAddr = ADDRESS.parse().expect("Failed to parse address.");
         let result = server.listen_and_serve(address).await;
         println!("Run result={:?}", result);
-    }));
+    });
 }
 
 fn configure_logging() -> Result<(), Error> {
