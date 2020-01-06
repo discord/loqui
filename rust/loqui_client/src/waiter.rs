@@ -51,17 +51,16 @@ impl ResponseWaiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::future_utils::{block_on_all, spawn};
     use futures_timer::Delay;
-    use tokio_futures::compat::forward::IntoAwaitable;
+    use tokio::runtime::Runtime;
+    use tokio::task::spawn;
 
     #[test]
     fn it_receives_ok() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
-        let result = block_on_all(async {
+        let result = Runtime::new().unwrap().block_on(async {
             spawn(async {
                 waiter.notify(Ok(vec![]));
-                Ok(())
             });
             awaitable.await
         });
@@ -72,10 +71,9 @@ mod tests {
     fn it_receives_error() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
 
-        let result: Result<Vec<u8>, Error> = block_on_all(async {
+        let result: Result<Vec<u8>, Error> = Runtime::new().unwrap().block_on(async {
             spawn(async {
                 waiter.notify(Err(LoquiError::ConnectionClosed.into()));
-                Ok(())
             });
             awaitable.await
         });
@@ -86,14 +84,10 @@ mod tests {
     fn it_times_out() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_millis(1));
 
-        let result = block_on_all(async {
+        let result = Runtime::new().unwrap().block_on(async {
             spawn(async {
-                Delay::new(Duration::from_millis(50))
-                    .into_awaitable()
-                    .await
-                    .unwrap();
+                Delay::new(Duration::from_millis(50)).await;
                 waiter.notify(Ok(vec![]));
-                Ok(())
             });
             awaitable.await
         });

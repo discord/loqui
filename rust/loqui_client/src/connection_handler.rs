@@ -270,7 +270,7 @@ impl ConnectionHandler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::future_utils::block_on_all;
+    use tokio::runtime::Runtime;
 
     const ENCODING: &str = "identity";
 
@@ -312,7 +312,10 @@ mod test {
             }
             _other => panic!("request not returned"),
         }
-        let result = block_on_all(async { awaitable.await }).unwrap();
+        let result = Runtime::new()
+            .unwrap()
+            .block_on(async { awaitable.await })
+            .unwrap();
         assert_eq!(result, payload)
     }
 
@@ -336,7 +339,7 @@ mod test {
             payload: vec![],
         };
         let _frame = handler.handle_frame(response.into(), ENCODING);
-        let result = block_on_all(async { awaitable.await });
+        let result = Runtime::new().unwrap().block_on(async { awaitable.await });
         assert!(result.is_err())
     }
 }

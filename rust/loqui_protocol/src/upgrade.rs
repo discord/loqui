@@ -97,11 +97,11 @@ mod tests {
         let buf = &mut BytesMut::with_capacity(1024);
 
         // Incomplete Payload
-        buf.put(frame_bytes[..frame_bytes.len() - 1].to_vec());
+        buf.put(&frame_bytes[..frame_bytes.len() - 1]);
         assert_eq!(codec.decode(buf).unwrap(), None);
 
         // Complete Frame
-        buf.put(frame_bytes[frame_bytes.len() - 1..].to_vec());
+        buf.put(&frame_bytes[frame_bytes.len() - 1..]);
         assert_eq!(codec.decode(buf).unwrap().unwrap(), expected_frame);
 
         // Buffer has been consumed
