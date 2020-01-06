@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tokio_futures::compat::infallible_into_01;
+use tokio::task;
 
 #[derive(Default)]
 struct State {
@@ -87,31 +87,31 @@ fn log_loop(state: Arc<State>) {
     }
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let state = Arc::new(State::default());
     let log_state = state.clone();
     configure_logging()?;
 
-    tokio::run(infallible_into_01(async move {
-        tokio::spawn(infallible_into_01(async move {
-            log_loop(log_state.clone());
-        }));
 
-        let config = Config {
-            max_payload_size: ByteSize::kb(5000),
-            request_timeout: Duration::from_secs(5),
-            handshake_timeout: Duration::from_secs(5),
-            supported_encodings: &["msgpack", "identity"],
-        };
-        let client = Arc::new(
-            Client::start_connect(make_socket_address(), config)
-                .await
-                .expect("Failed to connect"),
-        );
-        client.await_ready().await.expect("Ready failed");
-        for _ in 0..100 {
-            tokio::spawn(infallible_into_01(work_loop(client.clone(), state.clone())));
-        }
-    }));
+    task::spawn(async move {
+        log_loop(log_state.clone());
+    });
+
+    let config = Config {
+        max_payload_size: ByteSize::kb(5000),
+        request_timeout: Duration::from_secs(5),
+        handshake_timeout: Duration::from_secs(5),
+        supported_encodings: &["msgpack", "identity"],
+    };
+    let client = Arc::new(
+        Client::start_connect(make_socket_address(), config)
+            .await
+            .expect("Failed to connect"),
+    );
+    client.await_ready().await.expect("Ready failed");
+    for _ in 0..100 {
+        task::spawn(work_loop(client.clone(), state.clone()));
+    }
     Ok(())
 }

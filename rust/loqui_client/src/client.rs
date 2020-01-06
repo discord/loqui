@@ -26,6 +26,7 @@ const READY_CHAN_BUFFER_SIZE: usize = 100_000;
 
 impl Client {
     pub async fn start_connect(address: SocketAddr, config: Config) -> Result<Client, Error> {
+        info!("connect");
         let handshake_deadline = Instant::now() + config.handshake_timeout;
         let request_timeout = config.request_timeout;
 
@@ -43,10 +44,12 @@ impl Client {
 
         let connection =
             Connection::spawn_from_address(address, handler, handshake_deadline, Some(ready_tx));
+        info!("made connection");
 
         let task_encoding = encoding.clone();
         let task_ready = ready.clone();
         task::spawn(async move {
+            info!("spawned");
             if let Ok(ready_encoding) = awaitable.await {
                 *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);
                 task_ready.store(true, SeqCst);
