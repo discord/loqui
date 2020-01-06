@@ -2,6 +2,7 @@ use bytesize::ByteSize;
 use failure::Error;
 #[macro_use]
 extern crate log;
+use futures::future::join_all;
 use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -107,9 +108,10 @@ async fn main() -> Result<(), Error> {
             .expect("Failed to connect"),
     );
     client.await_ready().await.expect("Ready failed");
+    let mut work_futures = vec![];
     for _ in 0..100 {
-        task::spawn(work_loop(client.clone(), state.clone()));
+        work_futures.push(work_loop(client.clone(), state.clone()));
     }
-    work_loop(client.clone(), state.clone()).await;
+    join_all(work_futures).await;
     Ok(())
 }
