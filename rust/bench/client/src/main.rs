@@ -6,9 +6,9 @@ use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread;
 use std::time::{Duration, Instant};
 use tokio::task;
+use tokio::time::delay_for;
 
 #[derive(Default)]
 struct State {
@@ -58,11 +58,11 @@ async fn work_loop(client: Arc<Client>, state: Arc<State>) {
     }
 }
 
-fn log_loop(state: Arc<State>) {
+async fn log_loop(state: Arc<State>) {
     let mut last_request_count = 0;
     let mut last = Instant::now();
     loop {
-        thread::sleep(Duration::from_secs(1));
+        delay_for(Duration::from_secs(1)).await;
         let now = Instant::now();
         let elapsed = now.duration_since(last).as_millis() as f64 / 1000.0;
         let request_count = state.request_count.load(Ordering::SeqCst);
@@ -93,10 +93,7 @@ async fn main() -> Result<(), Error> {
     let log_state = state.clone();
     configure_logging()?;
 
-
-    task::spawn(async move {
-        log_loop(log_state.clone());
-    });
+    task::spawn(log_loop(log_state.clone()));
 
     let config = Config {
         max_payload_size: ByteSize::kb(5000),
@@ -113,5 +110,6 @@ async fn main() -> Result<(), Error> {
     for _ in 0..100 {
         task::spawn(work_loop(client.clone(), state.clone()));
     }
+    work_loop(client.clone(), state.clone()).await;
     Ok(())
 }
