@@ -8,15 +8,13 @@ use crate::LoquiError;
 use failure::Error;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
-use futures::future::Future;
-// TODO: ping
-//use futures_timer::Interval;
-use futures::stream::StreamExt;
+use futures::{Future, StreamExt, TryStreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::net::TcpStream;
 use tokio::task;
+use tokio::time::interval;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -161,14 +159,13 @@ async fn run<H: Handler>(
         encoding,
     } = ready;
     // Convert each stream into a Result<Event, Error> stream.
-    //let ping_stream = Interval::new(ping_interval)
-    //    .map(|()| Event::Ping)
-    //    .map_err(Error::from);
+    let ping_stream = interval(ping_interval).map(|_| Ok(Event::Ping));
     let framed_reader = reader.map(|result| result.map(Event::SocketReceive));
     let self_rx = self_rx.map(|event| Ok(event));
 
-    let mut stream = framed_reader.select_break(self_rx);
-    //.select_break(ping_stream);
+    let mut stream = framed_reader
+        .select_break(self_rx)
+        .select_break(ping_stream);
 
     let mut event_handler = EventHandler::new(self_sender, handler, encoding);
     while let Some(event) = stream.next().await {

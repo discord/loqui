@@ -115,8 +115,7 @@ impl Client {
             self.handshake_deadline,
             self.ready_waiter_tx.clone().send(tx).map_err(Error::from),
         )
-        .await
-        .map_err(Error::from)?;
+        .await?;
         timeout_at(
             self.handshake_deadline,
             rx.map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed)),

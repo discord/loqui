@@ -8,7 +8,7 @@ edition = "2018"
 failure = "0.1"
 log = "0.4"
 loqui_protocol = { path = "../loqui_protocol" }
-tokio = { version = "0.2", features = ["rt-core", "tcp", "time"] }
+tokio = { version = "0.2", features = ["rt-core", "tcp", "time", "stream"] }
 futures = "0.3"
 tokio-util = { version = "0.2", features = ["codec"]}
 backoff = "0.1.2"
