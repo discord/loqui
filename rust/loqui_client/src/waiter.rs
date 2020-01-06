@@ -1,7 +1,7 @@
 use failure::Error;
 use futures::channel::oneshot::{self, Sender};
-// TODO: use futures_timer::FutureExt;
-use loqui_connection::{convert_timeout_error, LoquiError};
+use futures::TryFutureExt;
+use loqui_connection::{convert_timeout_error, timeout_at, LoquiError};
 use std::future::Future;
 use std::time::{Duration, Instant};
 
@@ -29,11 +29,9 @@ impl ResponseWaiter {
         let deadline = Instant::now() + timeout;
 
         let awaitable = async move {
-            // TODO: probably need a better error
-            // TODO: timeout
-            //    //.timeout_at(deadline)
-            //    //.map_err(convert_timeout_error)
-            rx.await
+            let rx = rx.map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed));
+            timeout_at(deadline, rx)
+                .await
                 .unwrap_or_else(|_e| Err(LoquiError::RequestTimeout.into()))
         };
 

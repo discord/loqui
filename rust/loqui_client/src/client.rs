@@ -4,10 +4,8 @@ use crate::Config;
 use failure::Error;
 use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot;
-// TODO: use futures_timer::FutureExt;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
-use loqui_connection::{Connection, LoquiError};
+use futures::{SinkExt, StreamExt, TryFutureExt};
+use loqui_connection::{timeout_at, Connection, LoquiError};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
@@ -35,10 +33,10 @@ impl Client {
 
         let ready = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = oneshot::channel();
-        let awaitable = ready_rx;
-        //.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed));
-        //.timeout_at(handshake_deadline)
-        //.into_awaitable();
+        let awaitable = timeout_at(
+            handshake_deadline,
+            ready_rx.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed)),
+        );
         let (ready_waiter_tx, mut ready_waiter_rx) =
             channel::<oneshot::Sender<()>>(READY_CHAN_BUFFER_SIZE);
         let encoding = Arc::new(RwLock::new(None));
@@ -113,21 +111,17 @@ impl Client {
     pub async fn await_ready(&self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
 
-        let _result = self
-            .ready_waiter_tx
-            .clone()
-            .send(tx)
-            //.map_err(Error::from)
-            //.timeout_at(self.handshake_deadline)
-            //.into_awaitable()
-            .await
-            .map_err(Error::from)?;
-        rx.await
-            .map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed))
-        //rx.map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-        //    .timeout_at(self.handshake_deadline)
-        //    .into_awaitable()
-        //    .await
+        let _result = timeout_at(
+            self.handshake_deadline,
+            self.ready_waiter_tx.clone().send(tx).map_err(Error::from),
+        )
+        .await
+        .map_err(Error::from)?;
+        timeout_at(
+            self.handshake_deadline,
+            rx.map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed)),
+        )
+        .await
     }
 
     pub fn is_closed(&self) -> bool {

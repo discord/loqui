@@ -3,13 +3,12 @@ use crate::framed_io::ReaderWriter;
 use crate::handler::{Handler, Ready};
 use crate::select_break::StreamExt as SelectBreakStreamExt;
 use crate::sender::Sender;
+use crate::timeout_at;
 use crate::LoquiError;
 use failure::Error;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
 use futures::future::Future;
-// TODO: timeout
-//use futures_timer::FutureExt;
 // TODO: ping
 //use futures_timer::Interval;
 use futures::stream::StreamExt;
@@ -45,10 +44,7 @@ impl<H: Handler> Connection<H> {
             self_sender: self_sender.clone(),
         };
         task::spawn(async move {
-            match TcpStream::connect(&address)
-                //.timeout_at(handshake_deadline)
-                .await
-            {
+            match timeout_at(handshake_deadline, TcpStream::connect(&address)).await {
                 Ok(tcp_stream) => {
                     info!("Connected to {}", address);
                     let result = run(
@@ -64,7 +60,7 @@ impl<H: Handler> Connection<H> {
                         warn!("Connection closed. ip={:?} error={:?}", address, e)
                     }
                 }
-                Err(e) => error!("Connect failed. error={:?}", e),
+                e => error!("Connect failed. error={:?}", e),
             };
         });
         connection
@@ -155,9 +151,8 @@ async fn run<H: Handler>(
     handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> Result<(), Error> {
-    let (ready, reader_writer, handler) = negotiate(tcp_stream, handler, ready_tx)
-        //.timeout_at(handshake_deadline)
-        .await?;
+    let (ready, reader_writer, handler) =
+        timeout_at(handshake_deadline, negotiate(tcp_stream, handler, ready_tx)).await?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
 
