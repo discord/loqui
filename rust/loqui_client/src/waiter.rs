@@ -52,9 +52,9 @@ impl ResponseWaiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures_timer::Delay;
     use tokio::runtime::Runtime;
     use tokio::task::spawn;
+    use tokio::time::delay_for;
 
     #[test]
     fn it_receives_ok() {
@@ -87,7 +87,7 @@ mod tests {
 
         let result = Runtime::new().unwrap().block_on(async {
             spawn(async {
-                Delay::new(Duration::from_millis(50)).await;
+                delay_for(Duration::from_millis(50)).await;
                 waiter.notify(Ok(vec![]));
             });
             awaitable.await
