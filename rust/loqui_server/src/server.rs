@@ -4,8 +4,8 @@ use failure::Error;
 use loqui_connection::Connection;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::Instant;
 
 pub struct Server<R: RequestHandler> {
     config: Arc<Config<R>>,

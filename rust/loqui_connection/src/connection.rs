@@ -11,10 +11,10 @@ use futures::channel::oneshot;
 use futures::{Future, StreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
-use tokio::time::Instant;
 use tokio::net::TcpStream;
 use tokio::task;
 use tokio::time::interval;
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {

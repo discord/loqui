@@ -10,9 +10,9 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::{Duration};
-use tokio::time::Instant;
+use std::time::Duration;
 use tokio::task;
+use tokio::time::Instant;
 
 pub struct Client {
     connection: Connection<ConnectionHandler>,
