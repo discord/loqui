@@ -4,7 +4,7 @@ use failure::Error;
 use loqui_connection::Connection;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use tokio::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
 
 pub struct Server<R: RequestHandler> {

@@ -11,7 +11,7 @@ use futures::channel::oneshot;
 use futures::{Future, StreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
-use std::time::Instant;
+use tokio::time::Instant;
 use tokio::net::TcpStream;
 use tokio::task;
 use tokio::time::interval;

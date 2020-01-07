@@ -3,7 +3,8 @@ use futures::channel::oneshot::{self, Sender};
 use futures::TryFutureExt;
 use loqui_connection::{timeout_at, LoquiError};
 use std::future::Future;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub struct ResponseWaiter {

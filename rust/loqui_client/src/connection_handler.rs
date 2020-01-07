@@ -15,7 +15,8 @@ use loqui_protocol::VERSION;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+use tokio::time::Instant;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 

@@ -10,7 +10,8 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+use tokio::time::Instant;
 use tokio::task;
 
 pub struct Client {
@@ -26,7 +27,6 @@ const READY_CHAN_BUFFER_SIZE: usize = 100_000;
 
 impl Client {
     pub async fn start_connect(address: SocketAddr, config: Config) -> Result<Client, Error> {
-        info!("connect");
         let handshake_deadline = Instant::now() + config.handshake_timeout;
         let request_timeout = config.request_timeout;
 
