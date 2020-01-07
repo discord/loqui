@@ -14,7 +14,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::task;
+use tokio::task::spawn;
 use tokio_util::codec::Framed;
 
 pub struct ConnectionHandler<R: RequestHandler> {
@@ -98,7 +98,7 @@ impl<R: RequestHandler> Handler for ConnectionHandler<R> {
     ) -> Option<Pin<Box<dyn Future<Output = Result<Response, (Error, u32)>> + Send>>> {
         match frame {
             DelegatedFrame::Push(push) => {
-                task::spawn(handle_push(self.config.clone(), push, encoding));
+                spawn(handle_push(self.config.clone(), push, encoding));
                 None
             }
             DelegatedFrame::Request(request) => {

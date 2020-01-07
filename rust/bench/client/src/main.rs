@@ -8,7 +8,7 @@ use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::task;
+use tokio::task::spawn;
 use tokio::time::delay_for;
 
 #[derive(Default)]
@@ -94,7 +94,7 @@ async fn main() -> Result<(), Error> {
     let log_state = state.clone();
     configure_logging()?;
 
-    task::spawn(log_loop(log_state.clone()));
+    spawn(log_loop(log_state.clone()));
 
     let config = Config {
         max_payload_size: ByteSize::kb(5000),

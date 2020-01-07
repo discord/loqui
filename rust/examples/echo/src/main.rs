@@ -11,8 +11,8 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::{thread, time::Duration};
-use tokio::task;
+use std::time::Duration;
+use tokio::task::spawn;
 use tokio::time::delay_for;
 
 const ADDRESS: &str = "127.0.0.1:8080";
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
     configure_logging()?;
     spawn_server();
     // Wait for server to start.
-    thread::sleep(Duration::from_secs(1));
+    delay_for(Duration::from_secs(1)).await;
     client_send_loop().await;
     Ok(())
 }
@@ -73,7 +73,7 @@ async fn client_send_loop() {
     loop {
         for message in messages {
             let client = client.clone();
-            task::spawn(async move {
+            spawn(async move {
                 if let Err(e) = client.push(message.as_bytes().to_vec()).await {
                     error!("Push failed. error={:?}", e);
                 }
@@ -96,7 +96,7 @@ async fn client_send_loop() {
 }
 
 fn spawn_server() {
-    task::spawn(async {
+    spawn(async {
         let config = ServerConfig {
             request_handler: EchoHandler {},
             max_payload_size: ByteSize::kb(5000),

@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
-use tokio::task;
+use tokio::task::spawn;
 use tokio::time::Instant;
 
 pub struct Client {
@@ -48,7 +48,7 @@ impl Client {
 
         let task_encoding = encoding.clone();
         let task_ready = ready.clone();
-        task::spawn(async move {
+        spawn(async move {
             info!("spawned");
             if let Ok(ready_encoding) = awaitable.await {
                 *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);

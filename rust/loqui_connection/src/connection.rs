@@ -12,7 +12,7 @@ use futures::{Future, StreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
-use tokio::task;
+use tokio::task::spawn;
 use tokio::time::interval;
 use tokio::time::Instant;
 
@@ -41,7 +41,7 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        task::spawn(async move {
+        spawn(async move {
             match timeout_at(handshake_deadline, TcpStream::connect(&address)).await {
                 Ok(tcp_stream) => {
                     info!("Connected to {}", address);
@@ -83,7 +83,7 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        task::spawn(async move {
+        spawn(async move {
             let ip = tcp_stream.peer_addr();
             let result = run(
                 tcp_stream,
