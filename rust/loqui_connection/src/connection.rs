@@ -8,7 +8,7 @@ use crate::LoquiError;
 use failure::Error;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
-use futures::{Future, StreamExt, TryStreamExt};
+use futures::{Future, StreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
 use std::time::Instant;

@@ -1,7 +1,7 @@
 use failure::Error;
 use futures::channel::oneshot::{self, Sender};
 use futures::TryFutureExt;
-use loqui_connection::{convert_timeout_error, timeout_at, LoquiError};
+use loqui_connection::{timeout_at, LoquiError};
 use std::future::Future;
 use std::time::{Duration, Instant};
 

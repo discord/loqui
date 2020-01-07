@@ -1,6 +1,11 @@
 #[macro_use]
 extern crate log;
 
+use std::future::Future;
+use std::io::{Error as IoError, ErrorKind};
+use std::time::Instant;
+use tokio::time::{timeout_at as tokio_timeout_at, Instant as TokioInstant};
+
 mod connection;
 mod error;
 mod event_handler;
@@ -11,11 +16,8 @@ mod sender;
 
 pub mod handler;
 
-use std::future::Future;
-use std::time::Instant;
-
 pub use connection::Connection;
-pub use error::{convert_timeout_error, LoquiError, LoquiErrorCode};
+pub use error::{LoquiError, LoquiErrorCode};
 pub use framed_io::ReaderWriter;
 pub use id_sequence::IdSequence;
 
@@ -31,10 +33,6 @@ pub fn find_encoding<S: AsRef<str>>(
     }
     None
 }
-
-use failure::Error;
-use std::io::{Error as IoError, ErrorKind};
-use tokio::time::{timeout_at as tokio_timeout_at, Instant as TokioInstant};
 
 pub async fn timeout_at<F, O, E>(deadline: Instant, future: F) -> F::Output
 where
