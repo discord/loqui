@@ -33,6 +33,8 @@ pub fn find_encoding<S: AsRef<str>>(
     None
 }
 
+/// Utility function for timing out a future without having to double unwrap the result.
+/// It collapses the two results into a single result.
 pub async fn timeout_at<F, O, E>(deadline: Instant, future: F) -> F::Output
 where
     F: Future<Output = Result<O, E>>,

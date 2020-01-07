@@ -58,7 +58,7 @@ impl<H: Handler> Connection<H> {
                         warn!("Connection closed. ip={:?} error={:?}", address, e)
                     }
                 }
-                e => error!("Connect failed. error={:?}", e),
+                Err(e) => error!("Connect failed. error={:?}", e),
             };
         });
         connection

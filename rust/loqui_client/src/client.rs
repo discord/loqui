@@ -44,12 +44,10 @@ impl Client {
 
         let connection =
             Connection::spawn_from_address(address, handler, handshake_deadline, Some(ready_tx));
-        info!("made connection");
 
         let task_encoding = encoding.clone();
         let task_ready = ready.clone();
         spawn(async move {
-            info!("spawned");
             if let Ok(ready_encoding) = awaitable.await {
                 *task_encoding.write().expect("Failed to write encoding") = Some(ready_encoding);
                 task_ready.store(true, SeqCst);
