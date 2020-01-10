@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use bytesize::ByteSize;
 use failure::Error;
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::ProtocolError;
 use crate::frames::{
@@ -73,7 +73,7 @@ fn encode<F: Frame>(frame: F, dst: &mut BytesMut) {
     dst.reserve(F::HEADER_SIZE_IN_BYTES);
     frame.put_header(dst);
     if let Some(payload) = frame.payload() {
-        dst.put_u32_be(payload.len() as u32);
+        dst.put_u32(payload.len() as u32);
         dst.extend_from_slice(&payload[..]);
     }
 }
@@ -122,11 +122,11 @@ mod tests {
         let buf = &mut BytesMut::with_capacity(1024);
 
         // Incomplete Payload
-        buf.put(frame_bytes[..frame_bytes.len() - 1].to_vec());
+        buf.put(&frame_bytes[..frame_bytes.len() - 1]);
         assert_eq!(codec.decode(buf).unwrap(), None);
 
         // Complete Frame
-        buf.put(frame_bytes[frame_bytes.len() - 1..].to_vec());
+        buf.put(&frame_bytes[frame_bytes.len() - 1..]);
         assert_eq!(codec.decode(buf).unwrap().unwrap(), expected_frame);
 
         // Buffer has been consumed

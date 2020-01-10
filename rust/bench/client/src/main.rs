@@ -2,13 +2,14 @@ use bytesize::ByteSize;
 use failure::Error;
 #[macro_use]
 extern crate log;
+use futures::future::join_all;
 use loqui_bench_common::{configure_logging, make_socket_address};
 use loqui_client::{Client, Config};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread;
 use std::time::{Duration, Instant};
-use tokio_futures::compat::infallible_into_01;
+use tokio::task::spawn;
+use tokio::time::delay_for;
 
 #[derive(Default)]
 struct State {
@@ -58,11 +59,11 @@ async fn work_loop(client: Arc<Client>, state: Arc<State>) {
     }
 }
 
-fn log_loop(state: Arc<State>) {
+async fn log_loop(state: Arc<State>) {
     let mut last_request_count = 0;
     let mut last = Instant::now();
     loop {
-        thread::sleep(Duration::from_secs(1));
+        delay_for(Duration::from_secs(1)).await;
         let now = Instant::now();
         let elapsed = now.duration_since(last).as_millis() as f64 / 1000.0;
         let request_count = state.request_count.load(Ordering::SeqCst);
@@ -87,31 +88,30 @@ fn log_loop(state: Arc<State>) {
     }
 }
 
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let state = Arc::new(State::default());
     let log_state = state.clone();
     configure_logging()?;
 
-    tokio::run(infallible_into_01(async move {
-        tokio::spawn(infallible_into_01(async move {
-            log_loop(log_state.clone());
-        }));
+    spawn(log_loop(log_state.clone()));
 
-        let config = Config {
-            max_payload_size: ByteSize::kb(5000),
-            request_timeout: Duration::from_secs(5),
-            handshake_timeout: Duration::from_secs(5),
-            supported_encodings: &["msgpack", "identity"],
-        };
-        let client = Arc::new(
-            Client::start_connect(make_socket_address(), config)
-                .await
-                .expect("Failed to connect"),
-        );
-        client.await_ready().await.expect("Ready failed");
-        for _ in 0..100 {
-            tokio::spawn(infallible_into_01(work_loop(client.clone(), state.clone())));
-        }
-    }));
+    let config = Config {
+        max_payload_size: ByteSize::kb(5000),
+        request_timeout: Duration::from_secs(5),
+        handshake_timeout: Duration::from_secs(5),
+        supported_encodings: &["msgpack", "identity"],
+    };
+    let client = Arc::new(
+        Client::start_connect(make_socket_address(), config)
+            .await
+            .expect("Failed to connect"),
+    );
+    client.await_ready().await.expect("Ready failed");
+    let mut work_futures = vec![];
+    for _ in 0..100 {
+        work_futures.push(work_loop(client.clone(), state.clone()));
+    }
+    join_all(work_futures).await;
     Ok(())
 }

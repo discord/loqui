@@ -1,11 +1,10 @@
 use failure::Error;
-use futures::future::Future as OldFuture;
-use futures::sync::oneshot::{self, Sender};
-use futures_timer::FutureExt;
-use loqui_connection::{convert_timeout_error, LoquiError};
+use futures::channel::oneshot::{self, Sender};
+use futures::TryFutureExt;
+use loqui_connection::{timeout_at, LoquiError};
 use std::future::Future;
-use std::time::{Duration, Instant};
-use tokio_futures::compat::forward::IntoAwaitable;
+use std::time::Duration;
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub struct ResponseWaiter {
@@ -30,13 +29,12 @@ impl ResponseWaiter {
 
         let deadline = Instant::now() + timeout;
 
-        let awaitable = rx
-            .map_err(|_canceled| Error::from(LoquiError::ConnectionClosed))
-            .timeout_at(deadline)
-            .map_err(convert_timeout_error)
-            // Collapses the Result<Result<Decoded, Error>> into a Result<Decoded, Error>
-            .then(|result| result.unwrap_or_else(Err))
-            .into_awaitable();
+        let awaitable = async move {
+            let rx = rx.map_err(|_cancelled| Error::from(LoquiError::ConnectionClosed));
+            timeout_at(deadline, rx)
+                .await
+                .unwrap_or_else(|_e| Err(LoquiError::RequestTimeout.into()))
+        };
 
         (Self { tx, deadline }, awaitable)
     }
@@ -54,17 +52,16 @@ impl ResponseWaiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::future_utils::{block_on_all, spawn};
-    use futures_timer::Delay;
-    use tokio_futures::compat::forward::IntoAwaitable;
+    use tokio::runtime::Runtime;
+    use tokio::task::spawn;
+    use tokio::time::delay_for;
 
     #[test]
     fn it_receives_ok() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
-        let result = block_on_all(async {
+        let result = Runtime::new().unwrap().block_on(async {
             spawn(async {
                 waiter.notify(Ok(vec![]));
-                Ok(())
             });
             awaitable.await
         });
@@ -75,10 +72,9 @@ mod tests {
     fn it_receives_error() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_secs(5));
 
-        let result: Result<Vec<u8>, Error> = block_on_all(async {
+        let result: Result<Vec<u8>, Error> = Runtime::new().unwrap().block_on(async {
             spawn(async {
                 waiter.notify(Err(LoquiError::ConnectionClosed.into()));
-                Ok(())
             });
             awaitable.await
         });
@@ -89,14 +85,10 @@ mod tests {
     fn it_times_out() {
         let (waiter, awaitable) = ResponseWaiter::new(Duration::from_millis(1));
 
-        let result = block_on_all(async {
+        let result = Runtime::new().unwrap().block_on(async {
             spawn(async {
-                Delay::new(Duration::from_millis(50))
-                    .into_awaitable()
-                    .await
-                    .unwrap();
+                delay_for(Duration::from_millis(50)).await;
                 waiter.notify(Ok(vec![]));
-                Ok(())
             });
             awaitable.await
         });

@@ -2,7 +2,7 @@ use crate::error::ProtocolError;
 use bytes::BytesMut;
 use bytesize::ByteSize;
 use failure::Error;
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 
 /// Codec for reading and writing the HTTP upgrade request.
 #[derive(Debug)]
@@ -97,11 +97,11 @@ mod tests {
         let buf = &mut BytesMut::with_capacity(1024);
 
         // Incomplete Payload
-        buf.put(frame_bytes[..frame_bytes.len() - 1].to_vec());
+        buf.put(&frame_bytes[..frame_bytes.len() - 1]);
         assert_eq!(codec.decode(buf).unwrap(), None);
 
         // Complete Frame
-        buf.put(frame_bytes[frame_bytes.len() - 1..].to_vec());
+        buf.put(&frame_bytes[frame_bytes.len() - 1..]);
         assert_eq!(codec.decode(buf).unwrap().unwrap(), expected_frame);
 
         // Buffer has been consumed

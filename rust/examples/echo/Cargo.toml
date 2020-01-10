@@ -5,13 +5,11 @@ authors = ["Discord Inc."]
 edition = "2018"
 
 [dependencies]
-failure = "0.1.1"
+failure = "0.1"
 loqui_client = { path = "../../loqui_client" }
 loqui_server = { path = "../../loqui_server" }
-tokio = { version = "0.1.21"}
-tokio-futures = { git = "https://github.com/discordapp/tokio", rev = "0506fb8018d3090ef1417d3db17f22a951c0c530", features = ["async-await-preview"] }
+tokio = { version = "0.2", features = ["rt-core", "macros", "time", "rt-threaded"] }
 log = "0.4"
 fern = "0.5"
 chrono = "0.4"
 bytesize = "1.0.0"
-futures-timer = "0.1"

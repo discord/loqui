@@ -3,20 +3,18 @@ use crate::framed_io::ReaderWriter;
 use crate::handler::{Handler, Ready};
 use crate::select_break::StreamExt as SelectBreakStreamExt;
 use crate::sender::Sender;
+use crate::timeout_at;
 use crate::LoquiError;
 use failure::Error;
-use futures::future::Future;
-use futures::sync::mpsc::UnboundedReceiver;
-use futures::sync::oneshot;
-use futures_timer::FutureExt;
-use futures_timer::Interval;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::oneshot;
+use futures::{Future, StreamExt};
 use loqui_protocol::frames::{LoquiFrame, Response};
 use std::net::SocketAddr;
-use std::time::Instant;
 use tokio::net::TcpStream;
-use tokio::prelude::*;
-use tokio_futures::compat::{forward::IntoAwaitable, infallible_into_01, into_01};
-use tokio_futures::stream::StreamExt;
+use tokio::task::spawn;
+use tokio::time::interval;
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub struct Connection<H: Handler> {
@@ -43,12 +41,8 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        tokio::spawn(infallible_into_01(async move {
-            match TcpStream::connect(&address)
-                .timeout_at(handshake_deadline)
-                .into_awaitable()
-                .await
-            {
+        spawn(async move {
+            match timeout_at(handshake_deadline, TcpStream::connect(&address)).await {
                 Ok(tcp_stream) => {
                     info!("Connected to {}", address);
                     let result = run(
@@ -66,7 +60,7 @@ impl<H: Handler> Connection<H> {
                 }
                 Err(e) => error!("Connect failed. error={:?}", e),
             };
-        }));
+        });
         connection
     }
 
@@ -89,7 +83,7 @@ impl<H: Handler> Connection<H> {
         let connection = Self {
             self_sender: self_sender.clone(),
         };
-        tokio::spawn(infallible_into_01(async move {
+        spawn(async move {
             let ip = tcp_stream.peer_addr();
             let result = run(
                 tcp_stream,
@@ -103,7 +97,7 @@ impl<H: Handler> Connection<H> {
             if let Err(e) = result {
                 warn!("Connection closed. ip={:?} error={:?}", ip, e)
             }
-        }));
+        });
         connection
     }
 
@@ -155,10 +149,8 @@ async fn run<H: Handler>(
     handshake_deadline: Instant,
     ready_tx: Option<oneshot::Sender<&'static str>>,
 ) -> Result<(), Error> {
-    let (ready, reader_writer, handler) = negotiate(tcp_stream, handler, ready_tx)
-        .timeout_at(handshake_deadline)
-        .into_awaitable()
-        .await?;
+    let (ready, reader_writer, handler) =
+        timeout_at(handshake_deadline, negotiate(tcp_stream, handler, ready_tx)).await?;
     debug!("Ready. {:?}", ready);
     let (reader, mut writer) = reader_writer.split();
 
@@ -167,11 +159,9 @@ async fn run<H: Handler>(
         encoding,
     } = ready;
     // Convert each stream into a Result<Event, Error> stream.
-    let ping_stream = Interval::new(ping_interval)
-        .map(|()| Event::Ping)
-        .map_err(Error::from);
-    let framed_reader = reader.map(Event::SocketReceive);
-    let self_rx = self_rx.map_err(|()| LoquiError::EventReceiveError.into());
+    let ping_stream = interval(ping_interval).map(|_| Ok(Event::Ping));
+    let framed_reader = reader.map(|result| result.map(Event::SocketReceive));
+    let self_rx = self_rx.map(|event| Ok(event));
 
     let mut stream = framed_reader
         .select_break(self_rx)
@@ -205,8 +195,8 @@ fn negotiate<H: Handler>(
     tcp_stream: TcpStream,
     mut handler: H,
     ready_tx: Option<oneshot::Sender<&'static str>>,
-) -> impl Future<Item = (Ready, ReaderWriter, H), Error = Error> {
-    into_01(async move {
+) -> impl Future<Output = Result<(Ready, ReaderWriter, H), Error>> {
+    async move {
         let tcp_stream = handler.upgrade(tcp_stream).await?;
         let max_payload_size = handler.max_payload_size();
         let reader_writer = ReaderWriter::new(tcp_stream, max_payload_size, H::SEND_GO_AWAY);
@@ -228,5 +218,5 @@ fn negotiate<H: Handler>(
                 Err(error)
             }
         }
-    })
+    }
 }

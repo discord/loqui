@@ -127,7 +127,7 @@ impl Frame for HelloAck {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.ping_interval_ms);
+        dst.put_u32(self.ping_interval_ms);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -190,7 +190,7 @@ impl Frame for Ping {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.sequence_id);
+        dst.put_u32(self.sequence_id);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -221,7 +221,7 @@ impl Frame for Pong {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.sequence_id);
+        dst.put_u32(self.sequence_id);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -253,7 +253,7 @@ impl Frame for Request {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.sequence_id);
+        dst.put_u32(self.sequence_id);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -290,7 +290,7 @@ impl Frame for Response {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.sequence_id);
+        dst.put_u32(self.sequence_id);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -357,7 +357,7 @@ impl Frame for GoAway {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u16_be(self.code);
+        dst.put_u16(self.code);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
@@ -396,8 +396,8 @@ impl Frame for Error {
     fn put_header(&self, dst: &mut BytesMut) {
         dst.put_u8(Self::OPCODE);
         dst.put_u8(self.flags);
-        dst.put_u32_be(self.sequence_id);
-        dst.put_u16_be(self.code);
+        dst.put_u32(self.sequence_id);
+        dst.put_u16(self.code);
     }
 
     fn payload(self) -> Option<Vec<u8>> {
