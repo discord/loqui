@@ -9,7 +9,7 @@ cdef class SocketWatcher:
         self.waiter = Waiter()
         self.waiter_get = self.waiter.get
         self.waiter_clear = self.waiter.clear
-        self.waiter_switch = self.waiter.switch
+        self.waiter_switch = lambda: self.waiter.switch(None)
         self.hub = gevent.get_hub()
         self.is_switching = False
         self.reset()

@@ -207,7 +207,7 @@ cdef class LoquiStreamHandler:
         cdef size_t size
         cdef bytes data = bytes(b'%s|%s' % (
             selected_encoding,
-            selected_compressor or ''
+            selected_compressor or b''
         ))
 
         rv = PyBytes_AsStringAndSize(data, &buffer, <Py_ssize_t*> &size)

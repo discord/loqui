@@ -3,9 +3,17 @@
 /* BEGIN: Cython Metadata
 {
     "distutils": {
-        "depends": [],
+        "depends": [
+            "c/buffer.h",
+            "c/constants.h",
+            "c/decoder.h",
+            "c/encoder.h"
+        ],
         "extra_compile_args": [
             "-O3"
+        ],
+        "include_dirs": [
+            "py/loqui"
         ],
         "name": "loqui.socket_session",
         "sources": [

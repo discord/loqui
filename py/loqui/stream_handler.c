@@ -3,9 +3,17 @@
 /* BEGIN: Cython Metadata
 {
     "distutils": {
-        "depends": [],
+        "depends": [
+            "c/buffer.h",
+            "c/constants.h",
+            "c/decoder.h",
+            "c/encoder.h"
+        ],
         "extra_compile_args": [
             "-O3"
+        ],
+        "include_dirs": [
+            "py/loqui"
         ],
         "name": "loqui.stream_handler",
         "sources": [
@@ -828,9 +836,9 @@ static const char *__pyx_filename;
 static const char *__pyx_f[] = {
   "py/loqui/stream_handler.pyx",
   "stringsource",
-  "type.pxd",
-  "bool.pxd",
-  "complex.pxd",
+  "venv3/lib/python3.7/site-packages/Cython/Includes/cpython/type.pxd",
+  "venv3/lib/python3.7/site-packages/Cython/Includes/cpython/bool.pxd",
+  "venv3/lib/python3.7/site-packages/Cython/Includes/cpython/complex.pxd",
   "py/loqui/opcodes.pxd",
 };
 
@@ -1679,7 +1687,7 @@ static PyObject *__pyx_n_s_TypeError;
 static PyObject *__pyx_kp_s_Unable_to_allocate_buffer;
 static PyObject *__pyx_kp_s_Unhandled_decoder_status_s;
 static PyObject *__pyx_kp_b__2;
-static PyObject *__pyx_kp_s__3;
+static PyObject *__pyx_kp_b__3;
 static PyObject *__pyx_kp_b__4;
 static PyObject *__pyx_n_s_cline_in_traceback;
 static PyObject *__pyx_n_s_code;
@@ -4109,7 +4117,7 @@ static uint32_t __pyx_f_5loqui_14stream_handler_18LoquiStreamHandler_send_hello_
   /* "loqui/stream_handler.pyx":210
  *         cdef bytes data = bytes(b'%s|%s' % (
  *             selected_encoding,
- *             selected_compressor or ''             # <<<<<<<<<<<<<<
+ *             selected_compressor or b''             # <<<<<<<<<<<<<<
  *         ))
  * 
  */
@@ -4120,15 +4128,15 @@ static uint32_t __pyx_f_5loqui_14stream_handler_18LoquiStreamHandler_send_hello_
     __pyx_t_1 = __pyx_v_selected_compressor;
     goto __pyx_L3_bool_binop_done;
   }
-  __Pyx_INCREF(__pyx_kp_s__3);
-  __pyx_t_1 = __pyx_kp_s__3;
+  __Pyx_INCREF(__pyx_kp_b__3);
+  __pyx_t_1 = __pyx_kp_b__3;
   __pyx_L3_bool_binop_done:;
 
   /* "loqui/stream_handler.pyx":209
  *         cdef size_t size
  *         cdef bytes data = bytes(b'%s|%s' % (
  *             selected_encoding,             # <<<<<<<<<<<<<<
- *             selected_compressor or ''
+ *             selected_compressor or b''
  *         ))
  */
   __pyx_t_2 = PyTuple_New(2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 209, __pyx_L1_error)
@@ -4145,7 +4153,7 @@ static uint32_t __pyx_f_5loqui_14stream_handler_18LoquiStreamHandler_send_hello_
  *         cdef size_t size
  *         cdef bytes data = bytes(b'%s|%s' % (             # <<<<<<<<<<<<<<
  *             selected_encoding,
- *             selected_compressor or ''
+ *             selected_compressor or b''
  */
   __pyx_t_1 = PyNumber_Remainder(__pyx_kp_b_s_s, __pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 208, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
@@ -7875,7 +7883,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_kp_s_Unable_to_allocate_buffer, __pyx_k_Unable_to_allocate_buffer, sizeof(__pyx_k_Unable_to_allocate_buffer), 0, 0, 1, 0},
   {&__pyx_kp_s_Unhandled_decoder_status_s, __pyx_k_Unhandled_decoder_status_s, sizeof(__pyx_k_Unhandled_decoder_status_s), 0, 0, 1, 0},
   {&__pyx_kp_b__2, __pyx_k__2, sizeof(__pyx_k__2), 0, 0, 0, 0},
-  {&__pyx_kp_s__3, __pyx_k__3, sizeof(__pyx_k__3), 0, 0, 1, 0},
+  {&__pyx_kp_b__3, __pyx_k__3, sizeof(__pyx_k__3), 0, 0, 0, 0},
   {&__pyx_kp_b__4, __pyx_k__4, sizeof(__pyx_k__4), 0, 0, 0, 0},
   {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
   {&__pyx_n_s_code, __pyx_k_code, sizeof(__pyx_k_code), 0, 0, 1, 1},
