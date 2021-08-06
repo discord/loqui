@@ -1,3 +1,7 @@
+# This project is no longer maintained
+
+The gRPC ecosystem has advanced since we've written this project, and we've moved to using gRPC instead.
+
 # Loqui
 Loqui is a transport that implements a very simple framing protocol over a raw socket. The framing protocol is similar
 to http2, except that we've chosen deliberately to not implement a bunch of stuff, like flow control.
