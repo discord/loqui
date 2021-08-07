@@ -37,5 +37,6 @@ setup(
     packages=['loqui'],
     ext_modules=extensions,
     tests_require=['pytest'],
+    install_requires=['six==1.12.0'],
     setup_requires=['pytest-runner']
 )
