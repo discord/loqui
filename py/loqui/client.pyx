@@ -156,9 +156,9 @@ cdef class LoquiClient:
 
 cdef class LoquiHTTPUpgradeClient(LoquiClient):
     def handle_new_socket(self, sock):
-        upgrade_payload = '\r\n'.join([
+        upgrade_payload = b'\r\n'.join([
             b'GET /_rpc HTTP/1.1',
-            (b'Host: %s' % self._address[0]),
+            (b'Host: %s' % six.ensure_binary(self._address[0], 'ascii')),
             b'Upgrade: loqui',
             b'Connection: Upgrade',
             b'',
@@ -167,14 +167,14 @@ cdef class LoquiHTTPUpgradeClient(LoquiClient):
 
         sock.sendall(upgrade_payload)
         expected_handshake_responses = [
-            '\r\n'.join([
+            b'\r\n'.join([
                 b'HTTP/1.1 101 Switching Protocols',
                 b'Upgrade: loqui',
                 b'Connection: Upgrade',
                 b'',
                 b''
             ]).lower(),
-            '\r\n'.join([
+            b'\r\n'.join([
                 b'HTTP/1.1 101 Switching Protocols',
                 b'Connection: Upgrade',
                 b'Upgrade: loqui',

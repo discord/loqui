@@ -1175,7 +1175,7 @@ struct __pyx_obj_5loqui_6client_LoquiClient {
  * 
  * cdef class LoquiHTTPUpgradeClient(LoquiClient):             # <<<<<<<<<<<<<<
  *     def handle_new_socket(self, sock):
- *         upgrade_payload = '\r\n'.join([
+ *         upgrade_payload = b'\r\n'.join([
  */
 struct __pyx_obj_5loqui_6client_LoquiHTTPUpgradeClient {
   struct __pyx_obj_5loqui_6client_LoquiClient __pyx_base;
@@ -1326,7 +1326,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5loqui_6client_11LoquiClient__is_socket_c
  * 
  * cdef class LoquiHTTPUpgradeClient(LoquiClient):             # <<<<<<<<<<<<<<
  *     def handle_new_socket(self, sock):
- *         upgrade_payload = '\r\n'.join([
+ *         upgrade_payload = b'\r\n'.join([
  */
 
 struct __pyx_vtabstruct_5loqui_6client_LoquiHTTPUpgradeClient {
@@ -1867,6 +1867,7 @@ static const char __pyx_k__3[] = "\r\n";
 static const char __pyx_k__4[] = "";
 static const char __pyx_k_get[] = "get";
 static const char __pyx_k_new[] = "__new__";
+static const char __pyx_k_six[] = "six";
 static const char __pyx_k_dict[] = "__dict__";
 static const char __pyx_k_exit[] = "__exit__";
 static const char __pyx_k_info[] = "info";
@@ -1876,12 +1877,14 @@ static const char __pyx_k_name[] = "__name__";
 static const char __pyx_k_recv[] = "recv";
 static const char __pyx_k_test[] = "__test__";
 static const char __pyx_k_time[] = "time";
-static const char __pyx_k_Queue[] = "Queue";
 static const char __pyx_k_RLock[] = "RLock";
+static const char __pyx_k_ascii[] = "ascii";
 static const char __pyx_k_deque[] = "deque";
 static const char __pyx_k_enter[] = "__enter__";
 static const char __pyx_k_error[] = "error";
 static const char __pyx_k_lower[] = "lower";
+static const char __pyx_k_moves[] = "moves";
+static const char __pyx_k_queue[] = "queue";
 static const char __pyx_k_sleep[] = "sleep";
 static const char __pyx_k_spawn[] = "spawn";
 static const char __pyx_k_Host_s[] = "Host: %s";
@@ -1935,11 +1938,13 @@ static const char __pyx_k_request_data[] = "request_data";
 static const char __pyx_k_send_request[] = "send_request";
 static const char __pyx_k_stringsource[] = "stringsource";
 static const char __pyx_k_Upgrade_loqui[] = "Upgrade: loqui";
+static const char __pyx_k_ensure_binary[] = "ensure_binary";
 static const char __pyx_k_reduce_cython[] = "__reduce_cython__";
 static const char __pyx_k_ConnectionError[] = "ConnectionError";
 static const char __pyx_k_connect_timeout[] = "connect_timeout";
 static const char __pyx_k_pyx_PickleError[] = "__pyx_PickleError";
 static const char __pyx_k_setstate_cython[] = "__setstate_cython__";
+static const char __pyx_k_six_moves_queue[] = "six.moves.queue";
 static const char __pyx_k_set_push_handler[] = "set_push_handler";
 static const char __pyx_k_GET__rpc_HTTP_1_1[] = "GET /_rpc HTTP/1.1";
 static const char __pyx_k_handle_new_socket[] = "handle_new_socket";
@@ -1977,15 +1982,15 @@ static PyObject *__pyx_n_s_LoquiClient;
 static PyObject *__pyx_n_s_LoquiHTTPUpgradeClient;
 static PyObject *__pyx_kp_s_No_connection_available;
 static PyObject *__pyx_n_s_PickleError;
-static PyObject *__pyx_n_s_Queue;
 static PyObject *__pyx_n_s_RLock;
 static PyObject *__pyx_n_s_SOCK_STREAM;
 static PyObject *__pyx_n_s_TCP_NODELAY;
 static PyObject *__pyx_kp_b_Upgrade_loqui;
-static PyObject *__pyx_kp_s__3;
+static PyObject *__pyx_kp_b__3;
 static PyObject *__pyx_kp_b__4;
 static PyObject *__pyx_n_s_address;
 static PyObject *__pyx_n_s_append;
+static PyObject *__pyx_n_s_ascii;
 static PyObject *__pyx_n_s_cline_in_traceback;
 static PyObject *__pyx_n_s_connect;
 static PyObject *__pyx_n_s_connect_and_send_request_async;
@@ -1994,6 +1999,7 @@ static PyObject *__pyx_n_s_connect_timeout;
 static PyObject *__pyx_n_s_deque;
 static PyObject *__pyx_n_s_dict;
 static PyObject *__pyx_n_s_encoders;
+static PyObject *__pyx_n_s_ensure_binary;
 static PyObject *__pyx_n_s_enter;
 static PyObject *__pyx_n_s_error;
 static PyObject *__pyx_n_s_exception;
@@ -2020,6 +2026,7 @@ static PyObject *__pyx_n_s_max_delay;
 static PyObject *__pyx_n_s_max_push_queue_len;
 static PyObject *__pyx_n_s_maxlen;
 static PyObject *__pyx_n_s_min_delay;
+static PyObject *__pyx_n_s_moves;
 static PyObject *__pyx_n_s_name;
 static PyObject *__pyx_n_s_new;
 static PyObject *__pyx_n_s_on_push;
@@ -2034,6 +2041,7 @@ static PyObject *__pyx_n_s_pyx_type;
 static PyObject *__pyx_n_s_pyx_unpickle_LoquiClient;
 static PyObject *__pyx_n_s_pyx_unpickle_LoquiHTTPUpgradeC;
 static PyObject *__pyx_n_s_pyx_vtable;
+static PyObject *__pyx_n_s_queue;
 static PyObject *__pyx_n_s_rawlink;
 static PyObject *__pyx_n_s_recv;
 static PyObject *__pyx_n_s_reduce;
@@ -2051,6 +2059,8 @@ static PyObject *__pyx_n_s_setsockopt;
 static PyObject *__pyx_n_s_setstate;
 static PyObject *__pyx_n_s_setstate_cython;
 static PyObject *__pyx_n_s_settimeout;
+static PyObject *__pyx_n_s_six;
+static PyObject *__pyx_n_s_six_moves_queue;
 static PyObject *__pyx_n_s_sleep;
 static PyObject *__pyx_n_s_socket;
 static PyObject *__pyx_n_s_spawn;
@@ -2300,7 +2310,7 @@ static int __pyx_pf_5loqui_6client_11LoquiClient___init__(struct __pyx_obj_5loqu
  *         self._connect_timeout = connect_timeout
  *         self._push_handler = push_handler             # <<<<<<<<<<<<<<
  *         self._connect_greenlet = None
- *         self._push_queue = Queue.deque(maxlen=max_push_queue_len)
+ *         self._push_queue = six.moves.queue.deque(maxlen=max_push_queue_len)
  */
   __Pyx_INCREF(__pyx_v_push_handler);
   __Pyx_GIVEREF(__pyx_v_push_handler);
@@ -2312,7 +2322,7 @@ static int __pyx_pf_5loqui_6client_11LoquiClient___init__(struct __pyx_obj_5loqu
  *         self._connect_timeout = connect_timeout
  *         self._push_handler = push_handler
  *         self._connect_greenlet = None             # <<<<<<<<<<<<<<
- *         self._push_queue = Queue.deque(maxlen=max_push_queue_len)
+ *         self._push_queue = six.moves.queue.deque(maxlen=max_push_queue_len)
  *         self._backoff = Backoff(min_delay=0.25, max_delay=2)
  */
   __Pyx_INCREF(Py_None);
@@ -2324,12 +2334,18 @@ static int __pyx_pf_5loqui_6client_11LoquiClient___init__(struct __pyx_obj_5loqu
   /* "loqui/client.pyx":35
  *         self._push_handler = push_handler
  *         self._connect_greenlet = None
- *         self._push_queue = Queue.deque(maxlen=max_push_queue_len)             # <<<<<<<<<<<<<<
+ *         self._push_queue = six.moves.queue.deque(maxlen=max_push_queue_len)             # <<<<<<<<<<<<<<
  *         self._backoff = Backoff(min_delay=0.25, max_delay=2)
  * 
  */
-  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_Queue); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 35, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_six); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 35, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_moves); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 35, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_queue); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 35, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_deque); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 35, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -2348,7 +2364,7 @@ static int __pyx_pf_5loqui_6client_11LoquiClient___init__(struct __pyx_obj_5loqu
 
   /* "loqui/client.pyx":36
  *         self._connect_greenlet = None
- *         self._push_queue = Queue.deque(maxlen=max_push_queue_len)
+ *         self._push_queue = six.moves.queue.deque(maxlen=max_push_queue_len)
  *         self._backoff = Backoff(min_delay=0.25, max_delay=2)             # <<<<<<<<<<<<<<
  * 
  *     cpdef set_push_handler(self, object push_handler):
@@ -5882,7 +5898,7 @@ static PyObject *__pyx_pf_5loqui_6client_11LoquiClient_18__setstate_cython__(str
  * 
  * cdef class LoquiHTTPUpgradeClient(LoquiClient):
  *     def handle_new_socket(self, sock):             # <<<<<<<<<<<<<<
- *         upgrade_payload = '\r\n'.join([
+ *         upgrade_payload = b'\r\n'.join([
  *             b'GET /_rpc HTTP/1.1',
  */
 
@@ -5911,42 +5927,96 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
   PyObject *__pyx_t_2 = NULL;
   PyObject *__pyx_t_3 = NULL;
   PyObject *__pyx_t_4 = NULL;
-  Py_ssize_t __pyx_t_5;
-  int __pyx_t_6;
-  int __pyx_t_7;
+  int __pyx_t_5;
+  PyObject *__pyx_t_6 = NULL;
+  Py_ssize_t __pyx_t_7;
+  int __pyx_t_8;
+  int __pyx_t_9;
   __Pyx_RefNannySetupContext("handle_new_socket", 0);
 
   /* "loqui/client.pyx":161
- *         upgrade_payload = '\r\n'.join([
+ *         upgrade_payload = b'\r\n'.join([
  *             b'GET /_rpc HTTP/1.1',
- *             (b'Host: %s' % self._address[0]),             # <<<<<<<<<<<<<<
+ *             (b'Host: %s' % six.ensure_binary(self._address[0], 'ascii')),             # <<<<<<<<<<<<<<
  *             b'Upgrade: loqui',
  *             b'Connection: Upgrade',
  */
+  __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_n_s_six); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ensure_binary); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   if (unlikely(__pyx_v_self->__pyx_base._address == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
     __PYX_ERR(0, 161, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_GetItemInt_Tuple(__pyx_v_self->__pyx_base._address, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 161, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = PyNumber_Remainder(__pyx_kp_b_Host_s, __pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_GetItemInt_Tuple(__pyx_v_self->__pyx_base._address, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 161, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_4 = NULL;
+  __pyx_t_5 = 0;
+  if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_3))) {
+    __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_3);
+    if (likely(__pyx_t_4)) {
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
+      __Pyx_INCREF(__pyx_t_4);
+      __Pyx_INCREF(function);
+      __Pyx_DECREF_SET(__pyx_t_3, function);
+      __pyx_t_5 = 1;
+    }
+  }
+  #if CYTHON_FAST_PYCALL
+  if (PyFunction_Check(__pyx_t_3)) {
+    PyObject *__pyx_temp[3] = {__pyx_t_4, __pyx_t_2, __pyx_n_s_ascii};
+    __pyx_t_1 = __Pyx_PyFunction_FastCall(__pyx_t_3, __pyx_temp+1-__pyx_t_5, 2+__pyx_t_5); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 161, __pyx_L1_error)
+    __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_GOTREF(__pyx_t_1);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  } else
+  #endif
+  #if CYTHON_FAST_PYCCALL
+  if (__Pyx_PyFastCFunction_Check(__pyx_t_3)) {
+    PyObject *__pyx_temp[3] = {__pyx_t_4, __pyx_t_2, __pyx_n_s_ascii};
+    __pyx_t_1 = __Pyx_PyCFunction_FastCall(__pyx_t_3, __pyx_temp+1-__pyx_t_5, 2+__pyx_t_5); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 161, __pyx_L1_error)
+    __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_GOTREF(__pyx_t_1);
+    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  } else
+  #endif
+  {
+    __pyx_t_6 = PyTuple_New(2+__pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 161, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    if (__pyx_t_4) {
+      __Pyx_GIVEREF(__pyx_t_4); PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_4); __pyx_t_4 = NULL;
+    }
+    __Pyx_GIVEREF(__pyx_t_2);
+    PyTuple_SET_ITEM(__pyx_t_6, 0+__pyx_t_5, __pyx_t_2);
+    __Pyx_INCREF(__pyx_n_s_ascii);
+    __Pyx_GIVEREF(__pyx_n_s_ascii);
+    PyTuple_SET_ITEM(__pyx_t_6, 1+__pyx_t_5, __pyx_n_s_ascii);
+    __pyx_t_2 = 0;
+    __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_3, __pyx_t_6, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 161, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_1);
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  }
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = PyNumber_Remainder(__pyx_kp_b_Host_s, __pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 161, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "loqui/client.pyx":159
  * cdef class LoquiHTTPUpgradeClient(LoquiClient):
  *     def handle_new_socket(self, sock):
- *         upgrade_payload = '\r\n'.join([             # <<<<<<<<<<<<<<
+ *         upgrade_payload = b'\r\n'.join([             # <<<<<<<<<<<<<<
  *             b'GET /_rpc HTTP/1.1',
- *             (b'Host: %s' % self._address[0]),
+ *             (b'Host: %s' % six.ensure_binary(self._address[0], 'ascii')),
  */
   __pyx_t_1 = PyList_New(6); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 159, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_INCREF(__pyx_kp_b_GET__rpc_HTTP_1_1);
   __Pyx_GIVEREF(__pyx_kp_b_GET__rpc_HTTP_1_1);
   PyList_SET_ITEM(__pyx_t_1, 0, __pyx_kp_b_GET__rpc_HTTP_1_1);
-  __Pyx_GIVEREF(__pyx_t_2);
-  PyList_SET_ITEM(__pyx_t_1, 1, __pyx_t_2);
+  __Pyx_GIVEREF(__pyx_t_3);
+  PyList_SET_ITEM(__pyx_t_1, 1, __pyx_t_3);
   __Pyx_INCREF(__pyx_kp_b_Upgrade_loqui);
   __Pyx_GIVEREF(__pyx_kp_b_Upgrade_loqui);
   PyList_SET_ITEM(__pyx_t_1, 2, __pyx_kp_b_Upgrade_loqui);
@@ -5959,43 +6029,43 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
   __Pyx_INCREF(__pyx_kp_b__4);
   __Pyx_GIVEREF(__pyx_kp_b__4);
   PyList_SET_ITEM(__pyx_t_1, 5, __pyx_kp_b__4);
-  __pyx_t_2 = 0;
-  __pyx_t_2 = __Pyx_PyString_Join(__pyx_kp_s__3, __pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 159, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = 0;
+  __pyx_t_3 = __Pyx_PyBytes_Join(__pyx_kp_b__3, __pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 159, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_v_upgrade_payload = ((PyObject*)__pyx_t_2);
-  __pyx_t_2 = 0;
+  __pyx_v_upgrade_payload = __pyx_t_3;
+  __pyx_t_3 = 0;
 
   /* "loqui/client.pyx":168
  *         ])
  * 
  *         sock.sendall(upgrade_payload)             # <<<<<<<<<<<<<<
  *         expected_handshake_responses = [
- *             '\r\n'.join([
+ *             b'\r\n'.join([
  */
   __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_sock, __pyx_n_s_sendall); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 168, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_3 = NULL;
+  __pyx_t_6 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_1))) {
-    __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_1);
-    if (likely(__pyx_t_3)) {
+    __pyx_t_6 = PyMethod_GET_SELF(__pyx_t_1);
+    if (likely(__pyx_t_6)) {
       PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_1);
-      __Pyx_INCREF(__pyx_t_3);
+      __Pyx_INCREF(__pyx_t_6);
       __Pyx_INCREF(function);
       __Pyx_DECREF_SET(__pyx_t_1, function);
     }
   }
-  __pyx_t_2 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_3, __pyx_v_upgrade_payload) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_v_upgrade_payload);
-  __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 168, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = (__pyx_t_6) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_6, __pyx_v_upgrade_payload) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_v_upgrade_payload);
+  __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
+  if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 168, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
   /* "loqui/client.pyx":170
  *         sock.sendall(upgrade_payload)
  *         expected_handshake_responses = [
- *             '\r\n'.join([             # <<<<<<<<<<<<<<
+ *             b'\r\n'.join([             # <<<<<<<<<<<<<<
  *                 b'HTTP/1.1 101 Switching Protocols',
  *                 b'Upgrade: loqui',
  */
@@ -6016,63 +6086,63 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
   __Pyx_INCREF(__pyx_kp_b__4);
   __Pyx_GIVEREF(__pyx_kp_b__4);
   PyList_SET_ITEM(__pyx_t_1, 4, __pyx_kp_b__4);
-  __pyx_t_3 = __Pyx_PyString_Join(__pyx_kp_s__3, __pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 170, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_6 = __Pyx_PyBytes_Join(__pyx_kp_b__3, __pyx_t_1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 170, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "loqui/client.pyx":176
  *                 b'',
  *                 b''
  *             ]).lower(),             # <<<<<<<<<<<<<<
- *             '\r\n'.join([
+ *             b'\r\n'.join([
  *                 b'HTTP/1.1 101 Switching Protocols',
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_lower); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 176, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_lower); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 176, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = NULL;
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __pyx_t_6 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_1))) {
-    __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_1);
-    if (likely(__pyx_t_3)) {
+    __pyx_t_6 = PyMethod_GET_SELF(__pyx_t_1);
+    if (likely(__pyx_t_6)) {
       PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_1);
-      __Pyx_INCREF(__pyx_t_3);
+      __Pyx_INCREF(__pyx_t_6);
       __Pyx_INCREF(function);
       __Pyx_DECREF_SET(__pyx_t_1, function);
     }
   }
-  __pyx_t_2 = (__pyx_t_3) ? __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_3) : __Pyx_PyObject_CallNoArg(__pyx_t_1);
-  __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 176, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = (__pyx_t_6) ? __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_6) : __Pyx_PyObject_CallNoArg(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
+  if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 176, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "loqui/client.pyx":177
  *                 b''
  *             ]).lower(),
- *             '\r\n'.join([             # <<<<<<<<<<<<<<
+ *             b'\r\n'.join([             # <<<<<<<<<<<<<<
  *                 b'HTTP/1.1 101 Switching Protocols',
  *                 b'Connection: Upgrade',
  */
-  __pyx_t_3 = PyList_New(5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 177, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_6 = PyList_New(5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 177, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
   __Pyx_INCREF(__pyx_kp_b_HTTP_1_1_101_Switching_Protocols);
   __Pyx_GIVEREF(__pyx_kp_b_HTTP_1_1_101_Switching_Protocols);
-  PyList_SET_ITEM(__pyx_t_3, 0, __pyx_kp_b_HTTP_1_1_101_Switching_Protocols);
+  PyList_SET_ITEM(__pyx_t_6, 0, __pyx_kp_b_HTTP_1_1_101_Switching_Protocols);
   __Pyx_INCREF(__pyx_kp_b_Connection_Upgrade);
   __Pyx_GIVEREF(__pyx_kp_b_Connection_Upgrade);
-  PyList_SET_ITEM(__pyx_t_3, 1, __pyx_kp_b_Connection_Upgrade);
+  PyList_SET_ITEM(__pyx_t_6, 1, __pyx_kp_b_Connection_Upgrade);
   __Pyx_INCREF(__pyx_kp_b_Upgrade_loqui);
   __Pyx_GIVEREF(__pyx_kp_b_Upgrade_loqui);
-  PyList_SET_ITEM(__pyx_t_3, 2, __pyx_kp_b_Upgrade_loqui);
+  PyList_SET_ITEM(__pyx_t_6, 2, __pyx_kp_b_Upgrade_loqui);
   __Pyx_INCREF(__pyx_kp_b__4);
   __Pyx_GIVEREF(__pyx_kp_b__4);
-  PyList_SET_ITEM(__pyx_t_3, 3, __pyx_kp_b__4);
+  PyList_SET_ITEM(__pyx_t_6, 3, __pyx_kp_b__4);
   __Pyx_INCREF(__pyx_kp_b__4);
   __Pyx_GIVEREF(__pyx_kp_b__4);
-  PyList_SET_ITEM(__pyx_t_3, 4, __pyx_kp_b__4);
-  __pyx_t_4 = __Pyx_PyString_Join(__pyx_kp_s__3, __pyx_t_3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  PyList_SET_ITEM(__pyx_t_6, 4, __pyx_kp_b__4);
+  __pyx_t_2 = __Pyx_PyBytes_Join(__pyx_kp_b__3, __pyx_t_6); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 177, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
   /* "loqui/client.pyx":183
  *                 b'',
@@ -6081,42 +6151,42 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *         ]
  * 
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_lower); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 183, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = NULL;
-  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_3))) {
-    __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_3);
-    if (likely(__pyx_t_4)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
-      __Pyx_INCREF(__pyx_t_4);
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_lower); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 183, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_2 = NULL;
+  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_6))) {
+    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_6);
+    if (likely(__pyx_t_2)) {
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
+      __Pyx_INCREF(__pyx_t_2);
       __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_3, function);
+      __Pyx_DECREF_SET(__pyx_t_6, function);
     }
   }
-  __pyx_t_1 = (__pyx_t_4) ? __Pyx_PyObject_CallOneArg(__pyx_t_3, __pyx_t_4) : __Pyx_PyObject_CallNoArg(__pyx_t_3);
-  __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __pyx_t_1 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
   if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 183, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
   /* "loqui/client.pyx":169
  * 
  *         sock.sendall(upgrade_payload)
  *         expected_handshake_responses = [             # <<<<<<<<<<<<<<
- *             '\r\n'.join([
+ *             b'\r\n'.join([
  *                 b'HTTP/1.1 101 Switching Protocols',
  */
-  __pyx_t_3 = PyList_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 169, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __Pyx_GIVEREF(__pyx_t_2);
-  PyList_SET_ITEM(__pyx_t_3, 0, __pyx_t_2);
+  __pyx_t_6 = PyList_New(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 169, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_GIVEREF(__pyx_t_3);
+  PyList_SET_ITEM(__pyx_t_6, 0, __pyx_t_3);
   __Pyx_GIVEREF(__pyx_t_1);
-  PyList_SET_ITEM(__pyx_t_3, 1, __pyx_t_1);
-  __pyx_t_2 = 0;
-  __pyx_t_1 = 0;
-  __pyx_v_expected_handshake_responses = ((PyObject*)__pyx_t_3);
+  PyList_SET_ITEM(__pyx_t_6, 1, __pyx_t_1);
   __pyx_t_3 = 0;
+  __pyx_t_1 = 0;
+  __pyx_v_expected_handshake_responses = ((PyObject*)__pyx_t_6);
+  __pyx_t_6 = 0;
 
   /* "loqui/client.pyx":186
  *         ]
@@ -6125,14 +6195,14 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *         handshake_response = b''
  *         while bytes_remaining:
  */
-  __pyx_t_3 = __Pyx_GetItemInt_List(__pyx_v_expected_handshake_responses, 0, long, 1, __Pyx_PyInt_From_long, 1, 0, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 186, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_5 = PyObject_Length(__pyx_t_3); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 186, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_3 = PyInt_FromSsize_t(__pyx_t_5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 186, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_v_bytes_remaining = __pyx_t_3;
-  __pyx_t_3 = 0;
+  __pyx_t_6 = __Pyx_GetItemInt_List(__pyx_v_expected_handshake_responses, 0, long, 1, __Pyx_PyInt_From_long, 1, 0, 1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 186, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_7 = PyObject_Length(__pyx_t_6); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 186, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __pyx_t_6 = PyInt_FromSsize_t(__pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 186, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_v_bytes_remaining = __pyx_t_6;
+  __pyx_t_6 = 0;
 
   /* "loqui/client.pyx":187
  * 
@@ -6152,8 +6222,8 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *             if not buf:
  */
   while (1) {
-    __pyx_t_6 = __Pyx_PyObject_IsTrue(__pyx_v_bytes_remaining); if (unlikely(__pyx_t_6 < 0)) __PYX_ERR(0, 188, __pyx_L1_error)
-    if (!__pyx_t_6) break;
+    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_v_bytes_remaining); if (unlikely(__pyx_t_8 < 0)) __PYX_ERR(0, 188, __pyx_L1_error)
+    if (!__pyx_t_8) break;
 
     /* "loqui/client.pyx":189
  *         handshake_response = b''
@@ -6164,23 +6234,23 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  */
     __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_v_sock, __pyx_n_s_recv); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 189, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_2 = NULL;
+    __pyx_t_3 = NULL;
     if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_1))) {
-      __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_1);
-      if (likely(__pyx_t_2)) {
+      __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_1);
+      if (likely(__pyx_t_3)) {
         PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_1);
-        __Pyx_INCREF(__pyx_t_2);
+        __Pyx_INCREF(__pyx_t_3);
         __Pyx_INCREF(function);
         __Pyx_DECREF_SET(__pyx_t_1, function);
       }
     }
-    __pyx_t_3 = (__pyx_t_2) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_2, __pyx_v_bytes_remaining) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_v_bytes_remaining);
-    __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 189, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_3, __pyx_v_bytes_remaining) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_v_bytes_remaining);
+    __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 189, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    __Pyx_XDECREF_SET(__pyx_v_buf, __pyx_t_3);
-    __pyx_t_3 = 0;
+    __Pyx_XDECREF_SET(__pyx_v_buf, __pyx_t_6);
+    __pyx_t_6 = 0;
 
     /* "loqui/client.pyx":190
  *         while bytes_remaining:
@@ -6189,9 +6259,9 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *                 raise ConnectionError('Connection died while reading handshake response')
  * 
  */
-    __pyx_t_6 = __Pyx_PyObject_IsTrue(__pyx_v_buf); if (unlikely(__pyx_t_6 < 0)) __PYX_ERR(0, 190, __pyx_L1_error)
-    __pyx_t_7 = ((!__pyx_t_6) != 0);
-    if (unlikely(__pyx_t_7)) {
+    __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_v_buf); if (unlikely(__pyx_t_8 < 0)) __PYX_ERR(0, 190, __pyx_L1_error)
+    __pyx_t_9 = ((!__pyx_t_8) != 0);
+    if (unlikely(__pyx_t_9)) {
 
       /* "loqui/client.pyx":191
  *             buf = sock.recv(bytes_remaining)
@@ -6202,23 +6272,23 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  */
       __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_n_s_ConnectionError); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 191, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      __pyx_t_2 = NULL;
+      __pyx_t_3 = NULL;
       if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_1))) {
-        __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_1);
-        if (likely(__pyx_t_2)) {
+        __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_1);
+        if (likely(__pyx_t_3)) {
           PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_1);
-          __Pyx_INCREF(__pyx_t_2);
+          __Pyx_INCREF(__pyx_t_3);
           __Pyx_INCREF(function);
           __Pyx_DECREF_SET(__pyx_t_1, function);
         }
       }
-      __pyx_t_3 = (__pyx_t_2) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_2, __pyx_kp_s_Connection_died_while_reading_ha) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_kp_s_Connection_died_while_reading_ha);
-      __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 191, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_3);
+      __pyx_t_6 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_1, __pyx_t_3, __pyx_kp_s_Connection_died_while_reading_ha) : __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_kp_s_Connection_died_while_reading_ha);
+      __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 191, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-      __Pyx_Raise(__pyx_t_3, 0, 0, 0);
-      __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+      __Pyx_Raise(__pyx_t_6, 0, 0, 0);
+      __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __PYX_ERR(0, 191, __pyx_L1_error)
 
       /* "loqui/client.pyx":190
@@ -6237,10 +6307,10 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *             bytes_remaining -= len(buf)
  * 
  */
-    __pyx_t_3 = PyNumber_InPlaceAdd(__pyx_v_handshake_response, __pyx_v_buf); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 193, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __Pyx_DECREF_SET(__pyx_v_handshake_response, __pyx_t_3);
-    __pyx_t_3 = 0;
+    __pyx_t_6 = PyNumber_InPlaceAdd(__pyx_v_handshake_response, __pyx_v_buf); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 193, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __Pyx_DECREF_SET(__pyx_v_handshake_response, __pyx_t_6);
+    __pyx_t_6 = 0;
 
     /* "loqui/client.pyx":194
  * 
@@ -6249,12 +6319,12 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  * 
  *         if handshake_response.lower() not in expected_handshake_responses:
  */
-    __pyx_t_5 = PyObject_Length(__pyx_v_buf); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 194, __pyx_L1_error)
-    __pyx_t_3 = PyInt_FromSsize_t(__pyx_t_5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 194, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_1 = PyNumber_InPlaceSubtract(__pyx_v_bytes_remaining, __pyx_t_3); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 194, __pyx_L1_error)
+    __pyx_t_7 = PyObject_Length(__pyx_v_buf); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 194, __pyx_L1_error)
+    __pyx_t_6 = PyInt_FromSsize_t(__pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 194, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_1 = PyNumber_InPlaceSubtract(__pyx_v_bytes_remaining, __pyx_t_6); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF_SET(__pyx_v_bytes_remaining, __pyx_t_1);
     __pyx_t_1 = 0;
   }
@@ -6265,53 +6335,53 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  *         if handshake_response.lower() not in expected_handshake_responses:             # <<<<<<<<<<<<<<
  *             raise ConnectionError('Invalid handshake response: %s' % handshake_response)
  */
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_v_handshake_response, __pyx_n_s_lower); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 196, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_2 = NULL;
-  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_3))) {
-    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_3);
-    if (likely(__pyx_t_2)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
-      __Pyx_INCREF(__pyx_t_2);
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_handshake_response, __pyx_n_s_lower); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 196, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_3 = NULL;
+  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_6))) {
+    __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_6);
+    if (likely(__pyx_t_3)) {
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
+      __Pyx_INCREF(__pyx_t_3);
       __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_3, function);
+      __Pyx_DECREF_SET(__pyx_t_6, function);
     }
   }
-  __pyx_t_1 = (__pyx_t_2) ? __Pyx_PyObject_CallOneArg(__pyx_t_3, __pyx_t_2) : __Pyx_PyObject_CallNoArg(__pyx_t_3);
-  __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_t_3) : __Pyx_PyObject_CallNoArg(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
   if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 196, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __pyx_t_7 = (__Pyx_PySequence_ContainsTF(__pyx_t_1, __pyx_v_expected_handshake_responses, Py_NE)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 196, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __pyx_t_9 = (__Pyx_PySequence_ContainsTF(__pyx_t_1, __pyx_v_expected_handshake_responses, Py_NE)); if (unlikely(__pyx_t_9 < 0)) __PYX_ERR(0, 196, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_6 = (__pyx_t_7 != 0);
-  if (unlikely(__pyx_t_6)) {
+  __pyx_t_8 = (__pyx_t_9 != 0);
+  if (unlikely(__pyx_t_8)) {
 
     /* "loqui/client.pyx":197
  * 
  *         if handshake_response.lower() not in expected_handshake_responses:
  *             raise ConnectionError('Invalid handshake response: %s' % handshake_response)             # <<<<<<<<<<<<<<
  */
-    __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_n_s_ConnectionError); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_6, __pyx_n_s_ConnectionError); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 197, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_6);
+    __pyx_t_3 = __Pyx_PyString_FormatSafe(__pyx_kp_s_Invalid_handshake_response_s, __pyx_v_handshake_response); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 197, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_2 = __Pyx_PyString_FormatSafe(__pyx_kp_s_Invalid_handshake_response_s, __pyx_v_handshake_response); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 197, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_4 = NULL;
-    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_3))) {
-      __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_3);
-      if (likely(__pyx_t_4)) {
-        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
-        __Pyx_INCREF(__pyx_t_4);
+    __pyx_t_2 = NULL;
+    if (CYTHON_UNPACK_METHODS && unlikely(PyMethod_Check(__pyx_t_6))) {
+      __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_6);
+      if (likely(__pyx_t_2)) {
+        PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
+        __Pyx_INCREF(__pyx_t_2);
         __Pyx_INCREF(function);
-        __Pyx_DECREF_SET(__pyx_t_3, function);
+        __Pyx_DECREF_SET(__pyx_t_6, function);
       }
     }
-    __pyx_t_1 = (__pyx_t_4) ? __Pyx_PyObject_Call2Args(__pyx_t_3, __pyx_t_4, __pyx_t_2) : __Pyx_PyObject_CallOneArg(__pyx_t_3, __pyx_t_2);
-    __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __pyx_t_1 = (__pyx_t_2) ? __Pyx_PyObject_Call2Args(__pyx_t_6, __pyx_t_2, __pyx_t_3) : __Pyx_PyObject_CallOneArg(__pyx_t_6, __pyx_t_3);
+    __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 197, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_Raise(__pyx_t_1, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __PYX_ERR(0, 197, __pyx_L1_error)
@@ -6328,7 +6398,7 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
  * 
  * cdef class LoquiHTTPUpgradeClient(LoquiClient):
  *     def handle_new_socket(self, sock):             # <<<<<<<<<<<<<<
- *         upgrade_payload = '\r\n'.join([
+ *         upgrade_payload = b'\r\n'.join([
  *             b'GET /_rpc HTTP/1.1',
  */
 
@@ -6340,6 +6410,7 @@ static PyObject *__pyx_pf_5loqui_6client_22LoquiHTTPUpgradeClient_handle_new_soc
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_6);
   __Pyx_AddTraceback("loqui.client.LoquiHTTPUpgradeClient.handle_new_socket", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
@@ -7995,15 +8066,15 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_LoquiHTTPUpgradeClient, __pyx_k_LoquiHTTPUpgradeClient, sizeof(__pyx_k_LoquiHTTPUpgradeClient), 0, 0, 1, 1},
   {&__pyx_kp_s_No_connection_available, __pyx_k_No_connection_available, sizeof(__pyx_k_No_connection_available), 0, 0, 1, 0},
   {&__pyx_n_s_PickleError, __pyx_k_PickleError, sizeof(__pyx_k_PickleError), 0, 0, 1, 1},
-  {&__pyx_n_s_Queue, __pyx_k_Queue, sizeof(__pyx_k_Queue), 0, 0, 1, 1},
   {&__pyx_n_s_RLock, __pyx_k_RLock, sizeof(__pyx_k_RLock), 0, 0, 1, 1},
   {&__pyx_n_s_SOCK_STREAM, __pyx_k_SOCK_STREAM, sizeof(__pyx_k_SOCK_STREAM), 0, 0, 1, 1},
   {&__pyx_n_s_TCP_NODELAY, __pyx_k_TCP_NODELAY, sizeof(__pyx_k_TCP_NODELAY), 0, 0, 1, 1},
   {&__pyx_kp_b_Upgrade_loqui, __pyx_k_Upgrade_loqui, sizeof(__pyx_k_Upgrade_loqui), 0, 0, 0, 0},
-  {&__pyx_kp_s__3, __pyx_k__3, sizeof(__pyx_k__3), 0, 0, 1, 0},
+  {&__pyx_kp_b__3, __pyx_k__3, sizeof(__pyx_k__3), 0, 0, 0, 0},
   {&__pyx_kp_b__4, __pyx_k__4, sizeof(__pyx_k__4), 0, 0, 0, 0},
   {&__pyx_n_s_address, __pyx_k_address, sizeof(__pyx_k_address), 0, 0, 1, 1},
   {&__pyx_n_s_append, __pyx_k_append, sizeof(__pyx_k_append), 0, 0, 1, 1},
+  {&__pyx_n_s_ascii, __pyx_k_ascii, sizeof(__pyx_k_ascii), 0, 0, 1, 1},
   {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
   {&__pyx_n_s_connect, __pyx_k_connect, sizeof(__pyx_k_connect), 0, 0, 1, 1},
   {&__pyx_n_s_connect_and_send_request_async, __pyx_k_connect_and_send_request_async, sizeof(__pyx_k_connect_and_send_request_async), 0, 0, 1, 1},
@@ -8012,6 +8083,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_deque, __pyx_k_deque, sizeof(__pyx_k_deque), 0, 0, 1, 1},
   {&__pyx_n_s_dict, __pyx_k_dict, sizeof(__pyx_k_dict), 0, 0, 1, 1},
   {&__pyx_n_s_encoders, __pyx_k_encoders, sizeof(__pyx_k_encoders), 0, 0, 1, 1},
+  {&__pyx_n_s_ensure_binary, __pyx_k_ensure_binary, sizeof(__pyx_k_ensure_binary), 0, 0, 1, 1},
   {&__pyx_n_s_enter, __pyx_k_enter, sizeof(__pyx_k_enter), 0, 0, 1, 1},
   {&__pyx_n_s_error, __pyx_k_error, sizeof(__pyx_k_error), 0, 0, 1, 1},
   {&__pyx_n_s_exception, __pyx_k_exception, sizeof(__pyx_k_exception), 0, 0, 1, 1},
@@ -8038,6 +8110,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_max_push_queue_len, __pyx_k_max_push_queue_len, sizeof(__pyx_k_max_push_queue_len), 0, 0, 1, 1},
   {&__pyx_n_s_maxlen, __pyx_k_maxlen, sizeof(__pyx_k_maxlen), 0, 0, 1, 1},
   {&__pyx_n_s_min_delay, __pyx_k_min_delay, sizeof(__pyx_k_min_delay), 0, 0, 1, 1},
+  {&__pyx_n_s_moves, __pyx_k_moves, sizeof(__pyx_k_moves), 0, 0, 1, 1},
   {&__pyx_n_s_name, __pyx_k_name, sizeof(__pyx_k_name), 0, 0, 1, 1},
   {&__pyx_n_s_new, __pyx_k_new, sizeof(__pyx_k_new), 0, 0, 1, 1},
   {&__pyx_n_s_on_push, __pyx_k_on_push, sizeof(__pyx_k_on_push), 0, 0, 1, 1},
@@ -8052,6 +8125,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_pyx_unpickle_LoquiClient, __pyx_k_pyx_unpickle_LoquiClient, sizeof(__pyx_k_pyx_unpickle_LoquiClient), 0, 0, 1, 1},
   {&__pyx_n_s_pyx_unpickle_LoquiHTTPUpgradeC, __pyx_k_pyx_unpickle_LoquiHTTPUpgradeC, sizeof(__pyx_k_pyx_unpickle_LoquiHTTPUpgradeC), 0, 0, 1, 1},
   {&__pyx_n_s_pyx_vtable, __pyx_k_pyx_vtable, sizeof(__pyx_k_pyx_vtable), 0, 0, 1, 1},
+  {&__pyx_n_s_queue, __pyx_k_queue, sizeof(__pyx_k_queue), 0, 0, 1, 1},
   {&__pyx_n_s_rawlink, __pyx_k_rawlink, sizeof(__pyx_k_rawlink), 0, 0, 1, 1},
   {&__pyx_n_s_recv, __pyx_k_recv, sizeof(__pyx_k_recv), 0, 0, 1, 1},
   {&__pyx_n_s_reduce, __pyx_k_reduce, sizeof(__pyx_k_reduce), 0, 0, 1, 1},
@@ -8069,6 +8143,8 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_setstate, __pyx_k_setstate, sizeof(__pyx_k_setstate), 0, 0, 1, 1},
   {&__pyx_n_s_setstate_cython, __pyx_k_setstate_cython, sizeof(__pyx_k_setstate_cython), 0, 0, 1, 1},
   {&__pyx_n_s_settimeout, __pyx_k_settimeout, sizeof(__pyx_k_settimeout), 0, 0, 1, 1},
+  {&__pyx_n_s_six, __pyx_k_six, sizeof(__pyx_k_six), 0, 0, 1, 1},
+  {&__pyx_n_s_six_moves_queue, __pyx_k_six_moves_queue, sizeof(__pyx_k_six_moves_queue), 0, 0, 1, 1},
   {&__pyx_n_s_sleep, __pyx_k_sleep, sizeof(__pyx_k_sleep), 0, 0, 1, 1},
   {&__pyx_n_s_socket, __pyx_k_socket, sizeof(__pyx_k_socket), 0, 0, 1, 1},
   {&__pyx_n_s_spawn, __pyx_k_spawn, sizeof(__pyx_k_spawn), 0, 0, 1, 1},
@@ -8484,53 +8560,54 @@ if (!__Pyx_RefNanny) {
   #endif
 
   /* "loqui/client.pyx":1
- * import Queue             # <<<<<<<<<<<<<<
- * import socket
- * 
- */
-  __pyx_t_1 = __Pyx_Import(__pyx_n_s_Queue, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 1, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_Queue, __pyx_t_1) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-
-  /* "loqui/client.pyx":2
- * import Queue
  * import socket             # <<<<<<<<<<<<<<
  * 
  * import gevent
  */
-  __pyx_t_1 = __Pyx_Import(__pyx_n_s_socket, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 2, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_Import(__pyx_n_s_socket, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_socket, __pyx_t_1) < 0) __PYX_ERR(0, 2, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_socket, __pyx_t_1) < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "loqui/client.pyx":4
+  /* "loqui/client.pyx":3
  * import socket
  * 
  * import gevent             # <<<<<<<<<<<<<<
  * import time
- * from gevent.lock import RLock
+ * import six.moves.queue
  */
-  __pyx_t_1 = __Pyx_Import(__pyx_n_s_gevent, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 4, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_Import(__pyx_n_s_gevent, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 3, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_gevent, __pyx_t_1) < 0) __PYX_ERR(0, 4, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_gevent, __pyx_t_1) < 0) __PYX_ERR(0, 3, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "loqui/client.pyx":5
+  /* "loqui/client.pyx":4
  * 
  * import gevent
  * import time             # <<<<<<<<<<<<<<
+ * import six.moves.queue
+ * from gevent.lock import RLock
+ */
+  __pyx_t_1 = __Pyx_Import(__pyx_n_s_time, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 4, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_time, __pyx_t_1) < 0) __PYX_ERR(0, 4, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+
+  /* "loqui/client.pyx":5
+ * import gevent
+ * import time
+ * import six.moves.queue             # <<<<<<<<<<<<<<
  * from gevent.lock import RLock
  * from gevent.event import AsyncResult
  */
-  __pyx_t_1 = __Pyx_Import(__pyx_n_s_time, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 5, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_Import(__pyx_n_s_six_moves_queue, 0, -1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 5, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_time, __pyx_t_1) < 0) __PYX_ERR(0, 5, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_six, __pyx_t_1) < 0) __PYX_ERR(0, 5, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "loqui/client.pyx":6
- * import gevent
  * import time
+ * import six.moves.queue
  * from gevent.lock import RLock             # <<<<<<<<<<<<<<
  * from gevent.event import AsyncResult
  * 
@@ -8550,7 +8627,7 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "loqui/client.pyx":7
- * import time
+ * import six.moves.queue
  * from gevent.lock import RLock
  * from gevent.event import AsyncResult             # <<<<<<<<<<<<<<
  * 
@@ -8660,9 +8737,9 @@ if (!__Pyx_RefNanny) {
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "loqui/client.pyx":1
- * import Queue             # <<<<<<<<<<<<<<
- * import socket
+ * import socket             # <<<<<<<<<<<<<<
  * 
+ * import gevent
  */
   __pyx_t_1 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
